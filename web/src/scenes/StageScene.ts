@@ -192,8 +192,11 @@ export class StageScene extends Phaser.Scene {
 
   private playSpeed = 1.0;
   private playSpeedToggle: 1.0 | 2.0 = 1.0;
+  /** SPEC-007 §5.1: ユーザーによる明示的な一時停止 */
+  private paused = false;
 
   private hpText!: Phaser.GameObjects.Text;
+  private pauseButtonText!: Phaser.GameObjects.Text;
   private ceText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
   private ceBar!: Phaser.GameObjects.Rectangle;
@@ -249,6 +252,7 @@ export class StageScene extends Phaser.Scene {
     this.routesAnimated = new Set();
     this.playSpeed = 1.0;
     this.playSpeedToggle = 1.0;
+    this.paused = false;
     this.statusPanel = null;
     this.statusPanelHeroId = null;
     this.endOverlay = null;
@@ -379,28 +383,47 @@ export class StageScene extends Phaser.Scene {
       .line(0, 0, 0, hudY, this.stageWidth, hudY, 0x374151, 1)
       .setOrigin(0, 0);
 
-    // SPEC-006 §5.3: 上段ステータス行 — BASE HP / CE 数値 / 1秒ゲージ / 速度
+    // SPEC-006 §5.3 + SPEC-007 §5.2: 上段ステータス行 — BASE HP / CE 数値 / 1秒ゲージ / 一時停止 / 速度
     this.hpText = this.add.text(10, hudY + 6, "", {
       fontSize: "14px",
       color: "#fee2e2",
       fontStyle: "bold",
     });
-    this.ceText = this.add.text(160, hudY + 6, "", {
+    this.ceText = this.add.text(140, hudY + 6, "", {
       fontSize: "18px",
       color: "#fde68a",
       fontStyle: "bold",
     });
-    // 1 秒ゲージ — ceProgress (0..1) が満タンで +1 CE される瞬間の進捗
-    this.add.rectangle(220, hudY + 16, 90, 6, 0x1f2937).setOrigin(0, 0.5);
+    // SPEC-007 §5.2: CE 数値 (3桁まで想定) を 80px 確保 → ゲージは x=240 から
+    this.add.rectangle(240, hudY + 16, 90, 6, 0x1f2937).setOrigin(0, 0.5);
     this.ceBar = this.add
-      .rectangle(220, hudY + 16, 0, 6, 0x38bdf8)
+      .rectangle(240, hudY + 16, 0, 6, 0x38bdf8)
       .setOrigin(0, 0.5);
     this.add
-      .text(315, hudY + 16, "/秒", {
+      .text(335, hudY + 16, "/秒", {
         fontSize: "10px",
         color: "#7dd3fc",
       })
       .setOrigin(0, 0.5);
+
+    // SPEC-007 §5.1: 一時停止 / 再生 トグル（速度トグルの左隣）
+    const pBtnX = this.stageWidth - 124;
+    const pBtnY = hudY + 16;
+    const pBorder = this.add.rectangle(pBtnX, pBtnY, 56, 22, 0x111827, 1);
+    pBorder.setStrokeStyle(1, 0x4b5563);
+    pBorder.setInteractive({ useHandCursor: true });
+    this.pauseButtonText = this.add
+      .text(pBtnX, pBtnY, "⏸ 停止", {
+        fontSize: "11px",
+        color: "#fca5a5",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5);
+    this.add.container(0, 0, [pBorder, this.pauseButtonText]);
+    pBorder.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (pointer.rightButtonDown()) return;
+      this.togglePause();
+    });
 
     // SPEC-006: 再生速度トグル（HUD 右上）
     const sBtnX = this.stageWidth - 48;
@@ -580,7 +603,13 @@ export class StageScene extends Phaser.Scene {
 
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       if (this.gameOver) return;
-      if (this.statusPanel) return;
+      if (this.statusPanel) {
+        // SPEC-007 §5.3: パネル外（パネルスロット x < panelSlotX）をタップで閉じる
+        if (p.x < this.panelSlotX) {
+          this.closeStatusPanel();
+        }
+        return; // パネル内クリックは個別ボタンが担当
+      }
       if (p.y >= this.stageHeight) return;
       if (p.x >= this.stageWidth) return; // パネルスロット領域はステージ入力対象外
 
@@ -1518,13 +1547,21 @@ export class StageScene extends Phaser.Scene {
     this.refreshSpeedButton();
   }
 
-  // ========== 再生速度 ==========
+  // ========== 再生速度 / 一時停止 ==========
 
   private togglePlaySpeed(): void {
     if (this.statusPanel) return;
     if (this.placement) return; // SPEC-005 §5.6: 配置中は 0.1× 固定なのでトグル無効
+    if (this.paused) return; // 一時停止中は速度切替を受け付けない
     this.playSpeedToggle = this.playSpeedToggle === 1.0 ? 2.0 : 1.0;
     this.playSpeed = this.playSpeedToggle;
+    this.refreshSpeedButton();
+  }
+
+  /** SPEC-007 §5.1: 一時停止 / 再開トグル */
+  private togglePause(): void {
+    if (this.gameOver) return;
+    this.paused = !this.paused;
     this.refreshSpeedButton();
   }
 
@@ -1541,12 +1578,23 @@ export class StageScene extends Phaser.Scene {
 
   private refreshSpeedButton(): void {
     this.speedButtonText.setText(`${this.playSpeed.toFixed(1)}×`);
+    if (this.pauseButtonText) {
+      this.pauseButtonText.setText(this.paused ? "▶ 再生" : "⏸ 停止");
+      this.pauseButtonText.setColor(this.paused ? "#a7f3d0" : "#fca5a5");
+    }
   }
 
   // ========== ループ ==========
 
   update(time: number, delta: number): void {
     if (this.gameOver) return;
+    // SPEC-007 §5.1: 一時停止中は時間も処理も止める。配置 UI のパルスだけは
+    // 操作感のため real time で動かし続ける。
+    if (this.paused) {
+      this.tickPlacementUI(time);
+      this.refreshHud();
+      return;
+    }
     const dt = (delta / 1000) * this.playSpeed;
     this.elapsed += dt;
 
