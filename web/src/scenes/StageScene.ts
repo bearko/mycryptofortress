@@ -29,6 +29,7 @@ import { calculateDamage } from "../game/damage";
 import {
   applyPatternToTile,
   directionFromDelta,
+  DIRECTIONS,
   rotatePattern,
   tileEquals,
   type Direction,
@@ -147,6 +148,8 @@ interface OrientingPhase {
   ghostSprite: Phaser.GameObjects.Sprite;
   rangeRects: Phaser.GameObjects.Rectangle[];
   highlightRects: Phaser.GameObjects.Rectangle[];
+  /** SPEC-005 §5.6: 向きを指定する誘導 UI。各方向のチェブロン記号を hero 周囲に配置。 */
+  directionArrows: Map<Direction, Phaser.GameObjects.Text>;
 }
 
 type PlacementPhase = SelectingPhase | OrientingPhase | null;
@@ -466,6 +469,7 @@ export class StageScene extends Phaser.Scene {
             this.placement.tile,
             dir,
           );
+          this.updateDirectionArrows(dir);
         }
       }
     });
@@ -559,6 +563,8 @@ export class StageScene extends Phaser.Scene {
       } に配置（右クリックでキャンセル）`,
     );
     this.refreshPaletteHighlight();
+    // SPEC-005 §5.6: 配置中はじっくり考えられるよう 0.1× に減速
+    this.setPlacementSpeed(true);
   }
 
   private buildHighlightTilesFor(
@@ -631,6 +637,9 @@ export class StageScene extends Phaser.Scene {
     for (const r of this.placement.highlightRects) r.destroy();
     this.placement.highlightRects = [];
 
+    // SPEC-005 §5.6: 上下左右に向きチェブロンを表示
+    const directionArrows = this.buildDirectionArrows(px.x, px.y, direction);
+
     this.placement = {
       kind: "orienting",
       hero: this.placement.hero,
@@ -639,15 +648,62 @@ export class StageScene extends Phaser.Scene {
       ghostSprite: this.placement.ghostSprite,
       rangeRects: this.placement.rangeRects,
       highlightRects: [],
+      directionArrows,
     };
     this.statusText.setText(
-      "カーソル方向で向きを選び、再度クリックで確定（右クリックでキャンセル）",
+      "上下左右の矢印が向きを示しています。カーソルで方向を変え、クリックで確定（右クリックでキャンセル）",
     );
+  }
+
+  private buildDirectionArrows(
+    centerX: number,
+    centerY: number,
+    activeDir: Direction,
+  ): Map<Direction, Phaser.GameObjects.Text> {
+    const arrows = new Map<Direction, Phaser.GameObjects.Text>();
+    const offset = TILE_SIZE * 0.5; // タイル端まで
+    const placement: Record<Direction, [string, number, number]> = {
+      up: ["▲", centerX, centerY - offset],
+      down: ["▼", centerX, centerY + offset],
+      left: ["◀", centerX - offset, centerY],
+      right: ["▶", centerX + offset, centerY],
+    };
+    for (const dir of DIRECTIONS) {
+      const [glyph, ax, ay] = placement[dir];
+      const isActive = dir === activeDir;
+      const arrow = this.add
+        .text(ax, ay, glyph, {
+          fontSize: "22px",
+          color: isActive ? "#fde047" : "#9ca3af",
+          fontStyle: "bold",
+          stroke: "#0b0d12",
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5)
+        .setDepth(60);
+      arrow.setScale(isActive ? 1.25 : 1.0);
+      arrows.set(dir, arrow);
+    }
+    return arrows;
+  }
+
+  private updateDirectionArrows(activeDir: Direction): void {
+    if (this.placement?.kind !== "orienting") return;
+    for (const dir of DIRECTIONS) {
+      const arrow = this.placement.directionArrows.get(dir);
+      if (!arrow) continue;
+      const isActive = dir === activeDir;
+      arrow.setColor(isActive ? "#fde047" : "#9ca3af");
+      arrow.setScale(isActive ? 1.25 : 1.0);
+    }
   }
 
   private confirmOrientation(): void {
     if (this.placement?.kind !== "orienting") return;
-    const { hero, tile, direction, ghostSprite, rangeRects } = this.placement;
+    const { hero, tile, direction, ghostSprite, rangeRects, directionArrows } =
+      this.placement;
+    // SPEC-005 §5.6: 矢印 UI は確定で消す
+    for (const arrow of directionArrows.values()) arrow.destroy();
 
     this.ce -= hero.cost;
     ghostSprite.setAlpha(1);
@@ -690,6 +746,8 @@ export class StageScene extends Phaser.Scene {
       `${CLASS_LABEL[hero.class]} ${hero.name} を ${direction} 向きで配置（block最大 ${blockMaxFor(hero.class)}）`,
     );
     this.refreshPaletteHighlight();
+    // SPEC-005 §5.6: 配置完了で通常速度に戻す
+    this.setPlacementSpeed(false);
   }
 
   private cancelPlacement(): void {
@@ -697,11 +755,18 @@ export class StageScene extends Phaser.Scene {
     this.placement.ghostSprite.destroy();
     for (const r of this.placement.rangeRects) r.destroy();
     for (const r of this.placement.highlightRects) r.destroy();
+    if (this.placement.kind === "orienting") {
+      for (const arrow of this.placement.directionArrows.values()) {
+        arrow.destroy();
+      }
+    }
     this.placement = null;
     this.statusText.setText(
       "ヒーローを選んで配置可能タイルをクリック → 向きを決めて再クリック",
     );
     this.refreshPaletteHighlight();
+    // SPEC-005 §5.6: 配置キャンセルで通常速度に戻す
+    this.setPlacementSpeed(false);
   }
 
   private repositionPatternRects(
@@ -1235,8 +1300,20 @@ export class StageScene extends Phaser.Scene {
 
   private togglePlaySpeed(): void {
     if (this.statusPanel) return;
+    if (this.placement) return; // SPEC-005 §5.6: 配置中は 0.1× 固定なのでトグル無効
     this.playSpeedToggle = this.playSpeedToggle === 1.0 ? 2.0 : 1.0;
     this.playSpeed = this.playSpeedToggle;
+    this.refreshSpeedButton();
+  }
+
+  /**
+   * SPEC-005 §5.6: 配置フェーズに入ったら 0.1× に減速、抜けたらユーザー設定速度
+   * （playSpeedToggle）に戻す。ステータスパネル表示中は触らない（パネル側が
+   * すでに 0.1× にしている）。
+   */
+  private setPlacementSpeed(active: boolean): void {
+    if (this.statusPanel) return;
+    this.playSpeed = active ? 0.1 : this.playSpeedToggle;
     this.refreshSpeedButton();
   }
 
@@ -1246,7 +1323,7 @@ export class StageScene extends Phaser.Scene {
 
   // ========== ループ ==========
 
-  update(_time: number, delta: number): void {
+  update(time: number, delta: number): void {
     if (this.gameOver) return;
     const dt = (delta / 1000) * this.playSpeed;
     this.elapsed += dt;
@@ -1257,8 +1334,25 @@ export class StageScene extends Phaser.Scene {
     this.tickHeroAttacks();
     this.tickBullets(dt);
     this.tickSkills(dt);
+    this.tickPlacementUI(time);
     this.refreshHud();
     this.checkEndCondition();
+  }
+
+  /**
+   * SPEC-005 §5.6: 配置中の向き矢印 UI のパルスを担当する。
+   * playSpeed=0.1× でもアニメは止まらないよう、Phaser の渡してくる real time
+   * （ms）を使う。
+   */
+  private tickPlacementUI(realTimeMs: number): void {
+    if (this.placement?.kind !== "orienting") return;
+    const t = realTimeMs / 1000;
+    const pulse = 0.7 + 0.3 * Math.abs(Math.sin(t * 5));
+    for (const dir of DIRECTIONS) {
+      const arrow = this.placement.directionArrows.get(dir);
+      if (!arrow) continue;
+      arrow.setAlpha(dir === this.placement.direction ? pulse : 0.55);
+    }
   }
 
   private tickSkills(dt: number): void {
