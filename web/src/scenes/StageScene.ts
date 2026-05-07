@@ -13,6 +13,13 @@ import {
 } from "../game/stage";
 import type { EnemyDef, HeroDef, SpawnPattern, TilePos } from "../game/types";
 import { calculateDamage } from "../game/damage";
+import {
+  applyPatternToTile,
+  directionFromDelta,
+  rotatePattern,
+  tileEquals,
+  type Direction,
+} from "../game/pattern";
 import { TEXTURE_KEYS } from "./BootScene";
 
 const HUD_HEIGHT = 96;
@@ -22,8 +29,9 @@ const STAGE_HEIGHT = ROWS * TILE_SIZE;
 interface PlacedHero {
   def: HeroDef;
   tile: TilePos;
+  direction: Direction;
   sprite: Phaser.GameObjects.Sprite;
-  rangeIndicator: Phaser.GameObjects.Arc;
+  rangeRects: Phaser.GameObjects.Rectangle[];
   lastAttackAt: number;
 }
 
@@ -33,7 +41,6 @@ interface ActiveEnemy {
   hpBar: Phaser.GameObjects.Rectangle;
   hpBarBg: Phaser.GameObjects.Rectangle;
   hp: number;
-  /** 現在向かっている route index（次のウェイポイント） */
   nextIndex: number;
   goalReached: boolean;
 }
@@ -46,10 +53,29 @@ interface ActiveBullet {
   done: boolean;
 }
 
+/** 配置フェーズ 1: パレット選択済み（ゴーストがカーソル追従中） */
+interface SelectingPhase {
+  kind: "selecting";
+  hero: HeroDef;
+  ghostSprite: Phaser.GameObjects.Sprite;
+  rangeRects: Phaser.GameObjects.Rectangle[];
+}
+
+/** 配置フェーズ 2: タイル決定済み・向きをカーソルで決める */
+interface OrientingPhase {
+  kind: "orienting";
+  hero: HeroDef;
+  tile: TilePos;
+  direction: Direction;
+  ghostSprite: Phaser.GameObjects.Sprite;
+  rangeRects: Phaser.GameObjects.Rectangle[];
+}
+
+type PlacementPhase = SelectingPhase | OrientingPhase | null;
+
 export class StageScene extends Phaser.Scene {
   private baseHp = 5;
   private maxBaseHp = 5;
-  /** 初期 CE。SPEC-001 §5.3: 開始即座に最低コストのヒーローを配置できる量にする */
   private ce = 20;
   private maxCe = 100;
   private ceProgress = 0;
@@ -60,10 +86,14 @@ export class StageScene extends Phaser.Scene {
   private defeatedTotal = 0;
   private totalToDefeat = 0;
 
-  private selectedHero: HeroDef | null = null;
+  private placement: PlacementPhase = null;
   private placedHeroes: PlacedHero[] = [];
   private enemies: ActiveEnemy[] = [];
   private bullets: ActiveBullet[] = [];
+
+  /** SPEC-002 §5.7: 通常時 1.0 / 倍速 2.0、ステータスパネル表示中は 0.1 */
+  private playSpeed = 1.0;
+  private playSpeedToggle: 1.0 | 2.0 = 1.0;
 
   private hpText!: Phaser.GameObjects.Text;
   private ceText!: Phaser.GameObjects.Text;
@@ -74,37 +104,59 @@ export class StageScene extends Phaser.Scene {
     container: Phaser.GameObjects.Container;
     border: Phaser.GameObjects.Rectangle;
   }[] = [];
+  private speedButtonText!: Phaser.GameObjects.Text;
+
+  private statusPanel: Phaser.GameObjects.Container | null = null;
+  private statusPanelHeroId: number | null = null;
 
   private endOverlay: Phaser.GameObjects.Container | null = null;
   private gameOver = false;
 
-  // 配置プレビュー（カーソル追従の薄いスプライト）
-  private ghostSprite: Phaser.GameObjects.Sprite | null = null;
-  private ghostRange: Phaser.GameObjects.Arc | null = null;
+  private cachedTileMap: ReturnType<typeof buildTileMap> | null = null;
 
   constructor() {
     super("StageScene");
   }
 
   create(): void {
-    this.cameras.main.setBackgroundColor(0x141822);
+    // Phaser の scene.restart() は同じインスタンスで create を再実行するため、
+    // クラスフィールドの初期化子は走らない。すべての可変状態を明示的にリセットする。
+    this.baseHp = 5;
+    this.maxBaseHp = 5;
+    this.ce = 20;
+    this.ceProgress = 0;
     this.elapsed = 0;
-    this.waveQueue = [...STAGE1_WAVE.patterns];
+    this.spawnedTotal = 0;
+    this.defeatedTotal = 0;
     this.totalToDefeat = STAGE1_WAVE.patterns.length;
+    this.waveQueue = [...STAGE1_WAVE.patterns];
+    this.placement = null;
+    this.placedHeroes = [];
+    this.enemies = [];
+    this.bullets = [];
+    this.playSpeed = 1.0;
+    this.playSpeedToggle = 1.0;
+    this.statusPanel = null;
+    this.statusPanelHeroId = null;
+    this.endOverlay = null;
+    this.gameOver = false;
+    this.heroPaletteEntries = [];
+    this.cachedTileMap = buildTileMap(STAGE1_ROUTE);
 
+    this.cameras.main.setBackgroundColor(0x141822);
     this.drawTilesAndRoute();
     this.drawHud();
     this.bindInput();
+    this.refreshSpeedButton();
   }
 
   // ========== セットアップ ==========
 
   private drawTilesAndRoute(): void {
-    const tileMap = buildTileMap(STAGE1_ROUTE);
-
+    if (!this.cachedTileMap) return;
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
-        const kind = tileMap[r][c];
+        const kind = this.cachedTileMap[r][c];
         const x = c * TILE_SIZE;
         const y = r * TILE_SIZE;
         const fill = kind === "path" ? 0x3b2a1a : 0x1f2937;
@@ -120,7 +172,6 @@ export class StageScene extends Phaser.Scene {
       }
     }
 
-    // Route ライン（視覚的にわかりやすくする）
     const g = this.add.graphics();
     g.lineStyle(6, 0xc59b6c, 0.8);
     g.beginPath();
@@ -132,7 +183,6 @@ export class StageScene extends Phaser.Scene {
     }
     g.strokePath();
 
-    // ゴール印
     const goal = tileToPixel(STAGE1_ROUTE[STAGE1_ROUTE.length - 1]);
     this.add
       .text(goal.x, goal.y, "GOAL", {
@@ -141,8 +191,6 @@ export class StageScene extends Phaser.Scene {
         fontStyle: "bold",
       })
       .setOrigin(0.5);
-
-    // 開始印
     const start0 = tileToPixel(STAGE1_ROUTE[0]);
     this.add
       .text(start0.x, start0.y, "START", {
@@ -163,18 +211,10 @@ export class StageScene extends Phaser.Scene {
       0x0b0d12,
       1,
     );
-    this.add.line(
-      0,
-      0,
-      0,
-      hudY,
-      STAGE_WIDTH,
-      hudY,
-      0x374151,
-      1,
-    ).setOrigin(0, 0);
+    this.add
+      .line(0, 0, 0, hudY, STAGE_WIDTH, hudY, 0x374151, 1)
+      .setOrigin(0, 0);
 
-    // HP / CE テキスト
     this.hpText = this.add.text(12, hudY + 8, "", {
       fontSize: "16px",
       color: "#fee2e2",
@@ -184,12 +224,13 @@ export class StageScene extends Phaser.Scene {
       fontSize: "14px",
       color: "#bae6fd",
     });
-    this.statusText = this.add.text(12, hudY + 56, "ヒーローを選んでマスをクリック", {
-      fontSize: "12px",
-      color: "#9ca3af",
-    });
+    this.statusText = this.add.text(
+      12,
+      hudY + 56,
+      "ヒーローを選んでマスをクリック → カーソルで向きを決めて再クリック",
+      { fontSize: "11px", color: "#9ca3af" },
+    );
 
-    // CE bar 背景
     this.add.rectangle(160, hudY + 38, 200, 8, 0x1f2937).setOrigin(0, 0.5);
     this.ceBar = this.add
       .rectangle(160, hudY + 38, 0, 8, 0x38bdf8)
@@ -217,139 +258,403 @@ export class StageScene extends Phaser.Scene {
 
       const container = this.add.container(0, 0, [sprite, costText]);
 
-      border.on("pointerdown", () => this.onSelectHero(hero));
+      border.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+        if (pointer.rightButtonDown()) return;
+        this.onSelectHero(hero);
+      });
       this.heroPaletteEntries.push({ hero, container, border });
+    });
+
+    // 再生速度トグル
+    const sx = STAGE_WIDTH - 60;
+    const sy = hudY + 18;
+    const sBorder = this.add.rectangle(sx, sy, 80, 26, 0x111827, 1);
+    sBorder.setStrokeStyle(1, 0x4b5563);
+    sBorder.setInteractive({ useHandCursor: true });
+    this.speedButtonText = this.add
+      .text(sx, sy, "1.0×", {
+        fontSize: "12px",
+        color: "#bae6fd",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5);
+    this.add.container(0, 0, [sBorder, this.speedButtonText]);
+    sBorder.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (pointer.rightButtonDown()) return;
+      this.togglePlaySpeed();
     });
   }
 
   private bindInput(): void {
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
-      if (this.ghostSprite && this.ghostRange) {
-        this.ghostSprite.x = p.worldX;
-        this.ghostSprite.y = p.worldY;
-        this.ghostRange.x = p.worldX;
-        this.ghostRange.y = p.worldY;
+      if (this.placement?.kind === "selecting") {
+        this.placement.ghostSprite.x = p.worldX;
+        this.placement.ghostSprite.y = p.worldY;
+        this.repositionPatternRects(
+          this.placement.rangeRects,
+          this.placement.hero.attackPattern,
+          { col: 0, row: 0 }, // ghost ベースなので絶対位置は ghost に追従
+          "right",
+          p.worldX,
+          p.worldY,
+        );
+      } else if (this.placement?.kind === "orienting") {
+        const center = tileToPixel(this.placement.tile);
+        const dir = directionFromDelta(
+          p.worldX - center.x,
+          p.worldY - center.y,
+        );
+        if (dir !== this.placement.direction) {
+          this.placement.direction = dir;
+          this.repositionPatternRects(
+            this.placement.rangeRects,
+            this.placement.hero.attackPattern,
+            this.placement.tile,
+            dir,
+          );
+        }
       }
     });
 
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       if (this.gameOver) return;
-      if (p.y >= STAGE_HEIGHT) return; // HUD クリックは個別ハンドラに任せる
+      if (this.statusPanel) return; // パネル表示中は背面入力を無視
+      if (p.y >= STAGE_HEIGHT) return;
 
-      if (this.selectedHero) {
-        this.tryPlaceHero(p.worldX, p.worldY);
+      // 右クリック: 配置中ならキャンセル、配置済みヒーローなら売却
+      if (p.rightButtonDown()) {
+        if (this.placement) {
+          this.cancelPlacement();
+          return;
+        }
+        const tile = pixelToTile(p.worldX, p.worldY);
+        if (tile) this.tryReleaseHeroAt(tile);
+        return;
+      }
+
+      // 左クリック
+      if (this.placement?.kind === "selecting") {
+        this.tryCommitPlacement(p.worldX, p.worldY);
+        return;
+      }
+      if (this.placement?.kind === "orienting") {
+        this.confirmOrientation();
+        return;
+      }
+      // 配置中でもなく右クリックでもない: 配置済みヒーロークリック → ステータス
+      const tile = pixelToTile(p.worldX, p.worldY);
+      if (tile) {
+        const hero = this.placedHeroes.find((h) => tileEquals(h.tile, tile));
+        if (hero) this.openStatusPanel(hero);
       }
     });
   }
 
-  // ========== 操作 ==========
+  // ========== 配置フロー ==========
 
   private onSelectHero(hero: HeroDef): void {
-    if (this.gameOver) return;
+    if (this.gameOver || this.statusPanel) return;
     if (this.ce < hero.cost) {
-      this.statusText.setText(`CE が足りません（必要 ${hero.cost} / 現在 ${Math.floor(this.ce)}）`);
+      this.statusText.setText(
+        `CE が足りません（必要 ${hero.cost} / 現在 ${Math.floor(this.ce)}）`,
+      );
       return;
     }
-    this.selectedHero = hero;
-    this.statusText.setText(`${hero.name} を配置するマスをクリック（右クリックでキャンセル）`);
+    this.cancelPlacement(); // 既存選択をクリア
 
-    // パレットの選択枠を更新
-    for (const entry of this.heroPaletteEntries) {
-      entry.border.setStrokeStyle(
-        2,
-        entry.hero.id === hero.id ? 0xfde047 : 0x4b5563,
-      );
-    }
-
-    // ゴーストスプライトを生成
-    this.clearGhost();
-    this.ghostSprite = this.add
+    const ghost = this.add
       .sprite(-100, -100, TEXTURE_KEYS.hero(hero.id))
-      .setDisplaySize(TILE_SIZE - 8, TILE_SIZE - 8)
-      .setAlpha(0.6);
-    this.ghostRange = this.add.circle(
-      -100,
-      -100,
-      hero.range * TILE_SIZE,
-      0xfde047,
-      0.12,
+      .setDisplaySize(TILE_SIZE, TILE_SIZE)
+      .setAlpha(0.6)
+      .setDepth(50);
+
+    this.placement = {
+      kind: "selecting",
+      hero,
+      ghostSprite: ghost,
+      rangeRects: [],
+    };
+
+    this.statusText.setText(
+      `${hero.name} を配置するマスをクリック（右クリックでキャンセル）`,
     );
-    this.ghostRange.setStrokeStyle(2, 0xfde047, 0.5);
-    this.ghostSprite.setDepth(50);
-    this.ghostRange.setDepth(49);
-
-    // 右クリックでキャンセル
-    this.input.once("pointerdown", (pp: Phaser.Input.Pointer) => {
-      if (pp.rightButtonDown()) this.cancelSelection();
-    });
+    this.refreshPaletteHighlight();
   }
 
-  private cancelSelection(): void {
-    this.selectedHero = null;
-    this.statusText.setText("ヒーローを選んでマスをクリック");
-    this.clearGhost();
-    for (const entry of this.heroPaletteEntries) {
-      entry.border.setStrokeStyle(2, 0x4b5563);
-    }
-  }
-
-  private clearGhost(): void {
-    this.ghostSprite?.destroy();
-    this.ghostRange?.destroy();
-    this.ghostSprite = null;
-    this.ghostRange = null;
-  }
-
-  private tryPlaceHero(x: number, y: number): void {
-    const hero = this.selectedHero;
-    if (!hero) return;
+  private tryCommitPlacement(x: number, y: number): void {
+    if (this.placement?.kind !== "selecting") return;
     const tile = pixelToTile(x, y);
     if (!tile) return;
-
-    const tileMap = buildTileMap(STAGE1_ROUTE);
-    if (tileMap[tile.row][tile.col] !== "placeable") {
+    if (!this.cachedTileMap) return;
+    if (this.cachedTileMap[tile.row][tile.col] !== "placeable") {
       this.statusText.setText("そのマスには置けません（敵の通り道）");
       return;
     }
-    if (this.placedHeroes.some((h) => h.tile.col === tile.col && h.tile.row === tile.row)) {
+    if (this.placedHeroes.some((h) => tileEquals(h.tile, tile))) {
       this.statusText.setText("既にヒーローが居ます");
       return;
     }
-    if (this.ce < hero.cost) {
+    if (this.ce < this.placement.hero.cost) {
       this.statusText.setText("CE が足りません");
       return;
     }
 
-    this.ce -= hero.cost;
-
+    // 配置タイルが決定したらゴーストを固定し、向き選択フェーズへ
     const px = tileToPixel(tile);
-    const sprite = this.add
-      .sprite(px.x, px.y, TEXTURE_KEYS.hero(hero.id))
-      .setDisplaySize(TILE_SIZE - 8, TILE_SIZE - 8)
-      .setDepth(20);
-    const range = this.add
-      .circle(px.x, px.y, hero.range * TILE_SIZE, 0xfde047, 0.05)
-      .setStrokeStyle(1, 0xfde047, 0.4)
-      .setDepth(19);
+    this.placement.ghostSprite.x = px.x;
+    this.placement.ghostSprite.y = px.y;
+
+    const direction: Direction = "right";
+    // 既存の range rect を更新
+    this.repositionPatternRects(
+      this.placement.rangeRects,
+      this.placement.hero.attackPattern,
+      tile,
+      direction,
+    );
+
+    this.placement = {
+      kind: "orienting",
+      hero: this.placement.hero,
+      tile,
+      direction,
+      ghostSprite: this.placement.ghostSprite,
+      rangeRects: this.placement.rangeRects,
+    };
+    this.statusText.setText(
+      "カーソル方向で向きを選び、再度クリックで確定（右クリックでキャンセル）",
+    );
+  }
+
+  private confirmOrientation(): void {
+    if (this.placement?.kind !== "orienting") return;
+    const { hero, tile, direction, ghostSprite, rangeRects } = this.placement;
+
+    this.ce -= hero.cost;
+    ghostSprite.setAlpha(1);
+    ghostSprite.setDepth(20);
+    // ゴースト → 配置スプライトとして転用
+    for (const r of rangeRects) r.setAlpha(0.18);
 
     this.placedHeroes.push({
       def: hero,
       tile,
-      sprite,
-      rangeIndicator: range,
+      direction,
+      sprite: ghostSprite,
+      rangeRects,
       lastAttackAt: this.elapsed,
     });
 
-    this.statusText.setText(`${hero.name} を配置しました`);
-    this.cancelSelection();
+    this.placement = null;
+    this.statusText.setText(`${hero.name} を ${direction} 向きで配置しました`);
+    this.refreshPaletteHighlight();
+  }
+
+  private cancelPlacement(): void {
+    if (!this.placement) return;
+    this.placement.ghostSprite.destroy();
+    for (const r of this.placement.rangeRects) r.destroy();
+    this.placement = null;
+    this.statusText.setText(
+      "ヒーローを選んでマスをクリック → カーソルで向きを決めて再クリック",
+    );
+    this.refreshPaletteHighlight();
+  }
+
+  /** 攻撃範囲タイル群を再配置・必要数まで増減する */
+  private repositionPatternRects(
+    rects: Phaser.GameObjects.Rectangle[],
+    pattern: TilePos[],
+    baseTile: TilePos,
+    direction: Direction,
+    overrideX?: number,
+    overrideY?: number,
+  ): void {
+    const rotated = rotatePattern(pattern, direction);
+
+    // 必要数を確保
+    while (rects.length < rotated.length) {
+      const r = this.add.rectangle(
+        0,
+        0,
+        TILE_SIZE - 4,
+        TILE_SIZE - 4,
+        0xfde047,
+        0.25,
+      );
+      r.setStrokeStyle(1, 0xfde047, 0.6);
+      r.setDepth(10);
+      rects.push(r);
+    }
+    // 余剰を破棄
+    while (rects.length > rotated.length) {
+      const dead = rects.pop();
+      dead?.destroy();
+    }
+
+    rotated.forEach((offset, i) => {
+      const r = rects[i];
+      let baseX: number, baseY: number;
+      if (overrideX != null && overrideY != null) {
+        baseX = overrideX;
+        baseY = overrideY;
+      } else {
+        const p = tileToPixel(baseTile);
+        baseX = p.x;
+        baseY = p.y;
+      }
+      r.x = baseX + offset.col * TILE_SIZE;
+      r.y = baseY + offset.row * TILE_SIZE;
+    });
+  }
+
+  private refreshPaletteHighlight(): void {
+    const selectedId =
+      this.placement?.kind === "selecting" || this.placement?.kind === "orienting"
+        ? this.placement.hero.id
+        : null;
+    for (const entry of this.heroPaletteEntries) {
+      const enough = this.ce >= entry.hero.cost;
+      const isSelected = entry.hero.id === selectedId;
+      const color = isSelected ? 0xfde047 : enough ? 0x4b5563 : 0x1f2937;
+      entry.border.setStrokeStyle(2, color);
+      entry.container.setAlpha(enough || isSelected ? 1 : 0.5);
+    }
+  }
+
+  // ========== 売却 ==========
+
+  private tryReleaseHeroAt(tile: TilePos): void {
+    const idx = this.placedHeroes.findIndex((h) => tileEquals(h.tile, tile));
+    if (idx === -1) return;
+    const hero = this.placedHeroes[idx];
+    const refund = Math.ceil(hero.def.cost / 2);
+    this.ce = Math.min(this.maxCe, this.ce + refund);
+    hero.sprite.destroy();
+    for (const r of hero.rangeRects) r.destroy();
+    this.placedHeroes.splice(idx, 1);
+    this.statusText.setText(`${hero.def.name} を売却（+${refund} CE）`);
+  }
+
+  // ========== ステータスパネル ==========
+
+  private openStatusPanel(hero: PlacedHero): void {
+    if (this.statusPanel) return;
+    this.statusPanelHeroId = hero.def.id;
+
+    const overlay = this.add.rectangle(
+      STAGE_WIDTH / 2,
+      STAGE_HEIGHT / 2,
+      STAGE_WIDTH,
+      STAGE_HEIGHT,
+      0x000000,
+      0.55,
+    );
+    overlay.setInteractive({ useHandCursor: true });
+
+    const panel = this.add.rectangle(
+      STAGE_WIDTH / 2,
+      STAGE_HEIGHT / 2,
+      360,
+      280,
+      0x111827,
+      0.98,
+    );
+    panel.setStrokeStyle(2, 0x4b5563);
+
+    const title = this.add
+      .text(STAGE_WIDTH / 2, STAGE_HEIGHT / 2 - 110, hero.def.name, {
+        fontSize: "20px",
+        color: "#f9fafb",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5);
+
+    const portrait = this.add
+      .sprite(STAGE_WIDTH / 2 - 130, STAGE_HEIGHT / 2 - 20, TEXTURE_KEYS.hero(hero.def.id))
+      .setDisplaySize(96, 96);
+
+    const interval = (1 / Math.max(0.1, hero.def.agi / 100)).toFixed(2);
+    const tilesCount = hero.def.attackPattern.length;
+    const lines = [
+      `属性: ${hero.def.attackType}`,
+      `HP : ${hero.def.hp}`,
+      `PHY: ${hero.def.phy}`,
+      `INT: ${hero.def.int}`,
+      `AGI: ${hero.def.agi}`,
+      `攻撃間隔: ${interval}s`,
+      `攻撃範囲: ${tilesCount} マス（${hero.direction}向き）`,
+      `コスト: ${hero.def.cost} CE`,
+    ];
+    const stats = this.add
+      .text(STAGE_WIDTH / 2 - 60, STAGE_HEIGHT / 2 - 70, lines.join("\n"), {
+        fontSize: "13px",
+        color: "#e5e7eb",
+        lineSpacing: 4,
+      })
+      .setOrigin(0, 0);
+
+    const closeBtn = this.add
+      .text(STAGE_WIDTH / 2, STAGE_HEIGHT / 2 + 110, "[ 閉じる ]", {
+        fontSize: "16px",
+        color: "#93c5fd",
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    closeBtn.on("pointerdown", () => this.closeStatusPanel());
+    overlay.on("pointerdown", () => this.closeStatusPanel());
+
+    this.statusPanel = this.add.container(0, 0, [
+      overlay,
+      panel,
+      title,
+      portrait,
+      stats,
+      closeBtn,
+    ]);
+    this.statusPanel.setDepth(100);
+
+    // 配置中の選択ヒーローの range を強調
+    for (const r of hero.rangeRects) r.setAlpha(0.35);
+    // ゲームほぼ停止
+    this.playSpeed = 0.1;
+    this.refreshSpeedButton();
+  }
+
+  private closeStatusPanel(): void {
+    if (!this.statusPanel) return;
+    this.statusPanel.destroy(true);
+    this.statusPanel = null;
+    // range alpha を戻す
+    if (this.statusPanelHeroId != null) {
+      const hero = this.placedHeroes.find(
+        (h) => h.def.id === this.statusPanelHeroId,
+      );
+      if (hero) for (const r of hero.rangeRects) r.setAlpha(0.18);
+    }
+    this.statusPanelHeroId = null;
+    this.playSpeed = this.playSpeedToggle;
+    this.refreshSpeedButton();
+  }
+
+  // ========== 再生速度 ==========
+
+  private togglePlaySpeed(): void {
+    if (this.statusPanel) return; // パネル中は不可
+    this.playSpeedToggle = this.playSpeedToggle === 1.0 ? 2.0 : 1.0;
+    this.playSpeed = this.playSpeedToggle;
+    this.refreshSpeedButton();
+  }
+
+  private refreshSpeedButton(): void {
+    this.speedButtonText.setText(`${this.playSpeed.toFixed(1)}×`);
   }
 
   // ========== ループ ==========
 
   update(_time: number, delta: number): void {
     if (this.gameOver) return;
-
-    const dt = delta / 1000;
+    const dt = (delta / 1000) * this.playSpeed;
     this.elapsed += dt;
 
     this.tickCe(dt);
@@ -363,8 +668,6 @@ export class StageScene extends Phaser.Scene {
 
   private tickCe(dt: number): void {
     if (this.ce >= this.maxCe) return;
-    // SPEC-001 §5.3 MVP 専用の加速版（2 CE/秒）。
-    // Unity 版の 0.12 CE/秒だと MVP プレイテストに向かないため、約 17× に調整。
     this.ceProgress += dt * 2.0;
     while (this.ceProgress >= 1) {
       this.ce = Math.min(this.maxCe, this.ce + 1);
@@ -387,13 +690,13 @@ export class StageScene extends Phaser.Scene {
 
     const sprite = this.add
       .sprite(start.x, start.y, TEXTURE_KEYS.enemy(def.id))
-      .setDisplaySize(TILE_SIZE - 16, TILE_SIZE - 16)
+      .setDisplaySize(TILE_SIZE, TILE_SIZE)
       .setDepth(30);
     const hpBg = this.add
-      .rectangle(start.x, start.y - 24, 40, 5, 0x111827, 0.9)
+      .rectangle(start.x, start.y - 28, 40, 5, 0x111827, 0.9)
       .setDepth(31);
     const hp = this.add
-      .rectangle(start.x - 20, start.y - 24, 40, 5, 0xef4444)
+      .rectangle(start.x - 20, start.y - 28, 40, 5, 0xef4444)
       .setOrigin(0, 0.5)
       .setDepth(32);
 
@@ -436,13 +739,12 @@ export class StageScene extends Phaser.Scene {
       }
 
       enemy.hpBarBg.x = enemy.sprite.x;
-      enemy.hpBarBg.y = enemy.sprite.y - 24;
+      enemy.hpBarBg.y = enemy.sprite.y - 28;
       enemy.hpBar.x = enemy.sprite.x - 20;
-      enemy.hpBar.y = enemy.sprite.y - 24;
+      enemy.hpBar.y = enemy.sprite.y - 28;
       enemy.hpBar.displayWidth = Math.max(0, 40 * (enemy.hp / enemy.def.hp));
     }
 
-    // ゴール到達済み・撃破済みの後始末
     this.enemies = this.enemies.filter((e) => {
       if (e.goalReached) {
         e.sprite.destroy();
@@ -471,7 +773,7 @@ export class StageScene extends Phaser.Scene {
       const interval = 1 / Math.max(0.1, hero.def.agi / 100);
       if (this.elapsed - hero.lastAttackAt < interval) continue;
 
-      const target = this.findNearestEnemyInRange(hero);
+      const target = this.findEnemyInPattern(hero);
       if (!target) continue;
 
       hero.lastAttackAt = this.elapsed;
@@ -479,15 +781,21 @@ export class StageScene extends Phaser.Scene {
     }
   }
 
-  private findNearestEnemyInRange(hero: PlacedHero): ActiveEnemy | null {
-    const rangePx = hero.def.range * TILE_SIZE;
+  private findEnemyInPattern(hero: PlacedHero): ActiveEnemy | null {
+    const tiles = applyPatternToTile(
+      hero.tile,
+      rotatePattern(hero.def.attackPattern, hero.direction),
+    );
     let nearest: ActiveEnemy | null = null;
     let nearestDist = Infinity;
     for (const e of this.enemies) {
+      const eTile = pixelToTile(e.sprite.x, e.sprite.y);
+      if (!eTile) continue;
+      if (!tiles.some((t) => tileEquals(t, eTile))) continue;
       const dx = e.sprite.x - hero.sprite.x;
       const dy = e.sprite.y - hero.sprite.y;
       const dist = Math.hypot(dx, dy);
-      if (dist <= rangePx && dist < nearestDist) {
+      if (dist < nearestDist) {
         nearest = e;
         nearestDist = dist;
       }
@@ -552,15 +860,7 @@ export class StageScene extends Phaser.Scene {
     this.hpText.setText(`BASE HP  ${this.baseHp} / ${this.maxBaseHp}`);
     this.ceText.setText(`CE  ${Math.floor(this.ce)} / ${this.maxCe}`);
     this.ceBar.width = 200 * (this.ce / this.maxCe);
-
-    // パレット枠の色を CE 残量で更新
-    for (const entry of this.heroPaletteEntries) {
-      const enough = this.ce >= entry.hero.cost;
-      const isSelected = this.selectedHero?.id === entry.hero.id;
-      const color = isSelected ? 0xfde047 : enough ? 0x4b5563 : 0x1f2937;
-      entry.border.setStrokeStyle(2, color);
-      entry.container.setAlpha(enough ? 1 : 0.5);
-    }
+    this.refreshPaletteHighlight();
   }
 
   private checkEndCondition(): void {
@@ -569,10 +869,10 @@ export class StageScene extends Phaser.Scene {
       this.endGame(false);
       return;
     }
+    const goalCount = this.enemies.filter((e) => e.goalReached).length;
     if (
       this.spawnedTotal >= this.totalToDefeat &&
-      this.defeatedTotal + this.enemies.filter((e) => e.goalReached).length >=
-        this.totalToDefeat
+      this.defeatedTotal + goalCount >= this.totalToDefeat
     ) {
       this.endGame(this.defeatedTotal === this.totalToDefeat);
     }
@@ -580,7 +880,8 @@ export class StageScene extends Phaser.Scene {
 
   private endGame(victory: boolean): void {
     this.gameOver = true;
-    this.cancelSelection();
+    this.cancelPlacement();
+    if (this.statusPanel) this.closeStatusPanel();
 
     const overlay = this.add.rectangle(
       STAGE_WIDTH / 2,
@@ -631,7 +932,6 @@ export const STAGE_DIMENSIONS = {
   height: STAGE_HEIGHT + HUD_HEIGHT,
 };
 
-// 念のため: HEROES が空でないことを型で保証する補助（インポート時の安全弁）
 if (HEROES.length === 0 || !findHero(HEROES[0].id)) {
   // eslint-disable-next-line no-console
   console.warn("HEROES list is empty or inconsistent");
