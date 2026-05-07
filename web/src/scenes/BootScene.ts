@@ -56,6 +56,14 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
+    // SPEC-002 §5.8: 全テクスチャに NEAREST フィルタを明示適用してドット絵の
+    // 拡大時にバイリニア補間でぼやけないようにする。`pixelArt: true` でも
+    // 効くはずだが、フィルタ周りはドライバ・ブラウザによって挙動差があるため
+    // テクスチャ単位で固定する。
+    this.textures.each((texture: Phaser.Textures.Texture) => {
+      texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    }, this);
+
     this.scene.start("StageScene");
   }
 

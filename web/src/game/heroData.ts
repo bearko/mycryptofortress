@@ -1,4 +1,4 @@
-import type { HeroDef } from "./types";
+import type { HeroDef, TilePos } from "./types";
 
 /**
  * MVP で使用するヒーロー 3 体。
@@ -7,9 +7,37 @@ import type { HeroDef } from "./types";
  *
  * 画像は同リポジトリの raw URL を直接読み込む（CORS 許可済み）。
  * 失敗時は BootScene 側でカラープレースホルダにフォールバック。
+ *
+ * SPEC-002: `range`（円）から `attackPattern`（タイル集合・右向き正規形）に置き換え。
  */
 const HERO_IMAGE_BASE =
   "https://raw.githubusercontent.com/bearko/mycryptoheroes/main/Image/Heroes";
+
+/** 4 タイル直線（INT 系・遠距離） */
+const PATTERN_LINE_4: TilePos[] = [
+  { col: 1, row: 0 },
+  { col: 2, row: 0 },
+  { col: 3, row: 0 },
+  { col: 4, row: 0 },
+];
+
+/** 3 タイル幅 × 2 列 + 先端 1 タイル（PHY 系・中距離） */
+const PATTERN_FAN_3: TilePos[] = [
+  { col: 1, row: -1 },
+  { col: 1, row: 0 },
+  { col: 1, row: 1 },
+  { col: 2, row: -1 },
+  { col: 2, row: 0 },
+  { col: 2, row: 1 },
+  { col: 3, row: 0 },
+];
+
+/** 1 タイル前 縦 3（PHY 系・近距離） */
+const PATTERN_NEAR_3: TilePos[] = [
+  { col: 1, row: -1 },
+  { col: 1, row: 0 },
+  { col: 1, row: 1 },
+];
 
 export const HEROES: HeroDef[] = [
   {
@@ -23,7 +51,7 @@ export const HEROES: HeroDef[] = [
     intDef: 0,
     hp: 192,
     agi: 138,
-    range: 2.5,
+    attackPattern: PATTERN_LINE_4,
     imageUrl: `${HERO_IMAGE_BASE}/1001.png`,
   },
   {
@@ -37,7 +65,7 @@ export const HEROES: HeroDef[] = [
     intDef: 0,
     hp: 240,
     agi: 110,
-    range: 2,
+    attackPattern: PATTERN_FAN_3,
     imageUrl: `${HERO_IMAGE_BASE}/3009.png`,
   },
   {
@@ -51,7 +79,7 @@ export const HEROES: HeroDef[] = [
     intDef: 0,
     hp: 320,
     agi: 90,
-    range: 1.4,
+    attackPattern: PATTERN_NEAR_3,
     imageUrl: `${HERO_IMAGE_BASE}/4003.png`,
   },
 ];
