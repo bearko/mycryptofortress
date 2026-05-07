@@ -21,8 +21,12 @@ export interface HeroDef {
   hp: number;
   /** 攻撃間隔の元となる素早さ。AGI=100 で 1 秒、200 で 0.5 秒 */
   agi: number;
-  /** 射程（タイル数） */
-  range: number;
+  /**
+   * 攻撃範囲パターン（タイルベース）。`right` 向きを正規形とし、
+   * `pattern.ts` の `rotatePattern` で他 3 方向に回転して使う。
+   * SPEC-002 で導入。
+   */
+  attackPattern: TilePos[];
   /** 画像 URL（読み込み失敗時はプレースホルダにフォールバック） */
   imageUrl: string;
 }
