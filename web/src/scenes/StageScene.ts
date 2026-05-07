@@ -32,7 +32,20 @@ import {
   tileEquals,
   type Direction,
 } from "../game/pattern";
-import { TEXTURE_KEYS } from "./BootScene";
+import {
+  ActiveSkillState,
+  GAUGE_MAX,
+  canActivate,
+  effectiveDamageRate,
+  findSkill,
+  gainOnAttack,
+  intervalScale,
+  isEffectActive,
+  startEffect,
+  tickGauge,
+  type SkillDef,
+} from "../game/skill";
+import { SE_KEYS, TEXTURE_KEYS } from "./BootScene";
 
 const HUD_HEIGHT = 96;
 
@@ -52,14 +65,46 @@ const ROUTE_COLOR: Record<string, number> = {
   B: 0x60a5fa,
 };
 
+/** SPEC-004 §5.6: 職業ごとのカットイン色 */
+const CLASS_AURA_COLOR: Record<HeroClass, number> = {
+  defender: 0x60a5fa,
+  guard: 0xfacc15,
+  vanguard: 0xf472b6,
+  specialist: 0xa78bfa,
+  sniper: 0xfb923c,
+  caster: 0x22d3ee,
+  medic: 0x4ade80,
+  supporter: 0xfde047,
+};
+
+interface DebuffSnapshot {
+  enemy: ActiveEnemy;
+  origPhyDef: number;
+  origIntDef: number;
+}
+
 interface PlacedHero {
   def: HeroDef;
+  skill: SkillDef | null;
   tile: TilePos;
   direction: Direction;
   sprite: Phaser.GameObjects.Sprite;
   rangeRects: Phaser.GameObjects.Rectangle[];
   lastAttackAt: number;
   blockNum: number;
+  /** SPEC-004 §5.3 スキルゲージ（0..100） */
+  skillGauge: number;
+  /** ゲージ満タン時に頭上に出すリング（null=未表示） */
+  readyRing: Phaser.GameObjects.Arc | null;
+  /** ゲージバー背景 / 進捗 */
+  gaugeBg: Phaser.GameObjects.Rectangle;
+  gaugeFill: Phaser.GameObjects.Rectangle;
+  /** 発動中の効果（null=非発動） */
+  activeEffect: ActiveSkillState | null;
+  /** 発動中に表示するオーラ */
+  aura: Phaser.GameObjects.Arc | null;
+  /** enemyDefDebuff のスナップショット（期限切れ時に巻き戻す） */
+  debuffSnapshots: DebuffSnapshot[];
 }
 
 interface ActiveEnemy {
@@ -72,6 +117,9 @@ interface ActiveEnemy {
   nextIndex: number;
   goalReached: boolean;
   blockedBy: PlacedHero | null;
+  /** SPEC-004 §5.5 enemyDefDebuff: 1.0 が通常、debuff 中は < 1.0 */
+  phyDefMul: number;
+  intDefMul: number;
 }
 
 interface ActiveBullet {
@@ -147,6 +195,9 @@ export class StageScene extends Phaser.Scene {
   private endOverlay: Phaser.GameObjects.Container | null = null;
   private gameOver = false;
 
+  /** 表示中のカットイン（同時 1 個だけ） */
+  private currentCutIn: Phaser.GameObjects.Container | null = null;
+
   constructor() {
     super("StageScene");
   }
@@ -176,6 +227,7 @@ export class StageScene extends Phaser.Scene {
     this.statusPanelHeroId = null;
     this.endOverlay = null;
     this.gameOver = false;
+    this.currentCutIn = null;
     this.heroPaletteEntries = [];
 
     this.cameras.main.setBackgroundColor(0x0e1117);
@@ -407,7 +459,11 @@ export class StageScene extends Phaser.Scene {
       );
       if (tile) {
         const hero = this.placedHeroes.find((h) => tileEquals(h.tile, tile));
-        if (hero) this.openStatusPanel(hero);
+        if (hero) {
+          // SPEC-004 §5.4: ゲージ満タンならスキル発動を優先
+          if (this.tryActivateSkill(hero)) return;
+          this.openStatusPanel(hero);
+        }
       }
     });
   }
@@ -541,14 +597,34 @@ export class StageScene extends Phaser.Scene {
     ghostSprite.setDepth(20);
     for (const r of rangeRects) r.setAlpha(0.18);
 
+    const px = tileToPixel(tile);
+    const gaugeW = 40;
+    const gaugeH = 4;
+    const gaugeY = px.y - 32;
+    const gaugeBg = this.add
+      .rectangle(px.x, gaugeY, gaugeW, gaugeH, 0x111827, 0.9)
+      .setDepth(33);
+    const gaugeFill = this.add
+      .rectangle(px.x - gaugeW / 2, gaugeY, 0, gaugeH, 0xfacc15)
+      .setOrigin(0, 0.5)
+      .setDepth(34);
+
     this.placedHeroes.push({
       def: hero,
+      skill: findSkill(hero.id) ?? null,
       tile,
       direction,
       sprite: ghostSprite,
       rangeRects,
       lastAttackAt: this.elapsed,
       blockNum: 0,
+      skillGauge: 0,
+      readyRing: null,
+      gaugeBg,
+      gaugeFill,
+      activeEffect: null,
+      aura: null,
+      debuffSnapshots: [],
     });
 
     this.placement = null;
@@ -636,12 +712,187 @@ export class StageScene extends Phaser.Scene {
     for (const e of this.enemies) {
       if (e.blockedBy === hero) e.blockedBy = null;
     }
+    // デバフを巻き戻す
+    this.revertDebuffs(hero);
     const refund = Math.ceil(hero.def.cost / 2);
     this.ce = Math.min(this.maxCe, this.ce + refund);
     hero.sprite.destroy();
     for (const r of hero.rangeRects) r.destroy();
+    hero.gaugeBg.destroy();
+    hero.gaugeFill.destroy();
+    hero.readyRing?.destroy();
+    hero.aura?.destroy();
     this.placedHeroes.splice(idx, 1);
     this.statusText.setText(`${hero.def.name} を売却（+${refund} CE）`);
+  }
+
+  private revertDebuffs(hero: PlacedHero): void {
+    for (const snap of hero.debuffSnapshots) {
+      if (snap.enemy.hp <= 0 || snap.enemy.goalReached) continue;
+      snap.enemy.phyDefMul = snap.origPhyDef;
+      snap.enemy.intDefMul = snap.origIntDef;
+    }
+    hero.debuffSnapshots = [];
+  }
+
+  // ========== スキル ==========
+
+  private tryActivateSkill(hero: PlacedHero): boolean {
+    if (this.gameOver) return false;
+    if (!hero.skill) return false;
+    if (!canActivate(hero.skillGauge)) return false;
+
+    const skill = hero.skill;
+    hero.skillGauge = 0;
+    hero.activeEffect = startEffect(skill, this.elapsed);
+    this.applySkillStart(hero);
+    this.playCutIn(hero);
+    this.playSe(skill.seCategory);
+    this.statusText.setText(`スキル発動: ${skill.name}（${hero.def.name}）`);
+    return true;
+  }
+
+  private applySkillStart(hero: PlacedHero): void {
+    if (!hero.skill || !hero.activeEffect) return;
+    const skill = hero.skill;
+
+    // オーラ表示（持続効果のみ）
+    if (skill.effectType !== "singleStrike") {
+      hero.aura?.destroy();
+      const aura = this.add.circle(
+        hero.sprite.x,
+        hero.sprite.y,
+        TILE_SIZE * 0.7,
+        CLASS_AURA_COLOR[hero.def.class],
+        0.18,
+      );
+      aura.setStrokeStyle(2, CLASS_AURA_COLOR[hero.def.class], 0.6);
+      aura.setDepth(15);
+      hero.aura = aura;
+    }
+
+    switch (skill.effectType) {
+      case "damageMultiplier":
+      case "agiBuff":
+        // 効果は activeEffect 経由で参照される。追加処理なし。
+        break;
+      case "enemyDefDebuff": {
+        const targets = this.findAllEnemiesInPattern(hero);
+        for (const e of targets) {
+          hero.debuffSnapshots.push({
+            enemy: e,
+            origPhyDef: e.phyDefMul,
+            origIntDef: e.intDefMul,
+          });
+          e.phyDefMul *= skill.value;
+          e.intDefMul *= skill.value;
+        }
+        break;
+      }
+      case "singleStrike": {
+        const target = this.findTargetByRouteProgress(hero);
+        if (target) {
+          this.fireBullet(hero, target, skill.value);
+        }
+        break;
+      }
+    }
+  }
+
+  private endSkillEffect(hero: PlacedHero): void {
+    hero.aura?.destroy();
+    hero.aura = null;
+    this.revertDebuffs(hero);
+    hero.activeEffect = null;
+  }
+
+  /** SPEC-004 §5.6 カットイン演出（同時 1 個） */
+  private playCutIn(hero: PlacedHero): void {
+    if (!hero.skill) return;
+    if (this.currentCutIn) {
+      this.currentCutIn.destroy(true);
+      this.currentCutIn = null;
+    }
+    const cx = this.stageWidth / 2;
+    const cy = this.stageHeight / 2;
+    const w = this.stageWidth * 0.85;
+    const h = 140;
+
+    const bg = this.add.rectangle(cx, cy, w, h, 0x000000, 0.6);
+    bg.setStrokeStyle(3, CLASS_AURA_COLOR[hero.def.class], 0.9);
+    const portrait = this.add
+      .sprite(cx - w / 2 + 80, cy, TEXTURE_KEYS.hero(hero.def.id))
+      .setDisplaySize(96, 96);
+    const heroName = this.add
+      .text(cx + 30, cy - 28, `${CLASS_LABEL[hero.def.class]}・${hero.def.name}`, {
+        fontSize: "16px",
+        color: "#e5e7eb",
+      })
+      .setOrigin(0.5);
+    const skillName = this.add
+      .text(cx + 30, cy + 4, hero.skill.name, {
+        fontSize: "32px",
+        color: "#fde68a",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5);
+    const desc = this.add
+      .text(cx + 30, cy + 36, hero.skill.description, {
+        fontSize: "12px",
+        color: "#cbd5e1",
+      })
+      .setOrigin(0.5);
+
+    const container = this.add.container(0, 0, [bg, portrait, heroName, skillName, desc]);
+    container.setDepth(95);
+    container.setAlpha(0);
+    this.currentCutIn = container;
+
+    this.tweens.add({
+      targets: container,
+      alpha: { from: 0, to: 1 },
+      duration: 200,
+      onComplete: () => {
+        this.tweens.add({
+          targets: container,
+          alpha: 1,
+          duration: 600,
+          onComplete: () => {
+            this.tweens.add({
+              targets: container,
+              alpha: 0,
+              duration: 200,
+              onComplete: () => {
+                if (this.currentCutIn === container) this.currentCutIn = null;
+                container.destroy(true);
+              },
+            });
+          },
+        });
+      },
+    });
+  }
+
+  private playSe(category: string): void {
+    const key = SE_KEYS.category(category as Parameters<typeof SE_KEYS.category>[0]);
+    if (!this.cache.audio.exists(key)) return;
+    try {
+      this.sound.play(key, { volume: 0.6 });
+    } catch (_) {
+      // 音声再生に失敗しても続行
+    }
+  }
+
+  private findAllEnemiesInPattern(hero: PlacedHero): ActiveEnemy[] {
+    const tiles = applyPatternToTile(
+      hero.tile,
+      rotatePattern(hero.def.attackPattern, hero.direction),
+    );
+    return this.enemies.filter((e) => {
+      const eTile = pixelToTile(e.sprite.x, e.sprite.y, this.map.cols, this.map.rows);
+      if (!eTile) return false;
+      return tiles.some((t) => tileEquals(t, eTile));
+    });
   }
 
   // ========== ステータスパネル ==========
@@ -773,8 +1024,53 @@ export class StageScene extends Phaser.Scene {
     this.tickEnemies(dt);
     this.tickHeroAttacks();
     this.tickBullets(dt);
+    this.tickSkills(dt);
     this.refreshHud();
     this.checkEndCondition();
+  }
+
+  private tickSkills(dt: number): void {
+    for (const hero of this.placedHeroes) {
+      // ゲージ蓄積
+      hero.skillGauge = tickGauge(hero.skillGauge, dt);
+
+      // ゲージ UI 位置同期
+      hero.gaugeBg.x = hero.sprite.x;
+      hero.gaugeBg.y = hero.sprite.y - 32;
+      hero.gaugeFill.x = hero.sprite.x - 20;
+      hero.gaugeFill.y = hero.sprite.y - 32;
+      hero.gaugeFill.displayWidth = 40 * (hero.skillGauge / GAUGE_MAX);
+
+      // 満タンリング
+      const ready = canActivate(hero.skillGauge);
+      if (ready && !hero.readyRing) {
+        hero.readyRing = this.add
+          .circle(hero.sprite.x, hero.sprite.y, TILE_SIZE * 0.45, 0xfde047, 0)
+          .setStrokeStyle(2, 0xfde047, 0.9)
+          .setDepth(22);
+      } else if (!ready && hero.readyRing) {
+        hero.readyRing.destroy();
+        hero.readyRing = null;
+      }
+      if (hero.readyRing) {
+        hero.readyRing.x = hero.sprite.x;
+        hero.readyRing.y = hero.sprite.y;
+        hero.readyRing.setStrokeStyle(2, 0xfde047, 0.6 + 0.4 * Math.abs(Math.sin(this.elapsed * 4)));
+      }
+
+      // 効果オーラ位置同期
+      if (hero.aura) {
+        hero.aura.x = hero.sprite.x;
+        hero.aura.y = hero.sprite.y;
+      }
+
+      // 効果期限切れ処理
+      if (hero.activeEffect && !isEffectActive(hero.activeEffect, this.elapsed)) {
+        // singleStrike は startEffect 直後から isEffectActive=false なので、この分岐は
+        // 持続効果と singleStrike 後始末の両方で機能する
+        this.endSkillEffect(hero);
+      }
+    }
   }
 
   private tickCe(dt: number): void {
@@ -828,6 +1124,8 @@ export class StageScene extends Phaser.Scene {
       nextIndex: 1,
       goalReached: false,
       blockedBy: null,
+      phyDefMul: 1,
+      intDefMul: 1,
     });
     this.spawnedTotal++;
   }
@@ -953,12 +1251,15 @@ export class StageScene extends Phaser.Scene {
 
   private tickHeroAttacks(): void {
     for (const hero of this.placedHeroes) {
-      const interval = 1 / Math.max(0.1, hero.def.agi / 100);
+      const baseInterval = 1 / Math.max(0.1, hero.def.agi / 100);
+      const interval =
+        baseInterval * intervalScale(hero.activeEffect, this.elapsed);
       if (this.elapsed - hero.lastAttackAt < interval) continue;
       const target = this.findTargetByRouteProgress(hero);
       if (!target) continue;
       hero.lastAttackAt = this.elapsed;
       this.fireBullet(hero, target);
+      hero.skillGauge = gainOnAttack(hero.skillGauge);
     }
   }
 
@@ -1007,13 +1308,21 @@ export class StageScene extends Phaser.Scene {
     return best;
   }
 
-  private fireBullet(hero: PlacedHero, target: ActiveEnemy): void {
+  private fireBullet(
+    hero: PlacedHero,
+    target: ActiveEnemy,
+    overrideDamageRate?: number,
+  ): void {
+    const damageRate =
+      overrideDamageRate ??
+      effectiveDamageRate(hero.activeEffect, this.elapsed);
     const damage = calculateDamage({
       attackType: hero.def.attackType,
       heroPhy: hero.def.phy,
       heroInt: hero.def.int,
-      enemyPhyDef: target.def.phyDef,
-      enemyIntDef: target.def.intDef,
+      enemyPhyDef: target.def.phyDef * target.phyDefMul,
+      enemyIntDef: target.def.intDef * target.intDefMul,
+      damageRate,
     });
 
     const color = hero.def.attackType === "INT" ? 0x60a5fa : 0xfacc15;
