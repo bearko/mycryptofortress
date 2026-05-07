@@ -27,6 +27,12 @@ cd web
 npm run build
 ```
 
+## Vercel へのデプロイ
+
+リポジトリルートに [vercel.json](vercel.json) を置き、`web/` 配下を Vite でビルドして `web/dist/` を公開する設定にしている。
+Vercel プロジェクトのダッシュボード側では **Root Directory はデフォルト（リポジトリルート）のまま** にする（`vercel.json` で吸収済み）。
+独自ドメインや環境変数の設定はダッシュボードから行う。
+
 ## 開発の進め方
 
 このリポジトリは [bearko/aidev_template](https://github.com/bearko/aidev_template) の **仕様駆動開発** フローに従う。
