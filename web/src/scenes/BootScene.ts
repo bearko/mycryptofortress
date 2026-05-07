@@ -22,9 +22,29 @@ const BGM_BATTLE_KEY = "bgm_battle";
 const BGM_BATTLE_URL =
   "https://raw.githubusercontent.com/bearko/mycryptoheroes/main/Audio/BGM/land.mp3";
 
+/**
+ * SPEC-005 §5.5: UI 系 SE。
+ * 元 Unity プロジェクト（MCHTowerDefence）に同梱されていた senses-circuit 提供の
+ * 効果音を `web/public/assets/se/` に配置して読み込む。
+ */
+const UI_SE_KEYS = {
+  tap: "ui_tap",
+  place: "ui_place",
+  attackSwipe: "ui_attack_swipe",
+} as const;
+
+const UI_SE_FILES: Array<{ key: string; url: string }> = [
+  { key: UI_SE_KEYS.tap, url: "assets/se/menu.mp3" },
+  { key: UI_SE_KEYS.place, url: "assets/se/tap_decision_01.mp3" },
+  { key: UI_SE_KEYS.attackSwipe, url: "assets/se/swipe_01.mp3" },
+];
+
 export const SE_KEYS = {
   category: (c: SkillCategory) => `se_${c}`,
   bgmBattle: () => BGM_BATTLE_KEY,
+  uiTap: () => UI_SE_KEYS.tap,
+  uiPlace: () => UI_SE_KEYS.place,
+  attackSwipe: () => UI_SE_KEYS.attackSwipe,
 };
 
 /**
@@ -59,6 +79,9 @@ export class BootScene extends Phaser.Scene {
     }
     for (const se of SE_FILES) {
       this.load.audio(SE_KEYS.category(se.key), [se.url]);
+    }
+    for (const se of UI_SE_FILES) {
+      this.load.audio(se.key, [se.url]);
     }
     this.load.audio(BGM_BATTLE_KEY, [BGM_BATTLE_URL]);
   }

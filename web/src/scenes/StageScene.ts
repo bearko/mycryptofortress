@@ -507,8 +507,8 @@ export class StageScene extends Phaser.Scene {
       if (tile) {
         const hero = this.placedHeroes.find((h) => tileEquals(h.tile, tile));
         if (hero) {
-          // SPEC-004 §5.4: ゲージ満タンならスキル発動を優先
-          if (this.tryActivateSkill(hero)) return;
+          // SPEC-005 §5.5: タップしたら必ず詳細パネルを開く（スキル発動はパネル内ボタン）
+          this.playUiSe(SE_KEYS.uiTap());
           this.openStatusPanel(hero);
         }
       }
@@ -685,6 +685,7 @@ export class StageScene extends Phaser.Scene {
     });
 
     this.placement = null;
+    this.playUiSe(SE_KEYS.uiPlace());
     this.statusText.setText(
       `${CLASS_LABEL[hero.class]} ${hero.name} を ${direction} 向きで配置（block最大 ${blockMaxFor(hero.class)}）`,
     );
@@ -1011,6 +1012,16 @@ export class StageScene extends Phaser.Scene {
     }
   }
 
+  /** SPEC-005 §5.5: UI 系 SE（タップ／配置／攻撃）の汎用再生 */
+  private playUiSe(key: string, volume = 0.6): void {
+    if (!this.cache.audio.exists(key)) return;
+    try {
+      this.sound.play(key, { volume });
+    } catch (_) {
+      // 音声再生に失敗しても続行
+    }
+  }
+
   private findAllEnemiesInPattern(hero: PlacedHero): ActiveEnemy[] {
     const tiles = this.effectiveAttackTiles(hero);
     return this.enemies.filter((e) => {
@@ -1020,52 +1031,52 @@ export class StageScene extends Phaser.Scene {
     });
   }
 
-  // ========== ステータスパネル ==========
+  // ========== ヒーロー詳細パネル ==========
 
+  /**
+   * SPEC-005 §5.5 仕様変更:
+   * - 半透明オーバーレイで背景バトル画面が透けて見える
+   * - パネル表示中はゲームを 0.1× 速度で進行（完全停止ではない）
+   * - スキル発動ボタンを内蔵し、ゲージ満タン時にのみ押下可能
+   * - 発動後はパネルを閉じてカットイン → スキル開始へ
+   */
   private openStatusPanel(hero: PlacedHero): void {
     if (this.statusPanel) return;
     this.statusPanelHeroId = hero.def.id;
 
+    const cx = this.stageWidth / 2;
+    const cy = this.stageHeight / 2;
+
+    // 半透明オーバーレイ（背景バトルが見える程度の透過に下げる）
     const overlay = this.add.rectangle(
-      this.stageWidth / 2,
-      this.stageHeight / 2,
+      cx,
+      cy,
       this.stageWidth,
       this.stageHeight,
       0x000000,
-      0.55,
+      0.45,
     );
     overlay.setInteractive({ useHandCursor: true });
 
-    const panel = this.add.rectangle(
-      this.stageWidth / 2,
-      this.stageHeight / 2,
-      400,
-      300,
-      0x111827,
-      0.98,
-    );
+    // 大きめのパネル（420×340）
+    const panel = this.add.rectangle(cx, cy, 460, 360, 0x111827, 0.92);
     panel.setStrokeStyle(2, 0x4b5563);
 
     const title = this.add
-      .text(
-        this.stageWidth / 2,
-        this.stageHeight / 2 - 120,
-        `[${CLASS_LABEL[hero.def.class]}] ${hero.def.name}`,
-        { fontSize: "20px", color: "#f9fafb", fontStyle: "bold" },
-      )
+      .text(cx, cy - 150, `[${CLASS_LABEL[hero.def.class]}] ${hero.def.name}`, {
+        fontSize: "20px",
+        color: "#f9fafb",
+        fontStyle: "bold",
+      })
       .setOrigin(0.5);
 
     const portrait = this.add
-      .sprite(
-        this.stageWidth / 2 - 145,
-        this.stageHeight / 2 - 30,
-        TEXTURE_KEYS.hero(hero.def.id),
-      )
+      .sprite(cx - 175, cy - 60, TEXTURE_KEYS.hero(hero.def.id))
       .setDisplaySize(96, 96);
 
     const interval = (1 / Math.max(0.1, hero.def.agi / 100)).toFixed(2);
     const tilesCount = hero.def.attackPattern.length;
-    const lines = [
+    const statLines = [
       `属性: ${hero.def.attackType}`,
       `HP : ${hero.def.hp}`,
       `PHY: ${hero.def.phy}`,
@@ -1077,16 +1088,97 @@ export class StageScene extends Phaser.Scene {
       `コスト: ${hero.def.cost} CE`,
     ];
     const stats = this.add
-      .text(this.stageWidth / 2 - 70, this.stageHeight / 2 - 80, lines.join("\n"), {
+      .text(cx - 100, cy - 110, statLines.join("\n"), {
         fontSize: "13px",
         color: "#e5e7eb",
         lineSpacing: 4,
       })
       .setOrigin(0, 0);
 
+    // ── スキル情報セクション
+    const skillTitle = this.add
+      .text(cx - 200, cy + 36, "[ スキル ]", {
+        fontSize: "13px",
+        color: "#fcd34d",
+        fontStyle: "bold",
+      })
+      .setOrigin(0, 0);
+
+    const skillName = hero.skill
+      ? this.add
+          .text(cx - 200, cy + 56, hero.skill.name, {
+            fontSize: "16px",
+            color: "#fde68a",
+            fontStyle: "bold",
+          })
+          .setOrigin(0, 0)
+      : this.add
+          .text(cx - 200, cy + 56, "（スキル無し）", {
+            fontSize: "13px",
+            color: "#9ca3af",
+          })
+          .setOrigin(0, 0);
+
+    const skillDesc = hero.skill
+      ? this.add
+          .text(cx - 200, cy + 80, hero.skill.description, {
+            fontSize: "12px",
+            color: "#cbd5e1",
+            wordWrap: { width: 400 },
+          })
+          .setOrigin(0, 0)
+      : null;
+
+    // ── ゲージ表示
+    const gaugeBgX = cx - 200;
+    const gaugeY = cy + 116;
+    const gaugeW = 240;
+    const gaugeH = 8;
+    const panelGaugeBg = this.add
+      .rectangle(gaugeBgX, gaugeY, gaugeW, gaugeH, 0x1f2937, 1)
+      .setOrigin(0, 0.5);
+    const fillW = gaugeW * (hero.skillGauge / GAUGE_MAX);
+    const panelGaugeFill = this.add
+      .rectangle(gaugeBgX, gaugeY, fillW, gaugeH, 0xfacc15)
+      .setOrigin(0, 0.5);
+    const gaugeLabel = this.add
+      .text(gaugeBgX + gaugeW + 8, gaugeY, `${Math.floor(hero.skillGauge)}/${GAUGE_MAX}`, {
+        fontSize: "11px",
+        color: "#bae6fd",
+      })
+      .setOrigin(0, 0.5);
+
+    // ── スキル発動ボタン
+    const ready = canActivate(hero.skillGauge) && hero.skill !== null;
+    const activateBtnBg = this.add.rectangle(
+      cx + 105,
+      cy + 56,
+      120,
+      36,
+      ready ? 0xfacc15 : 0x374151,
+      0.95,
+    );
+    activateBtnBg.setStrokeStyle(2, ready ? 0xfde047 : 0x6b7280);
+    if (ready) activateBtnBg.setInteractive({ useHandCursor: true });
+    const activateBtnText = this.add
+      .text(cx + 105, cy + 56, ready ? "▶ 発動" : "ゲージ不足", {
+        fontSize: "14px",
+        color: ready ? "#1f2937" : "#9ca3af",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5);
+
+    if (ready) {
+      activateBtnBg.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+        if (pointer.rightButtonDown()) return;
+        this.activateSkillFromPanel(hero);
+      });
+    }
+
+    // ── 閉じるボタン
     const closeBtn = this.add
-      .text(this.stageWidth / 2, this.stageHeight / 2 + 120, "[ 閉じる ]", {
-        fontSize: "16px",
+      .text(cx, cy + 150, "[ 閉じる ]", {
+        fontSize: "14px",
         color: "#93c5fd",
       })
       .setOrigin(0.5)
@@ -1094,19 +1186,34 @@ export class StageScene extends Phaser.Scene {
     closeBtn.on("pointerdown", () => this.closeStatusPanel());
     overlay.on("pointerdown", () => this.closeStatusPanel());
 
-    this.statusPanel = this.add.container(0, 0, [
+    const items: Phaser.GameObjects.GameObject[] = [
       overlay,
       panel,
       title,
       portrait,
       stats,
+      skillTitle,
+      skillName,
+      panelGaugeBg,
+      panelGaugeFill,
+      gaugeLabel,
+      activateBtnBg,
+      activateBtnText,
       closeBtn,
-    ]);
+    ];
+    if (skillDesc) items.splice(7, 0, skillDesc);
+    this.statusPanel = this.add.container(0, 0, items);
     this.statusPanel.setDepth(100);
 
     for (const r of hero.rangeRects) r.setAlpha(0.35);
     this.playSpeed = 0.1;
     this.refreshSpeedButton();
+  }
+
+  /** SPEC-005 §5.5: パネル経由でスキル発動 → パネル閉じてカットイン */
+  private activateSkillFromPanel(hero: PlacedHero): void {
+    this.closeStatusPanel();
+    this.tryActivateSkill(hero);
   }
 
   private closeStatusPanel(): void {
@@ -1479,6 +1586,12 @@ export class StageScene extends Phaser.Scene {
       speed: 600,
       done: false,
     });
+
+    // SPEC-005 §5.5: 道職業（前衛系）が攻撃したときに swipe SE。
+    // 連発を避けるため volume はやや控えめ。
+    if (isPathClass(hero.def.class)) {
+      this.playUiSe(SE_KEYS.attackSwipe(), 0.35);
+    }
   }
 
   private tickBullets(dt: number): void {
