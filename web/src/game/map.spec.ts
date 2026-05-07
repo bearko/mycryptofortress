@@ -69,16 +69,16 @@ describe("canPlaceClassOnTile マトリクス", () => {
 });
 
 describe("Stage1-1 v2 MapDef", () => {
-  it("12 列 × 8 行で、A / B の 2 経路が始端から終端まで通っている", () => {
-    expect(STAGE1_MAP.cols).toBe(12);
+  it("10 列 × 8 行で、A / B の 2 経路が始端から終端まで通っている", () => {
+    expect(STAGE1_MAP.cols).toBe(10);
     expect(STAGE1_MAP.rows).toBe(8);
     expect(STAGE1_MAP.routes.map((r) => r.id).sort()).toEqual(["A", "B"]);
     const a = findRoute(STAGE1_MAP, "A")!;
     const b = findRoute(STAGE1_MAP, "B")!;
     expect(a.points[0]).toEqual({ col: 0, row: 1 });
-    expect(a.points[a.points.length - 1]).toEqual({ col: 11, row: 1 });
+    expect(a.points[a.points.length - 1]).toEqual({ col: 9, row: 1 });
     expect(b.points[0]).toEqual({ col: 0, row: 6 });
-    expect(b.points[b.points.length - 1]).toEqual({ col: 11, row: 6 });
+    expect(b.points[b.points.length - 1]).toEqual({ col: 9, row: 6 });
   });
 
   it("ルート上は path、壁帯 (row 2, 5) は wall、その他は obstacle", () => {
@@ -92,12 +92,12 @@ describe("Stage1-1 v2 MapDef", () => {
 
   it("壁帯の端 2 マスは obstacle", () => {
     expect(tileTypeAt(STAGE1_MAP, { col: 0, row: 2 })).toBe("obstacle");
-    expect(tileTypeAt(STAGE1_MAP, { col: 11, row: 2 })).toBe("obstacle");
+    expect(tileTypeAt(STAGE1_MAP, { col: 9, row: 2 })).toBe("obstacle");
   });
 
   it("範囲外は null", () => {
     expect(tileTypeAt(STAGE1_MAP, { col: -1, row: 0 })).toBeNull();
-    expect(tileTypeAt(STAGE1_MAP, { col: 12, row: 0 })).toBeNull();
+    expect(tileTypeAt(STAGE1_MAP, { col: 10, row: 0 })).toBeNull();
     expect(tileTypeAt(STAGE1_MAP, { col: 0, row: 8 })).toBeNull();
   });
 });
@@ -114,13 +114,13 @@ describe("tile <-> pixel", () => {
     const p = tileToPixel({ col: 4, row: 2 });
     expect(p.x).toBe(4 * TILE_SIZE + TILE_SIZE / 2);
     expect(p.y).toBe(2 * TILE_SIZE + TILE_SIZE / 2);
-    const t = pixelToTile(p.x, p.y, 12, 8);
+    const t = pixelToTile(p.x, p.y, 10, 8);
     expect(t).toEqual({ col: 4, row: 2 });
   });
 
   it("マップ範囲外は null", () => {
-    expect(pixelToTile(-10, 0, 12, 8)).toBeNull();
-    expect(pixelToTile(0, 8 * TILE_SIZE + 1, 12, 8)).toBeNull();
+    expect(pixelToTile(-10, 0, 10, 8)).toBeNull();
+    expect(pixelToTile(0, 8 * TILE_SIZE + 1, 10, 8)).toBeNull();
   });
 });
 

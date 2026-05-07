@@ -33,4 +33,9 @@ describe("stage re-exports (SPEC-003 互換)", () => {
     const t = pixelToTile(p.x, p.y, COLS, ROWS);
     expect(t).toEqual({ col: 4, row: 2 });
   });
+
+  it("SPEC-006: 10 列 × 8 行に縮小", () => {
+    expect(COLS).toBe(10);
+    expect(ROWS).toBe(8);
+  });
 });
