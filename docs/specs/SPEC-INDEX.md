@@ -2,7 +2,8 @@
 
 | ID | 状態 | 題名 | 最終更新 |
 |----|------|------|----------|
-| [SPEC-001](./SPEC-001-mvp-stage1.md) | Draft | Stage1-1 相当 MVP（ブラウザ TD ループ） | 2026-05-07 |
+| [SPEC-001](./SPEC-001-mvp-stage1.md) | Accepted | Stage1-1 相当 MVP（ブラウザ TD ループ） | 2026-05-07 |
+| [SPEC-002](./SPEC-002-battle-screen-polish.md) | Draft | バトル画面ブラッシュアップ（タイル攻撃範囲・向き選択・描画調整・残 Unity 要素） | 2026-05-07 |
 
 ## 番号付けルール
 
