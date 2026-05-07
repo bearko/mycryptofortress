@@ -17,8 +17,14 @@ const SE_FILES: Array<{ key: SkillCategory; url: string }> = [
   { key: "debuff_status_effect", url: `${SE_BASE}/5_debuff_status_effect.mp3` },
 ];
 
+/** SPEC-005 §5.4: 戦闘 BGM */
+const BGM_BATTLE_KEY = "bgm_battle";
+const BGM_BATTLE_URL =
+  "https://raw.githubusercontent.com/bearko/mycryptoheroes/main/Audio/BGM/land.mp3";
+
 export const SE_KEYS = {
   category: (c: SkillCategory) => `se_${c}`,
+  bgmBattle: () => BGM_BATTLE_KEY,
 };
 
 /**
@@ -54,6 +60,7 @@ export class BootScene extends Phaser.Scene {
     for (const se of SE_FILES) {
       this.load.audio(SE_KEYS.category(se.key), [se.url]);
     }
+    this.load.audio(BGM_BATTLE_KEY, [BGM_BATTLE_URL]);
   }
 
   create(): void {

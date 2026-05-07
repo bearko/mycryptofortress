@@ -9,6 +9,7 @@ import {
   canPlaceClassOnTile,
   distanceToGoal,
   findRoute,
+  isPathClass,
   pixelToTile,
   placementTileFor,
   routeProgress,
@@ -165,6 +166,8 @@ export class StageScene extends Phaser.Scene {
   private waveQueue: SpawnPattern[] = [];
   private spawnedTotal = 0;
   private defeatedTotal = 0;
+  /** SPEC-005 §5.1: ゴール到達した敵の総数（クリア判定で使う） */
+  private escapedTotal = 0;
   private totalToDefeat = 0;
 
   private placement: PlacementPhase = null;
@@ -198,6 +201,9 @@ export class StageScene extends Phaser.Scene {
   /** 表示中のカットイン（同時 1 個だけ） */
   private currentCutIn: Phaser.GameObjects.Container | null = null;
 
+  /** SPEC-005 §5.4: 戦闘 BGM の再生インスタンス（停止用に保持） */
+  private bgm: Phaser.Sound.BaseSound | null = null;
+
   constructor() {
     super("StageScene");
   }
@@ -214,6 +220,7 @@ export class StageScene extends Phaser.Scene {
     this.elapsed = 0;
     this.spawnedTotal = 0;
     this.defeatedTotal = 0;
+    this.escapedTotal = 0;
     this.totalToDefeat = STAGE1_WAVE.patterns.length;
     this.waveQueue = [...STAGE1_WAVE.patterns];
     this.placement = null;
@@ -235,6 +242,46 @@ export class StageScene extends Phaser.Scene {
     this.drawHud();
     this.bindInput();
     this.refreshSpeedButton();
+    this.startBgm();
+  }
+
+  /**
+   * SPEC-005 §5.4: 戦闘 BGM をループ再生する。
+   * 多くのブラウザは「ユーザーがページに最初にインタラクトするまで」音を出せない仕様
+   * なので、一度クリックされたタイミングでも再開できるよう shutdown / 再起動を扱う。
+   */
+  private startBgm(): void {
+    if (this.bgm) {
+      this.bgm.stop();
+      this.bgm.destroy();
+      this.bgm = null;
+    }
+    const key = SE_KEYS.bgmBattle();
+    if (!this.cache.audio.exists(key)) return;
+    try {
+      this.bgm = this.sound.add(key, { loop: true, volume: 0.4 });
+      const playWhenAllowed = () => {
+        if (!this.bgm) return;
+        try {
+          this.bgm.play();
+        } catch (_) {
+          // 再生に失敗（autoplay block 等）。ユーザー操作後に再試行。
+        }
+      };
+      playWhenAllowed();
+      // 自動再生がブロックされた場合、最初の入力で再生開始
+      if (this.bgm && !(this.bgm as Phaser.Sound.BaseSound & { isPlaying?: boolean }).isPlaying) {
+        const onceListener = () => playWhenAllowed();
+        this.input.once("pointerdown", onceListener);
+      }
+    } catch (_) {
+      // 失敗時はミュートのまま継続
+    }
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.bgm?.stop();
+      this.bgm?.destroy();
+      this.bgm = null;
+    });
   }
 
   // ========== 描画 ==========
@@ -399,7 +446,7 @@ export class StageScene extends Phaser.Scene {
         this.placement.ghostSprite.y = p.worldY;
         this.repositionPatternRects(
           this.placement.rangeRects,
-          this.placement.hero.attackPattern,
+          this.visualPattern(this.placement.hero),
           { col: 0, row: 0 },
           "right",
           p.worldX,
@@ -415,7 +462,7 @@ export class StageScene extends Phaser.Scene {
           this.placement.direction = dir;
           this.repositionPatternRects(
             this.placement.rangeRects,
-            this.placement.hero.attackPattern,
+            this.visualPattern(this.placement.hero),
             this.placement.tile,
             dir,
           );
@@ -469,6 +516,16 @@ export class StageScene extends Phaser.Scene {
   }
 
   // ========== 配置フロー ==========
+
+  /**
+   * SPEC-005 §5.2: path 職業は表示用パターンにも自タイル (0,0) を含める。
+   */
+  private visualPattern(hero: HeroDef): TilePos[] {
+    const base = hero.attackPattern;
+    if (!isPathClass(hero.class)) return base;
+    if (base.some((p) => p.col === 0 && p.row === 0)) return base;
+    return [...base, { col: 0, row: 0 }];
+  }
 
   private onSelectHero(hero: HeroDef): void {
     if (this.gameOver || this.statusPanel) return;
@@ -565,7 +622,7 @@ export class StageScene extends Phaser.Scene {
     const direction: Direction = "right";
     this.repositionPatternRects(
       this.placement.rangeRects,
-      this.placement.hero.attackPattern,
+      this.visualPattern(this.placement.hero),
       tile,
       direction,
     );
@@ -806,63 +863,134 @@ export class StageScene extends Phaser.Scene {
     hero.activeEffect = null;
   }
 
-  /** SPEC-004 §5.6 カットイン演出（同時 1 個） */
+  /**
+   * SPEC-005 §5.3 カットイン演出（MCH パッシブスキル風）。
+   *
+   * 元の MCH 演出は CSS の `transform: skewY(-10deg)` で平行四辺形バンドを作り、
+   * `linear-gradient(to right bottom, #609da8 50%, #282b33 50%)` で 2 色対角分割し、
+   * 右からスライドイン → ホールド → 左へスライドアウトする。
+   * Phaser には skew が無いので、コンテナを `setAngle(-10)` で代用しつつ、
+   * 背景は Graphics で 2 色の三角形を重ねて分割を表現する。
+   * シャインは alpha 0.3 ↔ 0.8 を 0.5 秒で yoyo して再現する。
+   */
   private playCutIn(hero: PlacedHero): void {
     if (!hero.skill) return;
     if (this.currentCutIn) {
       this.currentCutIn.destroy(true);
       this.currentCutIn = null;
     }
-    const cx = this.stageWidth / 2;
-    const cy = this.stageHeight / 2;
-    const w = this.stageWidth * 0.85;
-    const h = 140;
 
-    const bg = this.add.rectangle(cx, cy, w, h, 0x000000, 0.6);
-    bg.setStrokeStyle(3, CLASS_AURA_COLOR[hero.def.class], 0.9);
+    const stageW = this.stageWidth;
+    const stageH = this.stageHeight;
+    const cx = stageW / 2;
+    const cy = stageH / 2;
+    // バンドはステージ幅より広く、左右にはみ出るサイズで作る（スライド時の見切れ防止）
+    const bandW = stageW * 1.4;
+    const bandH = 120;
+
+    // ── 背景バンド（2 色対角分割）
+    // ally 色: 青系 / opponent 色: 赤系。マイクリでは「自分のヒーロー＝ally」で青系。
+    // ここではプレイヤーのヒーロー＝ ally として固定。
+    const LIGHT = 0x609da8;
+    const DARK = 0x282b33;
+    const SHINE = 0x05599a; // shine animation の上塗り色
+
+    const bg = this.add.graphics();
+    bg.fillStyle(DARK, 1);
+    bg.fillRect(-bandW / 2, -bandH / 2, bandW, bandH);
+    // 左下三角形（top-left → top-right → bottom-left の領域 = "to right bottom" の前半 50%）
+    bg.fillStyle(LIGHT, 1);
+    bg.fillTriangle(
+      -bandW / 2,
+      -bandH / 2,
+      bandW / 2,
+      -bandH / 2,
+      -bandW / 2,
+      bandH / 2,
+    );
+
+    // ── シャイン（薄いブルーが点滅して動感を出す）
+    const shine = this.add.graphics();
+    shine.fillStyle(SHINE, 0.5);
+    shine.fillRect(-bandW / 2, -bandH / 2, bandW, bandH);
+    shine.setAlpha(0.3);
+
+    // ── 三角形の装飾片（mix-blend-mode:color-dodge の代わりに加算ぽい色で 2 個だけ置く）
+    const tri1 = this.add.graphics();
+    tri1.fillStyle(0x80c8d8, 0.8);
+    tri1.fillTriangle(-bandW * 0.25, 0, -bandW * 0.18, -bandH / 2, -bandW * 0.32, -bandH / 2);
+    const tri2 = this.add.graphics();
+    tri2.fillStyle(0x80c8d8, 0.6);
+    tri2.fillTriangle(bandW * 0.18, 0, bandW * 0.28, bandH / 2, bandW * 0.10, bandH / 2);
+
+    // ── ヒーロー portrait（image-rendering: pixelated を効かすため scale を整数で）
+    // CSS は max-width 128px / scale(2) なので実効 256px。Phaser 側では 96 にしておく。
+    const portraitX = -bandW * 0.32;
     const portrait = this.add
-      .sprite(cx - w / 2 + 80, cy, TEXTURE_KEYS.hero(hero.def.id))
+      .sprite(portraitX, 0, TEXTURE_KEYS.hero(hero.def.id))
       .setDisplaySize(96, 96);
-    const heroName = this.add
-      .text(cx + 30, cy - 28, `${CLASS_LABEL[hero.def.class]}・${hero.def.name}`, {
-        fontSize: "16px",
-        color: "#e5e7eb",
-      })
-      .setOrigin(0.5);
+
+    // ── スキル名 + ヒーロー名
     const skillName = this.add
-      .text(cx + 30, cy + 4, hero.skill.name, {
-        fontSize: "32px",
+      .text(bandW * 0.05, -14, hero.skill.name, {
+        fontSize: "30px",
         color: "#fde68a",
         fontStyle: "bold",
       })
       .setOrigin(0.5);
-    const desc = this.add
-      .text(cx + 30, cy + 36, hero.skill.description, {
-        fontSize: "12px",
-        color: "#cbd5e1",
+    const heroName = this.add
+      .text(bandW * 0.05, 22, `${CLASS_LABEL[hero.def.class]}・${hero.def.name}`, {
+        fontSize: "14px",
+        color: "#e5e7eb",
       })
       .setOrigin(0.5);
 
-    const container = this.add.container(0, 0, [bg, portrait, heroName, skillName, desc]);
+    // ── コンテナにまとめて、中心へ配置 + 10° 回転（skewY 代用）
+    const container = this.add.container(cx, cy, [
+      bg,
+      shine,
+      tri1,
+      tri2,
+      portrait,
+      skillName,
+      heroName,
+    ]);
+    container.setAngle(-10);
     container.setDepth(95);
-    container.setAlpha(0);
+
+    // 初期位置: 右側からスライドイン
+    container.x = cx + stageW;
     this.currentCutIn = container;
 
+    // シャイン点滅（持続中ずっと動かす）
+    const shineTween = this.tweens.add({
+      targets: shine,
+      alpha: { from: 0.3, to: 0.85 },
+      duration: 500,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+
+    // スライドイン → ホールド → スライドアウト の 3 段
     this.tweens.add({
       targets: container,
-      alpha: { from: 0, to: 1 },
-      duration: 200,
+      x: cx,
+      duration: 220,
+      ease: "Sine.easeOut",
       onComplete: () => {
         this.tweens.add({
           targets: container,
-          alpha: 1,
+          x: cx,
           duration: 600,
           onComplete: () => {
             this.tweens.add({
               targets: container,
-              alpha: 0,
-              duration: 200,
+              x: cx - stageW,
+              duration: 220,
+              ease: "Sine.easeIn",
               onComplete: () => {
+                shineTween.stop();
                 if (this.currentCutIn === container) this.currentCutIn = null;
                 container.destroy(true);
               },
@@ -884,10 +1012,7 @@ export class StageScene extends Phaser.Scene {
   }
 
   private findAllEnemiesInPattern(hero: PlacedHero): ActiveEnemy[] {
-    const tiles = applyPatternToTile(
-      hero.tile,
-      rotatePattern(hero.def.attackPattern, hero.direction),
-    );
+    const tiles = this.effectiveAttackTiles(hero);
     return this.enemies.filter((e) => {
       const eTile = pixelToTile(e.sprite.x, e.sprite.y, this.map.cols, this.map.rows);
       if (!eTile) return false;
@@ -1245,7 +1370,9 @@ export class StageScene extends Phaser.Scene {
   }
 
   private handleGoal(enemy: ActiveEnemy): void {
+    if (enemy.goalReached) return; // 二重カウント防止
     enemy.goalReached = true;
+    this.escapedTotal += 1;
     this.baseHp = Math.max(0, this.baseHp - 1);
   }
 
@@ -1264,6 +1391,23 @@ export class StageScene extends Phaser.Scene {
   }
 
   /**
+   * SPEC-005 §5.2: path 職業は自身のタイルも攻撃範囲に含める。
+   */
+  private effectiveAttackTiles(hero: PlacedHero): TilePos[] {
+    const tiles = applyPatternToTile(
+      hero.tile,
+      rotatePattern(hero.def.attackPattern, hero.direction),
+    );
+    if (isPathClass(hero.def.class)) {
+      // 自タイルが既にパターンに含まれていない場合のみ追加
+      if (!tiles.some((t) => tileEquals(t, hero.tile))) {
+        tiles.push({ col: hero.tile.col, row: hero.tile.row });
+      }
+    }
+    return tiles;
+  }
+
+  /**
    * SPEC-003 §5.7: 攻撃範囲タイルに重なる敵から
    *   1. ルート進行度が最大
    *   2. ゴールまでの距離が最小
@@ -1271,10 +1415,7 @@ export class StageScene extends Phaser.Scene {
    * の順で 1 体選ぶ。
    */
   private findTargetByRouteProgress(hero: PlacedHero): ActiveEnemy | null {
-    const tiles = applyPatternToTile(
-      hero.tile,
-      rotatePattern(hero.def.attackPattern, hero.direction),
-    );
+    const tiles = this.effectiveAttackTiles(hero);
     let best: ActiveEnemy | null = null;
     let bestProgress = -Infinity;
     let bestDistanceToGoal = Infinity;
@@ -1382,10 +1523,12 @@ export class StageScene extends Phaser.Scene {
       this.endGame(false);
       return;
     }
-    const goalCount = this.enemies.filter((e) => e.goalReached).length;
+    // SPEC-005 §5.1 のバグ修正: 旧実装は `goalReached` を持つ enemies を即時 filter で
+    // 取り除いてから数えていたため、ゴール到達の累計を取り損ねていた。永続カウンタの
+    // `escapedTotal` を使うことでブロックして全敵を撃破した時もクリア判定が出る。
     if (
       this.spawnedTotal >= this.totalToDefeat &&
-      this.defeatedTotal + goalCount >= this.totalToDefeat
+      this.defeatedTotal + this.escapedTotal >= this.totalToDefeat
     ) {
       this.endGame(this.defeatedTotal === this.totalToDefeat);
     }

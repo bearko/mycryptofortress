@@ -50,6 +50,14 @@ export function canPlaceClassOnTile(
   return CLASS_PLACEMENT_TILE[cls] === tile;
 }
 
+/**
+ * SPEC-005 §5.2: 道（path）に置く職業は、自身がいるタイルも攻撃判定エリアに含める。
+ * これにより、ブロック中の敵（自タイルで停止）に対しても攻撃が通る。
+ */
+export function isPathClass(cls: HeroClass): boolean {
+  return CLASS_PLACEMENT_TILE[cls] === "path";
+}
+
 /** タイル座標 → ピクセル中心座標 */
 export function tileToPixel(pos: TilePos): { x: number; y: number } {
   return {
