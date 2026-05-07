@@ -6,6 +6,7 @@ import {
   canPlaceClassOnTile,
   distanceToGoal,
   findRoute,
+  isPathClass,
   placementTileFor,
   pixelToTile,
   routeProgress,
@@ -34,6 +35,19 @@ describe("placementTileFor / blockMaxFor", () => {
     expect(blockMaxFor("guard")).toBe(2);
     expect(blockMaxFor("vanguard")).toBe(1);
     expect(blockMaxFor("specialist")).toBe(1);
+  });
+});
+
+describe("isPathClass (SPEC-005 §5.2)", () => {
+  it("path 系職業は true", () => {
+    for (const c of ["defender", "guard", "vanguard", "specialist"] as const) {
+      expect(isPathClass(c)).toBe(true);
+    }
+  });
+  it("wall 系職業は false", () => {
+    for (const c of ["sniper", "caster", "medic", "supporter"] as const) {
+      expect(isPathClass(c)).toBe(false);
+    }
   });
 });
 

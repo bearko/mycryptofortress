@@ -9,6 +9,7 @@ import {
   canPlaceClassOnTile,
   distanceToGoal,
   findRoute,
+  isPathClass,
   pixelToTile,
   placementTileFor,
   routeProgress,
@@ -32,7 +33,20 @@ import {
   tileEquals,
   type Direction,
 } from "../game/pattern";
-import { TEXTURE_KEYS } from "./BootScene";
+import {
+  ActiveSkillState,
+  GAUGE_MAX,
+  canActivate,
+  effectiveDamageRate,
+  findSkill,
+  gainOnAttack,
+  intervalScale,
+  isEffectActive,
+  startEffect,
+  tickGauge,
+  type SkillDef,
+} from "../game/skill";
+import { SE_KEYS, TEXTURE_KEYS } from "./BootScene";
 
 const HUD_HEIGHT = 96;
 
@@ -52,14 +66,46 @@ const ROUTE_COLOR: Record<string, number> = {
   B: 0x60a5fa,
 };
 
+/** SPEC-004 §5.6: 職業ごとのカットイン色 */
+const CLASS_AURA_COLOR: Record<HeroClass, number> = {
+  defender: 0x60a5fa,
+  guard: 0xfacc15,
+  vanguard: 0xf472b6,
+  specialist: 0xa78bfa,
+  sniper: 0xfb923c,
+  caster: 0x22d3ee,
+  medic: 0x4ade80,
+  supporter: 0xfde047,
+};
+
+interface DebuffSnapshot {
+  enemy: ActiveEnemy;
+  origPhyDef: number;
+  origIntDef: number;
+}
+
 interface PlacedHero {
   def: HeroDef;
+  skill: SkillDef | null;
   tile: TilePos;
   direction: Direction;
   sprite: Phaser.GameObjects.Sprite;
   rangeRects: Phaser.GameObjects.Rectangle[];
   lastAttackAt: number;
   blockNum: number;
+  /** SPEC-004 §5.3 スキルゲージ（0..100） */
+  skillGauge: number;
+  /** ゲージ満タン時に頭上に出すリング（null=未表示） */
+  readyRing: Phaser.GameObjects.Arc | null;
+  /** ゲージバー背景 / 進捗 */
+  gaugeBg: Phaser.GameObjects.Rectangle;
+  gaugeFill: Phaser.GameObjects.Rectangle;
+  /** 発動中の効果（null=非発動） */
+  activeEffect: ActiveSkillState | null;
+  /** 発動中に表示するオーラ */
+  aura: Phaser.GameObjects.Arc | null;
+  /** enemyDefDebuff のスナップショット（期限切れ時に巻き戻す） */
+  debuffSnapshots: DebuffSnapshot[];
 }
 
 interface ActiveEnemy {
@@ -72,6 +118,9 @@ interface ActiveEnemy {
   nextIndex: number;
   goalReached: boolean;
   blockedBy: PlacedHero | null;
+  /** SPEC-004 §5.5 enemyDefDebuff: 1.0 が通常、debuff 中は < 1.0 */
+  phyDefMul: number;
+  intDefMul: number;
 }
 
 interface ActiveBullet {
@@ -117,6 +166,8 @@ export class StageScene extends Phaser.Scene {
   private waveQueue: SpawnPattern[] = [];
   private spawnedTotal = 0;
   private defeatedTotal = 0;
+  /** SPEC-005 §5.1: ゴール到達した敵の総数（クリア判定で使う） */
+  private escapedTotal = 0;
   private totalToDefeat = 0;
 
   private placement: PlacementPhase = null;
@@ -147,6 +198,12 @@ export class StageScene extends Phaser.Scene {
   private endOverlay: Phaser.GameObjects.Container | null = null;
   private gameOver = false;
 
+  /** 表示中のカットイン（同時 1 個だけ） */
+  private currentCutIn: Phaser.GameObjects.Container | null = null;
+
+  /** SPEC-005 §5.4: 戦闘 BGM の再生インスタンス（停止用に保持） */
+  private bgm: Phaser.Sound.BaseSound | null = null;
+
   constructor() {
     super("StageScene");
   }
@@ -163,6 +220,7 @@ export class StageScene extends Phaser.Scene {
     this.elapsed = 0;
     this.spawnedTotal = 0;
     this.defeatedTotal = 0;
+    this.escapedTotal = 0;
     this.totalToDefeat = STAGE1_WAVE.patterns.length;
     this.waveQueue = [...STAGE1_WAVE.patterns];
     this.placement = null;
@@ -176,6 +234,7 @@ export class StageScene extends Phaser.Scene {
     this.statusPanelHeroId = null;
     this.endOverlay = null;
     this.gameOver = false;
+    this.currentCutIn = null;
     this.heroPaletteEntries = [];
 
     this.cameras.main.setBackgroundColor(0x0e1117);
@@ -183,6 +242,46 @@ export class StageScene extends Phaser.Scene {
     this.drawHud();
     this.bindInput();
     this.refreshSpeedButton();
+    this.startBgm();
+  }
+
+  /**
+   * SPEC-005 §5.4: 戦闘 BGM をループ再生する。
+   * 多くのブラウザは「ユーザーがページに最初にインタラクトするまで」音を出せない仕様
+   * なので、一度クリックされたタイミングでも再開できるよう shutdown / 再起動を扱う。
+   */
+  private startBgm(): void {
+    if (this.bgm) {
+      this.bgm.stop();
+      this.bgm.destroy();
+      this.bgm = null;
+    }
+    const key = SE_KEYS.bgmBattle();
+    if (!this.cache.audio.exists(key)) return;
+    try {
+      this.bgm = this.sound.add(key, { loop: true, volume: 0.4 });
+      const playWhenAllowed = () => {
+        if (!this.bgm) return;
+        try {
+          this.bgm.play();
+        } catch (_) {
+          // 再生に失敗（autoplay block 等）。ユーザー操作後に再試行。
+        }
+      };
+      playWhenAllowed();
+      // 自動再生がブロックされた場合、最初の入力で再生開始
+      if (this.bgm && !(this.bgm as Phaser.Sound.BaseSound & { isPlaying?: boolean }).isPlaying) {
+        const onceListener = () => playWhenAllowed();
+        this.input.once("pointerdown", onceListener);
+      }
+    } catch (_) {
+      // 失敗時はミュートのまま継続
+    }
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.bgm?.stop();
+      this.bgm?.destroy();
+      this.bgm = null;
+    });
   }
 
   // ========== 描画 ==========
@@ -347,7 +446,7 @@ export class StageScene extends Phaser.Scene {
         this.placement.ghostSprite.y = p.worldY;
         this.repositionPatternRects(
           this.placement.rangeRects,
-          this.placement.hero.attackPattern,
+          this.visualPattern(this.placement.hero),
           { col: 0, row: 0 },
           "right",
           p.worldX,
@@ -363,7 +462,7 @@ export class StageScene extends Phaser.Scene {
           this.placement.direction = dir;
           this.repositionPatternRects(
             this.placement.rangeRects,
-            this.placement.hero.attackPattern,
+            this.visualPattern(this.placement.hero),
             this.placement.tile,
             dir,
           );
@@ -407,12 +506,26 @@ export class StageScene extends Phaser.Scene {
       );
       if (tile) {
         const hero = this.placedHeroes.find((h) => tileEquals(h.tile, tile));
-        if (hero) this.openStatusPanel(hero);
+        if (hero) {
+          // SPEC-005 §5.5: タップしたら必ず詳細パネルを開く（スキル発動はパネル内ボタン）
+          this.playUiSe(SE_KEYS.uiTap());
+          this.openStatusPanel(hero);
+        }
       }
     });
   }
 
   // ========== 配置フロー ==========
+
+  /**
+   * SPEC-005 §5.2: path 職業は表示用パターンにも自タイル (0,0) を含める。
+   */
+  private visualPattern(hero: HeroDef): TilePos[] {
+    const base = hero.attackPattern;
+    if (!isPathClass(hero.class)) return base;
+    if (base.some((p) => p.col === 0 && p.row === 0)) return base;
+    return [...base, { col: 0, row: 0 }];
+  }
 
   private onSelectHero(hero: HeroDef): void {
     if (this.gameOver || this.statusPanel) return;
@@ -509,7 +622,7 @@ export class StageScene extends Phaser.Scene {
     const direction: Direction = "right";
     this.repositionPatternRects(
       this.placement.rangeRects,
-      this.placement.hero.attackPattern,
+      this.visualPattern(this.placement.hero),
       tile,
       direction,
     );
@@ -541,17 +654,38 @@ export class StageScene extends Phaser.Scene {
     ghostSprite.setDepth(20);
     for (const r of rangeRects) r.setAlpha(0.18);
 
+    const px = tileToPixel(tile);
+    const gaugeW = 40;
+    const gaugeH = 4;
+    const gaugeY = px.y - 32;
+    const gaugeBg = this.add
+      .rectangle(px.x, gaugeY, gaugeW, gaugeH, 0x111827, 0.9)
+      .setDepth(33);
+    const gaugeFill = this.add
+      .rectangle(px.x - gaugeW / 2, gaugeY, 0, gaugeH, 0xfacc15)
+      .setOrigin(0, 0.5)
+      .setDepth(34);
+
     this.placedHeroes.push({
       def: hero,
+      skill: findSkill(hero.id) ?? null,
       tile,
       direction,
       sprite: ghostSprite,
       rangeRects,
       lastAttackAt: this.elapsed,
       blockNum: 0,
+      skillGauge: 0,
+      readyRing: null,
+      gaugeBg,
+      gaugeFill,
+      activeEffect: null,
+      aura: null,
+      debuffSnapshots: [],
     });
 
     this.placement = null;
+    this.playUiSe(SE_KEYS.uiPlace());
     this.statusText.setText(
       `${CLASS_LABEL[hero.class]} ${hero.name} を ${direction} 向きで配置（block最大 ${blockMaxFor(hero.class)}）`,
     );
@@ -636,60 +770,313 @@ export class StageScene extends Phaser.Scene {
     for (const e of this.enemies) {
       if (e.blockedBy === hero) e.blockedBy = null;
     }
+    // デバフを巻き戻す
+    this.revertDebuffs(hero);
     const refund = Math.ceil(hero.def.cost / 2);
     this.ce = Math.min(this.maxCe, this.ce + refund);
     hero.sprite.destroy();
     for (const r of hero.rangeRects) r.destroy();
+    hero.gaugeBg.destroy();
+    hero.gaugeFill.destroy();
+    hero.readyRing?.destroy();
+    hero.aura?.destroy();
     this.placedHeroes.splice(idx, 1);
     this.statusText.setText(`${hero.def.name} を売却（+${refund} CE）`);
   }
 
-  // ========== ステータスパネル ==========
+  private revertDebuffs(hero: PlacedHero): void {
+    for (const snap of hero.debuffSnapshots) {
+      if (snap.enemy.hp <= 0 || snap.enemy.goalReached) continue;
+      snap.enemy.phyDefMul = snap.origPhyDef;
+      snap.enemy.intDefMul = snap.origIntDef;
+    }
+    hero.debuffSnapshots = [];
+  }
 
+  // ========== スキル ==========
+
+  private tryActivateSkill(hero: PlacedHero): boolean {
+    if (this.gameOver) return false;
+    if (!hero.skill) return false;
+    if (!canActivate(hero.skillGauge)) return false;
+
+    const skill = hero.skill;
+    hero.skillGauge = 0;
+    hero.activeEffect = startEffect(skill, this.elapsed);
+    this.applySkillStart(hero);
+    this.playCutIn(hero);
+    this.playSe(skill.seCategory);
+    this.statusText.setText(`スキル発動: ${skill.name}（${hero.def.name}）`);
+    return true;
+  }
+
+  private applySkillStart(hero: PlacedHero): void {
+    if (!hero.skill || !hero.activeEffect) return;
+    const skill = hero.skill;
+
+    // オーラ表示（持続効果のみ）
+    if (skill.effectType !== "singleStrike") {
+      hero.aura?.destroy();
+      const aura = this.add.circle(
+        hero.sprite.x,
+        hero.sprite.y,
+        TILE_SIZE * 0.7,
+        CLASS_AURA_COLOR[hero.def.class],
+        0.18,
+      );
+      aura.setStrokeStyle(2, CLASS_AURA_COLOR[hero.def.class], 0.6);
+      aura.setDepth(15);
+      hero.aura = aura;
+    }
+
+    switch (skill.effectType) {
+      case "damageMultiplier":
+      case "agiBuff":
+        // 効果は activeEffect 経由で参照される。追加処理なし。
+        break;
+      case "enemyDefDebuff": {
+        const targets = this.findAllEnemiesInPattern(hero);
+        for (const e of targets) {
+          hero.debuffSnapshots.push({
+            enemy: e,
+            origPhyDef: e.phyDefMul,
+            origIntDef: e.intDefMul,
+          });
+          e.phyDefMul *= skill.value;
+          e.intDefMul *= skill.value;
+        }
+        break;
+      }
+      case "singleStrike": {
+        const target = this.findTargetByRouteProgress(hero);
+        if (target) {
+          this.fireBullet(hero, target, skill.value);
+        }
+        break;
+      }
+    }
+  }
+
+  private endSkillEffect(hero: PlacedHero): void {
+    hero.aura?.destroy();
+    hero.aura = null;
+    this.revertDebuffs(hero);
+    hero.activeEffect = null;
+  }
+
+  /**
+   * SPEC-005 §5.3 カットイン演出（MCH パッシブスキル風）。
+   *
+   * 元の MCH 演出は CSS の `transform: skewY(-10deg)` で平行四辺形バンドを作り、
+   * `linear-gradient(to right bottom, #609da8 50%, #282b33 50%)` で 2 色対角分割し、
+   * 右からスライドイン → ホールド → 左へスライドアウトする。
+   * Phaser には skew が無いので、コンテナを `setAngle(-10)` で代用しつつ、
+   * 背景は Graphics で 2 色の三角形を重ねて分割を表現する。
+   * シャインは alpha 0.3 ↔ 0.8 を 0.5 秒で yoyo して再現する。
+   */
+  private playCutIn(hero: PlacedHero): void {
+    if (!hero.skill) return;
+    if (this.currentCutIn) {
+      this.currentCutIn.destroy(true);
+      this.currentCutIn = null;
+    }
+
+    const stageW = this.stageWidth;
+    const stageH = this.stageHeight;
+    const cx = stageW / 2;
+    const cy = stageH / 2;
+    // バンドはステージ幅より広く、左右にはみ出るサイズで作る（スライド時の見切れ防止）
+    const bandW = stageW * 1.4;
+    const bandH = 120;
+
+    // ── 背景バンド（2 色対角分割）
+    // ally 色: 青系 / opponent 色: 赤系。マイクリでは「自分のヒーロー＝ally」で青系。
+    // ここではプレイヤーのヒーロー＝ ally として固定。
+    const LIGHT = 0x609da8;
+    const DARK = 0x282b33;
+    const SHINE = 0x05599a; // shine animation の上塗り色
+
+    const bg = this.add.graphics();
+    bg.fillStyle(DARK, 1);
+    bg.fillRect(-bandW / 2, -bandH / 2, bandW, bandH);
+    // 左下三角形（top-left → top-right → bottom-left の領域 = "to right bottom" の前半 50%）
+    bg.fillStyle(LIGHT, 1);
+    bg.fillTriangle(
+      -bandW / 2,
+      -bandH / 2,
+      bandW / 2,
+      -bandH / 2,
+      -bandW / 2,
+      bandH / 2,
+    );
+
+    // ── シャイン（薄いブルーが点滅して動感を出す）
+    const shine = this.add.graphics();
+    shine.fillStyle(SHINE, 0.5);
+    shine.fillRect(-bandW / 2, -bandH / 2, bandW, bandH);
+    shine.setAlpha(0.3);
+
+    // ── 三角形の装飾片（mix-blend-mode:color-dodge の代わりに加算ぽい色で 2 個だけ置く）
+    const tri1 = this.add.graphics();
+    tri1.fillStyle(0x80c8d8, 0.8);
+    tri1.fillTriangle(-bandW * 0.25, 0, -bandW * 0.18, -bandH / 2, -bandW * 0.32, -bandH / 2);
+    const tri2 = this.add.graphics();
+    tri2.fillStyle(0x80c8d8, 0.6);
+    tri2.fillTriangle(bandW * 0.18, 0, bandW * 0.28, bandH / 2, bandW * 0.10, bandH / 2);
+
+    // ── ヒーロー portrait（image-rendering: pixelated を効かすため scale を整数で）
+    // CSS は max-width 128px / scale(2) なので実効 256px。Phaser 側では 96 にしておく。
+    const portraitX = -bandW * 0.32;
+    const portrait = this.add
+      .sprite(portraitX, 0, TEXTURE_KEYS.hero(hero.def.id))
+      .setDisplaySize(96, 96);
+
+    // ── スキル名 + ヒーロー名
+    const skillName = this.add
+      .text(bandW * 0.05, -14, hero.skill.name, {
+        fontSize: "30px",
+        color: "#fde68a",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5);
+    const heroName = this.add
+      .text(bandW * 0.05, 22, `${CLASS_LABEL[hero.def.class]}・${hero.def.name}`, {
+        fontSize: "14px",
+        color: "#e5e7eb",
+      })
+      .setOrigin(0.5);
+
+    // ── コンテナにまとめて、中心へ配置 + 10° 回転（skewY 代用）
+    const container = this.add.container(cx, cy, [
+      bg,
+      shine,
+      tri1,
+      tri2,
+      portrait,
+      skillName,
+      heroName,
+    ]);
+    container.setAngle(-10);
+    container.setDepth(95);
+
+    // 初期位置: 右側からスライドイン
+    container.x = cx + stageW;
+    this.currentCutIn = container;
+
+    // シャイン点滅（持続中ずっと動かす）
+    const shineTween = this.tweens.add({
+      targets: shine,
+      alpha: { from: 0.3, to: 0.85 },
+      duration: 500,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+
+    // スライドイン → ホールド → スライドアウト の 3 段
+    this.tweens.add({
+      targets: container,
+      x: cx,
+      duration: 220,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        this.tweens.add({
+          targets: container,
+          x: cx,
+          duration: 600,
+          onComplete: () => {
+            this.tweens.add({
+              targets: container,
+              x: cx - stageW,
+              duration: 220,
+              ease: "Sine.easeIn",
+              onComplete: () => {
+                shineTween.stop();
+                if (this.currentCutIn === container) this.currentCutIn = null;
+                container.destroy(true);
+              },
+            });
+          },
+        });
+      },
+    });
+  }
+
+  private playSe(category: string): void {
+    const key = SE_KEYS.category(category as Parameters<typeof SE_KEYS.category>[0]);
+    if (!this.cache.audio.exists(key)) return;
+    try {
+      this.sound.play(key, { volume: 0.6 });
+    } catch (_) {
+      // 音声再生に失敗しても続行
+    }
+  }
+
+  /** SPEC-005 §5.5: UI 系 SE（タップ／配置／攻撃）の汎用再生 */
+  private playUiSe(key: string, volume = 0.6): void {
+    if (!this.cache.audio.exists(key)) return;
+    try {
+      this.sound.play(key, { volume });
+    } catch (_) {
+      // 音声再生に失敗しても続行
+    }
+  }
+
+  private findAllEnemiesInPattern(hero: PlacedHero): ActiveEnemy[] {
+    const tiles = this.effectiveAttackTiles(hero);
+    return this.enemies.filter((e) => {
+      const eTile = pixelToTile(e.sprite.x, e.sprite.y, this.map.cols, this.map.rows);
+      if (!eTile) return false;
+      return tiles.some((t) => tileEquals(t, eTile));
+    });
+  }
+
+  // ========== ヒーロー詳細パネル ==========
+
+  /**
+   * SPEC-005 §5.5 仕様変更:
+   * - 半透明オーバーレイで背景バトル画面が透けて見える
+   * - パネル表示中はゲームを 0.1× 速度で進行（完全停止ではない）
+   * - スキル発動ボタンを内蔵し、ゲージ満タン時にのみ押下可能
+   * - 発動後はパネルを閉じてカットイン → スキル開始へ
+   */
   private openStatusPanel(hero: PlacedHero): void {
     if (this.statusPanel) return;
     this.statusPanelHeroId = hero.def.id;
 
+    const cx = this.stageWidth / 2;
+    const cy = this.stageHeight / 2;
+
+    // 半透明オーバーレイ（背景バトルが見える程度の透過に下げる）
     const overlay = this.add.rectangle(
-      this.stageWidth / 2,
-      this.stageHeight / 2,
+      cx,
+      cy,
       this.stageWidth,
       this.stageHeight,
       0x000000,
-      0.55,
+      0.45,
     );
     overlay.setInteractive({ useHandCursor: true });
 
-    const panel = this.add.rectangle(
-      this.stageWidth / 2,
-      this.stageHeight / 2,
-      400,
-      300,
-      0x111827,
-      0.98,
-    );
+    // 大きめのパネル（420×340）
+    const panel = this.add.rectangle(cx, cy, 460, 360, 0x111827, 0.92);
     panel.setStrokeStyle(2, 0x4b5563);
 
     const title = this.add
-      .text(
-        this.stageWidth / 2,
-        this.stageHeight / 2 - 120,
-        `[${CLASS_LABEL[hero.def.class]}] ${hero.def.name}`,
-        { fontSize: "20px", color: "#f9fafb", fontStyle: "bold" },
-      )
+      .text(cx, cy - 150, `[${CLASS_LABEL[hero.def.class]}] ${hero.def.name}`, {
+        fontSize: "20px",
+        color: "#f9fafb",
+        fontStyle: "bold",
+      })
       .setOrigin(0.5);
 
     const portrait = this.add
-      .sprite(
-        this.stageWidth / 2 - 145,
-        this.stageHeight / 2 - 30,
-        TEXTURE_KEYS.hero(hero.def.id),
-      )
+      .sprite(cx - 175, cy - 60, TEXTURE_KEYS.hero(hero.def.id))
       .setDisplaySize(96, 96);
 
     const interval = (1 / Math.max(0.1, hero.def.agi / 100)).toFixed(2);
     const tilesCount = hero.def.attackPattern.length;
-    const lines = [
+    const statLines = [
       `属性: ${hero.def.attackType}`,
       `HP : ${hero.def.hp}`,
       `PHY: ${hero.def.phy}`,
@@ -701,16 +1088,97 @@ export class StageScene extends Phaser.Scene {
       `コスト: ${hero.def.cost} CE`,
     ];
     const stats = this.add
-      .text(this.stageWidth / 2 - 70, this.stageHeight / 2 - 80, lines.join("\n"), {
+      .text(cx - 100, cy - 110, statLines.join("\n"), {
         fontSize: "13px",
         color: "#e5e7eb",
         lineSpacing: 4,
       })
       .setOrigin(0, 0);
 
+    // ── スキル情報セクション
+    const skillTitle = this.add
+      .text(cx - 200, cy + 36, "[ スキル ]", {
+        fontSize: "13px",
+        color: "#fcd34d",
+        fontStyle: "bold",
+      })
+      .setOrigin(0, 0);
+
+    const skillName = hero.skill
+      ? this.add
+          .text(cx - 200, cy + 56, hero.skill.name, {
+            fontSize: "16px",
+            color: "#fde68a",
+            fontStyle: "bold",
+          })
+          .setOrigin(0, 0)
+      : this.add
+          .text(cx - 200, cy + 56, "（スキル無し）", {
+            fontSize: "13px",
+            color: "#9ca3af",
+          })
+          .setOrigin(0, 0);
+
+    const skillDesc = hero.skill
+      ? this.add
+          .text(cx - 200, cy + 80, hero.skill.description, {
+            fontSize: "12px",
+            color: "#cbd5e1",
+            wordWrap: { width: 400 },
+          })
+          .setOrigin(0, 0)
+      : null;
+
+    // ── ゲージ表示
+    const gaugeBgX = cx - 200;
+    const gaugeY = cy + 116;
+    const gaugeW = 240;
+    const gaugeH = 8;
+    const panelGaugeBg = this.add
+      .rectangle(gaugeBgX, gaugeY, gaugeW, gaugeH, 0x1f2937, 1)
+      .setOrigin(0, 0.5);
+    const fillW = gaugeW * (hero.skillGauge / GAUGE_MAX);
+    const panelGaugeFill = this.add
+      .rectangle(gaugeBgX, gaugeY, fillW, gaugeH, 0xfacc15)
+      .setOrigin(0, 0.5);
+    const gaugeLabel = this.add
+      .text(gaugeBgX + gaugeW + 8, gaugeY, `${Math.floor(hero.skillGauge)}/${GAUGE_MAX}`, {
+        fontSize: "11px",
+        color: "#bae6fd",
+      })
+      .setOrigin(0, 0.5);
+
+    // ── スキル発動ボタン
+    const ready = canActivate(hero.skillGauge) && hero.skill !== null;
+    const activateBtnBg = this.add.rectangle(
+      cx + 105,
+      cy + 56,
+      120,
+      36,
+      ready ? 0xfacc15 : 0x374151,
+      0.95,
+    );
+    activateBtnBg.setStrokeStyle(2, ready ? 0xfde047 : 0x6b7280);
+    if (ready) activateBtnBg.setInteractive({ useHandCursor: true });
+    const activateBtnText = this.add
+      .text(cx + 105, cy + 56, ready ? "▶ 発動" : "ゲージ不足", {
+        fontSize: "14px",
+        color: ready ? "#1f2937" : "#9ca3af",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5);
+
+    if (ready) {
+      activateBtnBg.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+        if (pointer.rightButtonDown()) return;
+        this.activateSkillFromPanel(hero);
+      });
+    }
+
+    // ── 閉じるボタン
     const closeBtn = this.add
-      .text(this.stageWidth / 2, this.stageHeight / 2 + 120, "[ 閉じる ]", {
-        fontSize: "16px",
+      .text(cx, cy + 150, "[ 閉じる ]", {
+        fontSize: "14px",
         color: "#93c5fd",
       })
       .setOrigin(0.5)
@@ -718,19 +1186,34 @@ export class StageScene extends Phaser.Scene {
     closeBtn.on("pointerdown", () => this.closeStatusPanel());
     overlay.on("pointerdown", () => this.closeStatusPanel());
 
-    this.statusPanel = this.add.container(0, 0, [
+    const items: Phaser.GameObjects.GameObject[] = [
       overlay,
       panel,
       title,
       portrait,
       stats,
+      skillTitle,
+      skillName,
+      panelGaugeBg,
+      panelGaugeFill,
+      gaugeLabel,
+      activateBtnBg,
+      activateBtnText,
       closeBtn,
-    ]);
+    ];
+    if (skillDesc) items.splice(7, 0, skillDesc);
+    this.statusPanel = this.add.container(0, 0, items);
     this.statusPanel.setDepth(100);
 
     for (const r of hero.rangeRects) r.setAlpha(0.35);
     this.playSpeed = 0.1;
     this.refreshSpeedButton();
+  }
+
+  /** SPEC-005 §5.5: パネル経由でスキル発動 → パネル閉じてカットイン */
+  private activateSkillFromPanel(hero: PlacedHero): void {
+    this.closeStatusPanel();
+    this.tryActivateSkill(hero);
   }
 
   private closeStatusPanel(): void {
@@ -773,8 +1256,53 @@ export class StageScene extends Phaser.Scene {
     this.tickEnemies(dt);
     this.tickHeroAttacks();
     this.tickBullets(dt);
+    this.tickSkills(dt);
     this.refreshHud();
     this.checkEndCondition();
+  }
+
+  private tickSkills(dt: number): void {
+    for (const hero of this.placedHeroes) {
+      // ゲージ蓄積
+      hero.skillGauge = tickGauge(hero.skillGauge, dt);
+
+      // ゲージ UI 位置同期
+      hero.gaugeBg.x = hero.sprite.x;
+      hero.gaugeBg.y = hero.sprite.y - 32;
+      hero.gaugeFill.x = hero.sprite.x - 20;
+      hero.gaugeFill.y = hero.sprite.y - 32;
+      hero.gaugeFill.displayWidth = 40 * (hero.skillGauge / GAUGE_MAX);
+
+      // 満タンリング
+      const ready = canActivate(hero.skillGauge);
+      if (ready && !hero.readyRing) {
+        hero.readyRing = this.add
+          .circle(hero.sprite.x, hero.sprite.y, TILE_SIZE * 0.45, 0xfde047, 0)
+          .setStrokeStyle(2, 0xfde047, 0.9)
+          .setDepth(22);
+      } else if (!ready && hero.readyRing) {
+        hero.readyRing.destroy();
+        hero.readyRing = null;
+      }
+      if (hero.readyRing) {
+        hero.readyRing.x = hero.sprite.x;
+        hero.readyRing.y = hero.sprite.y;
+        hero.readyRing.setStrokeStyle(2, 0xfde047, 0.6 + 0.4 * Math.abs(Math.sin(this.elapsed * 4)));
+      }
+
+      // 効果オーラ位置同期
+      if (hero.aura) {
+        hero.aura.x = hero.sprite.x;
+        hero.aura.y = hero.sprite.y;
+      }
+
+      // 効果期限切れ処理
+      if (hero.activeEffect && !isEffectActive(hero.activeEffect, this.elapsed)) {
+        // singleStrike は startEffect 直後から isEffectActive=false なので、この分岐は
+        // 持続効果と singleStrike 後始末の両方で機能する
+        this.endSkillEffect(hero);
+      }
+    }
   }
 
   private tickCe(dt: number): void {
@@ -828,6 +1356,8 @@ export class StageScene extends Phaser.Scene {
       nextIndex: 1,
       goalReached: false,
       blockedBy: null,
+      phyDefMul: 1,
+      intDefMul: 1,
     });
     this.spawnedTotal++;
   }
@@ -947,19 +1477,41 @@ export class StageScene extends Phaser.Scene {
   }
 
   private handleGoal(enemy: ActiveEnemy): void {
+    if (enemy.goalReached) return; // 二重カウント防止
     enemy.goalReached = true;
+    this.escapedTotal += 1;
     this.baseHp = Math.max(0, this.baseHp - 1);
   }
 
   private tickHeroAttacks(): void {
     for (const hero of this.placedHeroes) {
-      const interval = 1 / Math.max(0.1, hero.def.agi / 100);
+      const baseInterval = 1 / Math.max(0.1, hero.def.agi / 100);
+      const interval =
+        baseInterval * intervalScale(hero.activeEffect, this.elapsed);
       if (this.elapsed - hero.lastAttackAt < interval) continue;
       const target = this.findTargetByRouteProgress(hero);
       if (!target) continue;
       hero.lastAttackAt = this.elapsed;
       this.fireBullet(hero, target);
+      hero.skillGauge = gainOnAttack(hero.skillGauge);
     }
+  }
+
+  /**
+   * SPEC-005 §5.2: path 職業は自身のタイルも攻撃範囲に含める。
+   */
+  private effectiveAttackTiles(hero: PlacedHero): TilePos[] {
+    const tiles = applyPatternToTile(
+      hero.tile,
+      rotatePattern(hero.def.attackPattern, hero.direction),
+    );
+    if (isPathClass(hero.def.class)) {
+      // 自タイルが既にパターンに含まれていない場合のみ追加
+      if (!tiles.some((t) => tileEquals(t, hero.tile))) {
+        tiles.push({ col: hero.tile.col, row: hero.tile.row });
+      }
+    }
+    return tiles;
   }
 
   /**
@@ -970,10 +1522,7 @@ export class StageScene extends Phaser.Scene {
    * の順で 1 体選ぶ。
    */
   private findTargetByRouteProgress(hero: PlacedHero): ActiveEnemy | null {
-    const tiles = applyPatternToTile(
-      hero.tile,
-      rotatePattern(hero.def.attackPattern, hero.direction),
-    );
+    const tiles = this.effectiveAttackTiles(hero);
     let best: ActiveEnemy | null = null;
     let bestProgress = -Infinity;
     let bestDistanceToGoal = Infinity;
@@ -1007,13 +1556,21 @@ export class StageScene extends Phaser.Scene {
     return best;
   }
 
-  private fireBullet(hero: PlacedHero, target: ActiveEnemy): void {
+  private fireBullet(
+    hero: PlacedHero,
+    target: ActiveEnemy,
+    overrideDamageRate?: number,
+  ): void {
+    const damageRate =
+      overrideDamageRate ??
+      effectiveDamageRate(hero.activeEffect, this.elapsed);
     const damage = calculateDamage({
       attackType: hero.def.attackType,
       heroPhy: hero.def.phy,
       heroInt: hero.def.int,
-      enemyPhyDef: target.def.phyDef,
-      enemyIntDef: target.def.intDef,
+      enemyPhyDef: target.def.phyDef * target.phyDefMul,
+      enemyIntDef: target.def.intDef * target.intDefMul,
+      damageRate,
     });
 
     const color = hero.def.attackType === "INT" ? 0x60a5fa : 0xfacc15;
@@ -1029,6 +1586,12 @@ export class StageScene extends Phaser.Scene {
       speed: 600,
       done: false,
     });
+
+    // SPEC-005 §5.5: 道職業（前衛系）が攻撃したときに swipe SE。
+    // 連発を避けるため volume はやや控えめ。
+    if (isPathClass(hero.def.class)) {
+      this.playUiSe(SE_KEYS.attackSwipe(), 0.35);
+    }
   }
 
   private tickBullets(dt: number): void {
@@ -1073,10 +1636,12 @@ export class StageScene extends Phaser.Scene {
       this.endGame(false);
       return;
     }
-    const goalCount = this.enemies.filter((e) => e.goalReached).length;
+    // SPEC-005 §5.1 のバグ修正: 旧実装は `goalReached` を持つ enemies を即時 filter で
+    // 取り除いてから数えていたため、ゴール到達の累計を取り損ねていた。永続カウンタの
+    // `escapedTotal` を使うことでブロックして全敵を撃破した時もクリア判定が出る。
     if (
       this.spawnedTotal >= this.totalToDefeat &&
-      this.defeatedTotal + goalCount >= this.totalToDefeat
+      this.defeatedTotal + this.escapedTotal >= this.totalToDefeat
     ) {
       this.endGame(this.defeatedTotal === this.totalToDefeat);
     }
