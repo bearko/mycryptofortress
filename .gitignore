@@ -1,0 +1,24 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
+
+# Node
+node_modules/
+
+# Vite build
+web/dist/
+web/.vite/
+*.local
+
+# Env
+.env
+.env.local
+.env.*.local
