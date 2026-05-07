@@ -49,7 +49,9 @@ import {
 } from "../game/skill";
 import { SE_KEYS, TEXTURE_KEYS } from "./BootScene";
 
-const HUD_HEIGHT = 96;
+const HUD_HEIGHT = 144;
+/** SPEC-006 §5.5: Arknights 風サイドパネル領域。ステージ右に常駐。 */
+const PANEL_SLOT_WIDTH = 280;
 
 const CLASS_LABEL: Record<HeroClass, string> = {
   defender: "重装",
@@ -138,6 +140,8 @@ interface SelectingPhase {
   ghostSprite: Phaser.GameObjects.Sprite;
   rangeRects: Phaser.GameObjects.Rectangle[];
   highlightRects: Phaser.GameObjects.Rectangle[];
+  /** SPEC-006 §5.6: カーソル直下のタイルに重ねるスナップ表示 */
+  snapRect: Phaser.GameObjects.Rectangle;
 }
 
 interface OrientingPhase {
@@ -156,8 +160,13 @@ type PlacementPhase = SelectingPhase | OrientingPhase | null;
 
 export class StageScene extends Phaser.Scene {
   private map: MapDef = STAGE1_MAP;
+  /** プレイ領域（タイル群）の幅。サイドパネルは含まない */
   private stageWidth = 0;
   private stageHeight = 0;
+  /** Canvas 全体の幅（stageWidth + PANEL_SLOT_WIDTH） */
+  private canvasWidth = 0;
+  /** サイドパネルスロットの左端 x */
+  private panelSlotX = 0;
 
   private baseHp = 5;
   private maxBaseHp = 5;
@@ -192,7 +201,11 @@ export class StageScene extends Phaser.Scene {
     hero: HeroDef;
     container: Phaser.GameObjects.Container;
     border: Phaser.GameObjects.Rectangle;
+    statusLabel: Phaser.GameObjects.Text;
   }[] = [];
+
+  /** パネルスロット内の常駐 placeholder（ヒーロー未選択時に表示） */
+  private panelPlaceholder: Phaser.GameObjects.Text | null = null;
   private speedButtonText!: Phaser.GameObjects.Text;
 
   private statusPanel: Phaser.GameObjects.Container | null = null;
@@ -215,6 +228,9 @@ export class StageScene extends Phaser.Scene {
     this.map = STAGE1_MAP;
     this.stageWidth = this.map.cols * TILE_SIZE;
     this.stageHeight = this.map.rows * TILE_SIZE;
+    this.canvasWidth = this.stageWidth + PANEL_SLOT_WIDTH;
+    this.panelSlotX = this.stageWidth;
+    void this.canvasWidth; // 将来パネル位置計算で使用予定（暫定で参照だけ）
 
     this.baseHp = 5;
     this.maxBaseHp = 5;
@@ -239,10 +255,12 @@ export class StageScene extends Phaser.Scene {
     this.gameOver = false;
     this.currentCutIn = null;
     this.heroPaletteEntries = [];
+    this.panelPlaceholder = null;
 
     this.cameras.main.setBackgroundColor(0x0e1117);
     this.drawTiles();
     this.drawHud();
+    this.drawPanelSlot();
     this.bindInput();
     this.refreshSpeedButton();
     this.startBgm();
@@ -347,6 +365,8 @@ export class StageScene extends Phaser.Scene {
 
   private drawHud(): void {
     const hudY = this.stageHeight;
+
+    // 背景（左側のステージ幅分のみ）
     this.add.rectangle(
       this.stageWidth / 2,
       hudY + HUD_HEIGHT / 2,
@@ -359,78 +379,38 @@ export class StageScene extends Phaser.Scene {
       .line(0, 0, 0, hudY, this.stageWidth, hudY, 0x374151, 1)
       .setOrigin(0, 0);
 
-    this.hpText = this.add.text(12, hudY + 8, "", {
-      fontSize: "16px",
+    // SPEC-006 §5.3: 上段ステータス行 — BASE HP / CE 数値 / 1秒ゲージ / 速度
+    this.hpText = this.add.text(10, hudY + 6, "", {
+      fontSize: "14px",
       color: "#fee2e2",
       fontStyle: "bold",
     });
-    this.ceText = this.add.text(12, hudY + 32, "", {
-      fontSize: "14px",
-      color: "#bae6fd",
+    this.ceText = this.add.text(160, hudY + 6, "", {
+      fontSize: "18px",
+      color: "#fde68a",
+      fontStyle: "bold",
     });
-    this.statusText = this.add.text(
-      12,
-      hudY + 56,
-      "ヒーローを選んで配置可能タイルをクリック → 向きを決めて再クリック",
-      { fontSize: "11px", color: "#9ca3af" },
-    );
-
-    this.add.rectangle(160, hudY + 38, 200, 8, 0x1f2937).setOrigin(0, 0.5);
+    // 1 秒ゲージ — ceProgress (0..1) が満タンで +1 CE される瞬間の進捗
+    this.add.rectangle(220, hudY + 16, 90, 6, 0x1f2937).setOrigin(0, 0.5);
     this.ceBar = this.add
-      .rectangle(160, hudY + 38, 0, 8, 0x38bdf8)
+      .rectangle(220, hudY + 16, 0, 6, 0x38bdf8)
+      .setOrigin(0, 0.5);
+    this.add
+      .text(315, hudY + 16, "/秒", {
+        fontSize: "10px",
+        color: "#7dd3fc",
+      })
       .setOrigin(0, 0.5);
 
-    // ヒーローパレット (8 体: 横 4 × 縦 2)
-    const paletteX = 380;
-    const paletteY = hudY + 8;
-    HEROES.forEach((hero, i) => {
-      const col = i % 4;
-      const row = Math.floor(i / 4);
-      const cx = paletteX + col * 56;
-      const cy = paletteY + row * 40;
-
-      const border = this.add.rectangle(cx, cy + 16, 48, 36, 0x111827, 1);
-      border.setStrokeStyle(2, 0x4b5563);
-      border.setInteractive({ useHandCursor: true });
-
-      const sprite = this.add
-        .sprite(cx, cy + 8, TEXTURE_KEYS.hero(hero.id))
-        .setDisplaySize(28, 28);
-      const labelClass = this.add
-        .text(cx, cy + 26, CLASS_LABEL[hero.class], {
-          fontSize: "9px",
-          color: "#fcd34d",
-        })
-        .setOrigin(0.5);
-      const labelCost = this.add
-        .text(cx + 18, cy - 1, `${hero.cost}`, {
-          fontSize: "9px",
-          color: "#bae6fd",
-          fontStyle: "bold",
-        })
-        .setOrigin(0.5);
-
-      const container = this.add.container(0, 0, [
-        sprite,
-        labelClass,
-        labelCost,
-      ]);
-      border.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-        if (pointer.rightButtonDown()) return;
-        this.onSelectHero(hero);
-      });
-      this.heroPaletteEntries.push({ hero, container, border });
-    });
-
-    // 再生速度トグル
-    const sx = this.stageWidth - 50;
-    const sy = hudY + 18;
-    const sBorder = this.add.rectangle(sx, sy, 70, 26, 0x111827, 1);
+    // SPEC-006: 再生速度トグル（HUD 右上）
+    const sBtnX = this.stageWidth - 48;
+    const sBtnY = hudY + 16;
+    const sBorder = this.add.rectangle(sBtnX, sBtnY, 70, 22, 0x111827, 1);
     sBorder.setStrokeStyle(1, 0x4b5563);
     sBorder.setInteractive({ useHandCursor: true });
     this.speedButtonText = this.add
-      .text(sx, sy, "1.0×", {
-        fontSize: "12px",
+      .text(sBtnX, sBtnY, "1.0×", {
+        fontSize: "11px",
         color: "#bae6fd",
         fontStyle: "bold",
       })
@@ -440,6 +420,107 @@ export class StageScene extends Phaser.Scene {
       if (pointer.rightButtonDown()) return;
       this.togglePlaySpeed();
     });
+
+    // SPEC-006 §5.3: パレット — 1 列 × 8 ヒーロー、アイコン大型化
+    const slotW = this.stageWidth / HEROES.length; // 80px ぴったり
+    const palTop = hudY + 32;
+    HEROES.forEach((hero, i) => {
+      const cx = slotW * i + slotW / 2;
+      const slotCenterY = palTop + 41; // 高さ ~82
+      const border = this.add.rectangle(cx, slotCenterY, slotW - 4, 82, 0x111827, 1);
+      border.setStrokeStyle(2, 0x4b5563);
+      border.setInteractive({ useHandCursor: true });
+
+      const sprite = this.add
+        .sprite(cx, palTop + 28, TEXTURE_KEYS.hero(hero.id))
+        .setDisplaySize(56, 56);
+
+      const labelCost = this.add
+        .text(cx + 28, palTop + 8, `${hero.cost}`, {
+          fontSize: "13px",
+          color: "#fde68a",
+          fontStyle: "bold",
+          stroke: "#0b0d12",
+          strokeThickness: 3,
+        })
+        .setOrigin(1, 0);
+
+      const labelClass = this.add
+        .text(cx, palTop + 60, CLASS_LABEL[hero.class], {
+          fontSize: "11px",
+          color: "#fcd34d",
+        })
+        .setOrigin(0.5);
+
+      const labelStatus = this.add
+        .text(cx, palTop + 75, "", {
+          fontSize: "10px",
+          color: "#a7f3d0",
+          fontStyle: "bold",
+        })
+        .setOrigin(0.5);
+
+      const container = this.add.container(0, 0, [
+        sprite,
+        labelCost,
+        labelClass,
+        labelStatus,
+      ]);
+
+      border.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+        if (pointer.rightButtonDown()) return;
+        this.onSelectHero(hero);
+      });
+      this.heroPaletteEntries.push({
+        hero,
+        container,
+        border,
+        statusLabel: labelStatus,
+      });
+    });
+
+    // 下段ステータステキスト
+    this.statusText = this.add.text(
+      10,
+      hudY + 124,
+      "ヒーローアイコンをタップ → タイルへドラッグして配置",
+      { fontSize: "11px", color: "#9ca3af" },
+    );
+  }
+
+  /** SPEC-006 §5.3: パネルスロット背景（常駐） */
+  private drawPanelSlot(): void {
+    const slotCx = this.panelSlotX + PANEL_SLOT_WIDTH / 2;
+    const slotCy = (this.stageHeight + HUD_HEIGHT) / 2;
+    this.add.rectangle(
+      slotCx,
+      slotCy,
+      PANEL_SLOT_WIDTH,
+      this.stageHeight + HUD_HEIGHT,
+      0x080a0f,
+      1,
+    );
+    // ステージとパネルの境界
+    this.add
+      .line(0, 0, this.panelSlotX, 0, this.panelSlotX, this.stageHeight + HUD_HEIGHT, 0x374151, 1)
+      .setOrigin(0, 0);
+
+    // 何も無いときの placeholder テキスト
+    this.panelPlaceholder = this.add
+      .text(slotCx, slotCy - 30, "ヒーロー詳細", {
+        fontSize: "16px",
+        color: "#374151",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5);
+    this.add
+      .text(slotCx, slotCy, "ステージ上のヒーローを\nタップすると詳細が出ます", {
+        fontSize: "11px",
+        color: "#374151",
+        align: "center",
+        lineSpacing: 4,
+      })
+      .setOrigin(0.5);
   }
 
   private bindInput(): void {
@@ -455,6 +536,29 @@ export class StageScene extends Phaser.Scene {
           p.worldX,
           p.worldY,
         );
+        // SPEC-006 §5.6: スナップタイル表示。カーソル下のタイルが配置可能なら緑、不可なら赤、ステージ外なら非表示。
+        const tileUnder = pixelToTile(
+          p.worldX,
+          p.worldY,
+          this.map.cols,
+          this.map.rows,
+        );
+        const sr = this.placement.snapRect;
+        if (!tileUnder || p.x >= this.stageWidth || p.y >= this.stageHeight) {
+          sr.setVisible(false);
+        } else {
+          const center = tileToPixel(tileUnder);
+          sr.setPosition(center.x, center.y);
+          sr.setVisible(true);
+          const tt = tileTypeAt(this.map, tileUnder);
+          const occupied = this.placedHeroes.some((h) => tileEquals(h.tile, tileUnder));
+          const ok =
+            tt &&
+            canPlaceClassOnTile(this.placement.hero.class, tt) &&
+            !occupied;
+          sr.setFillStyle(ok ? 0x4ade80 : 0xef4444, 0.3);
+          sr.setStrokeStyle(3, ok ? 0xfde047 : 0xfca5a5, 0.95);
+        }
       } else if (this.placement?.kind === "orienting") {
         const center = tileToPixel(this.placement.tile);
         const dir = directionFromDelta(
@@ -478,6 +582,7 @@ export class StageScene extends Phaser.Scene {
       if (this.gameOver) return;
       if (this.statusPanel) return;
       if (p.y >= this.stageHeight) return;
+      if (p.x >= this.stageWidth) return; // パネルスロット領域はステージ入力対象外
 
       if (p.rightButtonDown()) {
         if (this.placement) {
@@ -517,6 +622,22 @@ export class StageScene extends Phaser.Scene {
         }
       }
     });
+
+    // SPEC-006 §5.6: ドラッグ&ドロップ — selecting 中に pointerup したら、
+    // ステージ内の配置可能タイル上でリリースされていれば即 orienting に進む。
+    this.input.on("pointerup", (p: Phaser.Input.Pointer) => {
+      if (this.gameOver || this.statusPanel) return;
+      if (this.placement?.kind !== "selecting") return;
+      if (p.x >= this.stageWidth || p.y >= this.stageHeight) return;
+      const tile = pixelToTile(
+        p.worldX,
+        p.worldY,
+        this.map.cols,
+        this.map.rows,
+      );
+      if (!tile) return;
+      this.tryCommitPlacement(p.worldX, p.worldY);
+    });
   }
 
   // ========== 配置フロー ==========
@@ -533,6 +654,13 @@ export class StageScene extends Phaser.Scene {
 
   private onSelectHero(hero: HeroDef): void {
     if (this.gameOver || this.statusPanel) return;
+    // SPEC-006 §5.3: 1 体 1 配置 — 既に配置済みなら拒否
+    if (this.placedHeroes.some((h) => h.def.id === hero.id)) {
+      this.statusText.setText(
+        `${hero.name} は既に出撃中です（売却で再選択可能）`,
+      );
+      return;
+    }
     if (this.ce < hero.cost) {
       this.statusText.setText(
         `CE が足りません（必要 ${hero.cost} / 現在 ${Math.floor(this.ce)}）`,
@@ -549,12 +677,26 @@ export class StageScene extends Phaser.Scene {
 
     const highlightRects = this.buildHighlightTilesFor(hero.class);
 
+    // SPEC-006 §5.6: スナップタイル枠（カーソル直下のタイルを示す）
+    const snapRect = this.add.rectangle(
+      -100,
+      -100,
+      TILE_SIZE - 4,
+      TILE_SIZE - 4,
+      0x4ade80,
+      0.3,
+    );
+    snapRect.setStrokeStyle(3, 0xfde047, 0.95);
+    snapRect.setDepth(45);
+    snapRect.setVisible(false);
+
     this.placement = {
       kind: "selecting",
       hero,
       ghostSprite: ghost,
       rangeRects: [],
       highlightRects,
+      snapRect,
     };
 
     this.statusText.setText(
@@ -636,6 +778,8 @@ export class StageScene extends Phaser.Scene {
     // 配置可能マスのハイライトはこの段階では消す（向き選択に集中）
     for (const r of this.placement.highlightRects) r.destroy();
     this.placement.highlightRects = [];
+    // SPEC-006 §5.6: スナップタイル枠も役目終了
+    this.placement.snapRect.destroy();
 
     // SPEC-005 §5.6: 上下左右に向きチェブロンを表示
     const directionArrows = this.buildDirectionArrows(px.x, px.y, direction);
@@ -755,6 +899,9 @@ export class StageScene extends Phaser.Scene {
     this.placement.ghostSprite.destroy();
     for (const r of this.placement.rangeRects) r.destroy();
     for (const r of this.placement.highlightRects) r.destroy();
+    if (this.placement.kind === "selecting") {
+      this.placement.snapRect.destroy();
+    }
     if (this.placement.kind === "orienting") {
       for (const arrow of this.placement.directionArrows.values()) {
         arrow.destroy();
@@ -817,11 +964,44 @@ export class StageScene extends Phaser.Scene {
         ? this.placement.hero.id
         : null;
     for (const entry of this.heroPaletteEntries) {
+      const isDeployed = this.placedHeroes.some(
+        (h) => h.def.id === entry.hero.id,
+      );
       const enough = this.ce >= entry.hero.cost;
       const isSelected = entry.hero.id === selectedId;
-      const color = isSelected ? 0xfde047 : enough ? 0x4b5563 : 0x1f2937;
-      entry.border.setStrokeStyle(2, color);
-      entry.container.setAlpha(enough || isSelected ? 1 : 0.5);
+
+      // SPEC-006 §5.3: ステータスバッジ
+      //   - 出撃中: 既に配置済（1 体 1 配置制限）
+      //   - 出撃可能: CE 足りる & 未配置
+      //   - CE不足: それ以外
+      let label = "";
+      let labelColor = "#a7f3d0";
+      let borderColor = 0x4b5563;
+      let alpha = 1;
+      if (isDeployed) {
+        label = "出撃中";
+        labelColor = "#fca5a5";
+        borderColor = 0x6b7280;
+        alpha = 0.4;
+      } else if (isSelected) {
+        label = "選択中";
+        labelColor = "#fde047";
+        borderColor = 0xfde047;
+        alpha = 1;
+      } else if (enough) {
+        label = "出撃可能";
+        labelColor = "#a7f3d0";
+        borderColor = 0x4ade80;
+        alpha = 1;
+      } else {
+        label = "CE不足";
+        labelColor = "#9ca3af";
+        borderColor = 0x374151;
+        alpha = 0.55;
+      }
+      entry.statusLabel.setText(label).setColor(labelColor);
+      entry.border.setStrokeStyle(2, borderColor);
+      entry.container.setAlpha(alpha);
     }
   }
 
@@ -1099,106 +1279,113 @@ export class StageScene extends Phaser.Scene {
   // ========== ヒーロー詳細パネル ==========
 
   /**
-   * SPEC-005 §5.5 仕様変更:
-   * - 半透明オーバーレイで背景バトル画面が透けて見える
-   * - パネル表示中はゲームを 0.1× 速度で進行（完全停止ではない）
-   * - スキル発動ボタンを内蔵し、ゲージ満タン時にのみ押下可能
-   * - 発動後はパネルを閉じてカットイン → スキル開始へ
+   * SPEC-006 §5.5 仕様変更:
+   * - パネルは画面右側のサイドスロット（PANEL_SLOT_WIDTH 幅）に右からスライドインする
+   * - 背景の暗幕は無し。ステージは引き続きそのまま視認できる
+   * - パネル表示中は playSpeed = 0.1（完全停止ではない）
+   * - portrait を従来 96px → 192px に倍化
+   * - スキル発動ボタン押下でパネルを閉じてカットイン → スキル開始
    */
   private openStatusPanel(hero: PlacedHero): void {
     if (this.statusPanel) return;
     this.statusPanelHeroId = hero.def.id;
 
-    const cx = this.stageWidth / 2;
-    const cy = this.stageHeight / 2;
+    // SPEC-006: パネルスロット内の中心。x はパネルスロットの中心、y はキャンバス中央。
+    const slotCx = this.panelSlotX + PANEL_SLOT_WIDTH / 2;
+    const fullH = this.stageHeight + HUD_HEIGHT;
+    const slotCy = fullH / 2;
 
-    // 半透明オーバーレイ（背景バトルが見える程度の透過に下げる）
-    const overlay = this.add.rectangle(
-      cx,
-      cy,
-      this.stageWidth,
-      this.stageHeight,
-      0x000000,
-      0.45,
+    // 背景パネル（PANEL_SLOT_WIDTH × fullH を覆う）
+    const panel = this.add.rectangle(
+      slotCx,
+      slotCy,
+      PANEL_SLOT_WIDTH,
+      fullH,
+      0x111827,
+      0.96,
     );
-    overlay.setInteractive({ useHandCursor: true });
-
-    // 大きめのパネル（420×340）
-    const panel = this.add.rectangle(cx, cy, 460, 360, 0x111827, 0.92);
     panel.setStrokeStyle(2, 0x4b5563);
 
+    // タイトル（職業 + 名前）
     const title = this.add
-      .text(cx, cy - 150, `[${CLASS_LABEL[hero.def.class]}] ${hero.def.name}`, {
-        fontSize: "20px",
+      .text(slotCx, 28, `[${CLASS_LABEL[hero.def.class]}] ${hero.def.name}`, {
+        fontSize: "16px",
         color: "#f9fafb",
         fontStyle: "bold",
+        align: "center",
+        wordWrap: { width: PANEL_SLOT_WIDTH - 24 },
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5, 0);
 
+    // ── ヒーロー portrait（2× = 192×192）
     const portrait = this.add
-      .sprite(cx - 175, cy - 60, TEXTURE_KEYS.hero(hero.def.id))
-      .setDisplaySize(96, 96);
+      .sprite(slotCx, 162, TEXTURE_KEYS.hero(hero.def.id))
+      .setDisplaySize(192, 192);
 
+    // ── ステータス
     const interval = (1 / Math.max(0.1, hero.def.agi / 100)).toFixed(2);
     const tilesCount = hero.def.attackPattern.length;
     const statLines = [
-      `属性: ${hero.def.attackType}`,
-      `HP : ${hero.def.hp}`,
-      `PHY: ${hero.def.phy}`,
-      `INT: ${hero.def.int}`,
-      `AGI: ${hero.def.agi}`,
-      `攻撃間隔: ${interval}s`,
-      `攻撃範囲: ${tilesCount} マス（${hero.direction} 向き）`,
-      `ブロック: ${hero.blockNum} / ${blockMaxFor(hero.def.class)}`,
-      `コスト: ${hero.def.cost} CE`,
+      `属性  ${hero.def.attackType}`,
+      `HP    ${hero.def.hp}`,
+      `PHY   ${hero.def.phy}`,
+      `INT   ${hero.def.int}`,
+      `AGI   ${hero.def.agi}`,
+      `攻撃間隔  ${interval}s`,
+      `攻撃範囲  ${tilesCount} マス（${hero.direction} 向き）`,
+      `ブロック  ${hero.blockNum} / ${blockMaxFor(hero.def.class)}`,
+      `コスト  ${hero.def.cost} CE`,
     ];
     const stats = this.add
-      .text(cx - 100, cy - 110, statLines.join("\n"), {
-        fontSize: "13px",
+      .text(slotCx - 110, 268, statLines.join("\n"), {
+        fontSize: "12px",
         color: "#e5e7eb",
-        lineSpacing: 4,
+        lineSpacing: 3,
       })
       .setOrigin(0, 0);
 
     // ── スキル情報セクション
     const skillTitle = this.add
-      .text(cx - 200, cy + 36, "[ スキル ]", {
-        fontSize: "13px",
+      .text(slotCx, 388, "[ スキル ]", {
+        fontSize: "12px",
         color: "#fcd34d",
         fontStyle: "bold",
       })
-      .setOrigin(0, 0);
+      .setOrigin(0.5);
 
     const skillName = hero.skill
       ? this.add
-          .text(cx - 200, cy + 56, hero.skill.name, {
+          .text(slotCx, 412, hero.skill.name, {
             fontSize: "16px",
             color: "#fde68a",
             fontStyle: "bold",
+            align: "center",
+            wordWrap: { width: PANEL_SLOT_WIDTH - 32 },
           })
-          .setOrigin(0, 0)
+          .setOrigin(0.5)
       : this.add
-          .text(cx - 200, cy + 56, "（スキル無し）", {
-            fontSize: "13px",
+          .text(slotCx, 412, "（スキル無し）", {
+            fontSize: "12px",
             color: "#9ca3af",
           })
-          .setOrigin(0, 0);
+          .setOrigin(0.5);
 
     const skillDesc = hero.skill
       ? this.add
-          .text(cx - 200, cy + 80, hero.skill.description, {
-            fontSize: "12px",
+          .text(slotCx, 442, hero.skill.description, {
+            fontSize: "11px",
             color: "#cbd5e1",
-            wordWrap: { width: 400 },
+            align: "center",
+            wordWrap: { width: PANEL_SLOT_WIDTH - 24 },
           })
-          .setOrigin(0, 0)
+          .setOrigin(0.5, 0)
       : null;
 
     // ── ゲージ表示
-    const gaugeBgX = cx - 200;
-    const gaugeY = cy + 116;
-    const gaugeW = 240;
-    const gaugeH = 8;
+    const gaugeY = 498;
+    const gaugeW = PANEL_SLOT_WIDTH - 60;
+    const gaugeH = 10;
+    const gaugeBgX = slotCx - gaugeW / 2;
     const panelGaugeBg = this.add
       .rectangle(gaugeBgX, gaugeY, gaugeW, gaugeH, 0x1f2937, 1)
       .setOrigin(0, 0.5);
@@ -1207,27 +1394,29 @@ export class StageScene extends Phaser.Scene {
       .rectangle(gaugeBgX, gaugeY, fillW, gaugeH, 0xfacc15)
       .setOrigin(0, 0.5);
     const gaugeLabel = this.add
-      .text(gaugeBgX + gaugeW + 8, gaugeY, `${Math.floor(hero.skillGauge)}/${GAUGE_MAX}`, {
+      .text(slotCx, gaugeY + 14, `${Math.floor(hero.skillGauge)} / ${GAUGE_MAX}`, {
         fontSize: "11px",
         color: "#bae6fd",
       })
-      .setOrigin(0, 0.5);
+      .setOrigin(0.5);
 
-    // ── スキル発動ボタン
+    // ── スキル発動ボタン（パネル幅いっぱい）
     const ready = canActivate(hero.skillGauge) && hero.skill !== null;
+    const btnW = PANEL_SLOT_WIDTH - 48;
+    const btnY = 552;
     const activateBtnBg = this.add.rectangle(
-      cx + 105,
-      cy + 56,
-      120,
-      36,
+      slotCx,
+      btnY,
+      btnW,
+      40,
       ready ? 0xfacc15 : 0x374151,
       0.95,
     );
     activateBtnBg.setStrokeStyle(2, ready ? 0xfde047 : 0x6b7280);
     if (ready) activateBtnBg.setInteractive({ useHandCursor: true });
     const activateBtnText = this.add
-      .text(cx + 105, cy + 56, ready ? "▶ 発動" : "ゲージ不足", {
-        fontSize: "14px",
+      .text(slotCx, btnY, ready ? "▶ スキル発動" : "ゲージ不足", {
+        fontSize: "15px",
         color: ready ? "#1f2937" : "#9ca3af",
         fontStyle: "bold",
       })
@@ -1240,19 +1429,30 @@ export class StageScene extends Phaser.Scene {
       });
     }
 
+    // ── 売却ボタン（小さく）
+    const sellBtn = this.add
+      .text(slotCx - 60, btnY + 38, "[ 売却 ]", {
+        fontSize: "11px",
+        color: "#fca5a5",
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    sellBtn.on("pointerdown", () => {
+      this.closeStatusPanel();
+      this.tryReleaseHeroAt(hero.tile);
+    });
+
     // ── 閉じるボタン
     const closeBtn = this.add
-      .text(cx, cy + 150, "[ 閉じる ]", {
-        fontSize: "14px",
+      .text(slotCx + 60, btnY + 38, "[ 閉じる ]", {
+        fontSize: "11px",
         color: "#93c5fd",
       })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
     closeBtn.on("pointerdown", () => this.closeStatusPanel());
-    overlay.on("pointerdown", () => this.closeStatusPanel());
 
     const items: Phaser.GameObjects.GameObject[] = [
-      overlay,
       panel,
       title,
       portrait,
@@ -1264,11 +1464,24 @@ export class StageScene extends Phaser.Scene {
       gaugeLabel,
       activateBtnBg,
       activateBtnText,
+      sellBtn,
       closeBtn,
     ];
-    if (skillDesc) items.splice(7, 0, skillDesc);
+    if (skillDesc) items.splice(6, 0, skillDesc);
     this.statusPanel = this.add.container(0, 0, items);
     this.statusPanel.setDepth(100);
+
+    // SPEC-006 §5.5: 右からスライドイン
+    this.statusPanel.x = PANEL_SLOT_WIDTH;
+    this.tweens.add({
+      targets: this.statusPanel,
+      x: 0,
+      duration: 220,
+      ease: "Sine.easeOut",
+    });
+
+    // パネル placeholder を一時非表示
+    this.panelPlaceholder?.setVisible(false);
 
     for (const r of hero.rangeRects) r.setAlpha(0.35);
     this.playSpeed = 0.1;
@@ -1283,7 +1496,15 @@ export class StageScene extends Phaser.Scene {
 
   private closeStatusPanel(): void {
     if (!this.statusPanel) return;
-    this.statusPanel.destroy(true);
+    const panel = this.statusPanel;
+    // SPEC-006 §5.5: 右へスライドアウト → 完了で破棄
+    this.tweens.add({
+      targets: panel,
+      x: PANEL_SLOT_WIDTH,
+      duration: 200,
+      ease: "Sine.easeIn",
+      onComplete: () => panel.destroy(true),
+    });
     this.statusPanel = null;
     if (this.statusPanelHeroId != null) {
       const hero = this.placedHeroes.find(
@@ -1292,7 +1513,8 @@ export class StageScene extends Phaser.Scene {
       if (hero) for (const r of hero.rangeRects) r.setAlpha(0.18);
     }
     this.statusPanelHeroId = null;
-    this.playSpeed = this.playSpeedToggle;
+    this.panelPlaceholder?.setVisible(true);
+    this.playSpeed = this.placement ? 0.1 : this.playSpeedToggle;
     this.refreshSpeedButton();
   }
 
@@ -1400,8 +1622,12 @@ export class StageScene extends Phaser.Scene {
   }
 
   private tickCe(dt: number): void {
-    if (this.ce >= this.maxCe) return;
-    this.ceProgress += dt * 2.0;
+    // SPEC-006 §5.4: 1 秒で 1 CE 蓄積。`ceProgress` が「1秒ゲージ」そのもの。
+    if (this.ce >= this.maxCe) {
+      this.ceProgress = 1; // 満タン時はゲージも常に満
+      return;
+    }
+    this.ceProgress += dt * 1.0;
     while (this.ceProgress >= 1) {
       this.ce = Math.min(this.maxCe, this.ce + 1);
       this.ceProgress -= 1;
@@ -1719,8 +1945,10 @@ export class StageScene extends Phaser.Scene {
 
   private refreshHud(): void {
     this.hpText.setText(`BASE HP  ${this.baseHp} / ${this.maxBaseHp}`);
-    this.ceText.setText(`CE  ${Math.floor(this.ce)} / ${this.maxCe}`);
-    this.ceBar.width = 200 * (this.ce / this.maxCe);
+    // SPEC-006 §5.4: CE は数値のみ。最大値は表示しない（増えなくなったら最大）
+    this.ceText.setText(`CE  ${Math.floor(this.ce)}`);
+    // 1 秒ゲージ: ceProgress (0..1)
+    this.ceBar.width = 90 * Math.min(1, this.ceProgress);
     this.refreshPaletteHighlight();
   }
 
@@ -1791,7 +2019,7 @@ export class StageScene extends Phaser.Scene {
 }
 
 export const STAGE_DIMENSIONS = {
-  width: STAGE1_MAP.cols * TILE_SIZE,
+  width: STAGE1_MAP.cols * TILE_SIZE + PANEL_SLOT_WIDTH,
   height: STAGE1_MAP.rows * TILE_SIZE + HUD_HEIGHT,
 };
 
