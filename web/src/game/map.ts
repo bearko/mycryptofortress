@@ -96,22 +96,23 @@ export function findRoute(map: MapDef, routeId: string): RouteDef | undefined {
 }
 
 /**
- * Stage1-1 v2 のマップ。SPEC-003 §5.3。
- * 12 列 × 8 行。上下に 2 経路（A: row 1, B: row 6）、中段は壁帯と障害。
+ * Stage1-1 v2 のマップ。SPEC-003 §5.3 → SPEC-006 で 10 マス幅に縮小。
+ * 10 列 × 8 行。上下に 2 経路（A: row 1, B: row 6）、中段は壁帯と障害。
+ * モバイル視認性を上げるため 12 マスから 10 マスに。
  */
-const ROW_OBSTACLE: MapTileType[] = Array(12).fill("obstacle");
-const ROW_PATH: MapTileType[] = Array(12).fill("path");
+const ROW_OBSTACLE: MapTileType[] = Array(10).fill("obstacle");
+const ROW_PATH: MapTileType[] = Array(10).fill("path");
 const ROW_WALL: MapTileType[] = (() => {
-  const a: MapTileType[] = Array(12).fill("wall");
+  const a: MapTileType[] = Array(10).fill("wall");
   // 端 2 マスは obstacle にして見栄えを整える
   a[0] = "obstacle";
-  a[11] = "obstacle";
+  a[9] = "obstacle";
   return a;
 })();
 
 export const STAGE1_MAP: MapDef = {
-  id: "stage-1-1-v2",
-  cols: 12,
+  id: "stage-1-1-v3",
+  cols: 10,
   rows: 8,
   tiles: [
     ROW_OBSTACLE.slice(),
@@ -128,14 +129,14 @@ export const STAGE1_MAP: MapDef = {
       id: "A",
       points: [
         { col: 0, row: 1 },
-        { col: 11, row: 1 },
+        { col: 9, row: 1 },
       ],
     },
     {
       id: "B",
       points: [
         { col: 0, row: 6 },
-        { col: 11, row: 6 },
+        { col: 9, row: 6 },
       ],
     },
   ],
