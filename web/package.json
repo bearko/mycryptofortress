@@ -1,0 +1,22 @@
+{
+  "name": "mycryptofortress-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Browser-based 2D tower defense using MCH assets",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "phaser": "^3.80.1"
+  },
+  "devDependencies": {
+    "typescript": "~5.4.5",
+    "vite": "^5.2.0",
+    "vitest": "^1.6.0"
+  }
+}
