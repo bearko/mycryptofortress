@@ -398,8 +398,9 @@ export class PartyFormationScene extends Phaser.Scene {
     const rosterTopY = cursorY + 6;
     const btnH = 40;
     const btnY = height - btnH / 2 - 10;
-    // 詳細パネル予約分 (約 130px) を引いた領域を roster viewport として確保
-    const detailReserve = 140;
+    // SPEC-021 fix: MCH 本家 passive desc は 60〜90 字あり 2〜3 行 wrap するため
+    // 詳細パネル領域を ~230px 確保。roster は scroll で補う。
+    const detailReserve = 230;
     const rosterBottomY = btnY - btnH / 2 - detailReserve;
     const rosterViewH = Math.max(rosterSlotH + 8, rosterBottomY - rosterTopY);
 
@@ -980,8 +981,13 @@ export class PartyFormationScene extends Phaser.Scene {
     partyFull: boolean,
   ): void {
     const { left, width, top, height } = this.detailGeometry;
-    const portraitSize = Math.min(64, Math.max(48, height - 80));
+    // 上から: ヘッダ "ヒーロー詳細" (14px) → portrait/text 行 → stats 1 行 →
+    // skill name → skill desc (wrap) → action btn → hint
+    // ボトム端からの予約 (action btn + hint = 30 + 12 = ~46) を確保。
+    const bottomReserve = 50;
 
+    // ── ポートレート + 名前/レアリティ/コスト
+    const portraitSize = 56;
     const portraitX = left + 12 + portraitSize / 2;
     const portraitY = top + 36 + portraitSize / 2;
     this.detailDynamic.push(
@@ -989,26 +995,23 @@ export class PartyFormationScene extends Phaser.Scene {
         .sprite(portraitX, portraitY, TEXTURE_KEYS.hero(hero.id))
         .setDisplaySize(portraitSize, portraitSize),
     );
-    // 職業アイコン（ポートレート右下隅に被せる）
     this.detailDynamic.push(
       makeClassIcon(
         this,
         portraitX + portraitSize / 2 - 10,
         portraitY + portraitSize / 2 - 10,
         hero.class,
-        20,
+        18,
         CLASS_COLORS[hero.class].hex,
       ),
     );
 
     const textLeft = portraitX + portraitSize / 2 + 12;
-    const textRight = left + width - 12;
-    const textW = textRight - textLeft;
-    let ty = top + 32;
-
+    const textW = Math.max(80, left + width - 12 - textLeft);
+    const rarityColor = hex2css(RARITY[hero.rarity].hex);
     this.detailDynamic.push(
       this.add
-        .text(textLeft, ty, hero.name, {
+        .text(textLeft, top + 32, hero.name, {
           fontSize: "14px",
           color: hex2css(theme.ink.primary),
           fontStyle: "bold",
@@ -1016,75 +1019,61 @@ export class PartyFormationScene extends Phaser.Scene {
         })
         .setOrigin(0, 0),
     );
-    ty += 18;
-
-    const rarityColor = hex2css(RARITY[hero.rarity].hex);
     this.detailDynamic.push(
       this.add
         .text(
           textLeft,
-          ty,
-          `[${RARITY_LABEL[hero.rarity]}] ${CLASS_LABEL[hero.class]} / ${hero.attackType}`,
+          top + 50,
+          `[${RARITY_LABEL[hero.rarity]}] ${CLASS_LABEL[hero.class]} / ${hero.attackType}  ·  Cost ${hero.cost}`,
           { fontSize: "10px", color: rarityColor },
         )
         .setOrigin(0, 0),
     );
-    ty += 14;
-    this.detailDynamic.push(
-      this.add
-        .text(textLeft, ty, `Cost ${hero.cost} CE`, {
+
+    // ── ステータス 1 行（HP / AGI / PHY / INT / 防御は省略）
+    let cursorY = top + 36 + portraitSize + 6;
+    const statsLine = `HP ${hero.hp} · AGI ${hero.agi} · PHY ${hero.phy} · INT ${hero.int} · DEF ${hero.phyDef}/${hero.intDef}`;
+    const statsText = this.add
+      .text(left + 12, cursorY, statsLine, {
+        fontSize: "10px",
+        color: hex2css(theme.ink.secondary),
+        wordWrap: { width: width - 24, useAdvancedWrap: true },
+      })
+      .setOrigin(0, 0);
+    this.detailDynamic.push(statsText);
+    cursorY += statsText.height + 6;
+
+    // ── スキル名 + 説明（wrap で実高を計測）
+    if (skill) {
+      const skillName = this.add
+        .text(left + 12, cursorY, `■ ${skill.name}`, {
+          fontSize: "11px",
+          color: hex2css(theme.accent.primary),
+          fontStyle: "bold",
+          wordWrap: { width: width - 24, useAdvancedWrap: true },
+        })
+        .setOrigin(0, 0);
+      this.detailDynamic.push(skillName);
+      cursorY += skillName.height + 2;
+
+      // action ボタン用に確保する縦幅（bottomReserve）を引いた残りで desc を描き、
+      // はみ出たら可視範囲のみ。
+      const descMaxBottom = top + height - bottomReserve;
+      const descMaxH = Math.max(20, descMaxBottom - cursorY);
+      const descText = this.add
+        .text(left + 12, cursorY, skill.description, {
           fontSize: "10px",
           color: hex2css(theme.ink.primary),
+          wordWrap: { width: width - 24, useAdvancedWrap: true },
+          // 行数制限の代わり: max height を超えそうなら fixedHeight + 切り捨て
+          fixedHeight: descMaxH,
         })
-        .setOrigin(0, 0),
-    );
-
-    let statsY = top + 36 + portraitSize + 8;
-    const statsLine1 = `HP ${hero.hp}    AGI ${hero.agi}    PHY ${hero.phy}    INT ${hero.int}`;
-    const statsLine2 = `PHY DEF ${hero.phyDef}    INT DEF ${hero.intDef}`;
-    this.detailDynamic.push(
-      this.add
-        .text(left + 12, statsY, statsLine1, {
-          fontSize: "10px",
-          color: hex2css(theme.ink.secondary),
-        })
-        .setOrigin(0, 0),
-    );
-    statsY += 14;
-    this.detailDynamic.push(
-      this.add
-        .text(left + 12, statsY, statsLine2, {
-          fontSize: "10px",
-          color: hex2css(theme.ink.secondary),
-        })
-        .setOrigin(0, 0),
-    );
-    statsY += 16;
-
-    if (skill) {
-      this.detailDynamic.push(
-        this.add
-          .text(left + 12, statsY, `■ ${skill.name}`, {
-            fontSize: "11px",
-            color: hex2css(theme.ink.primary),
-            fontStyle: "bold",
-            wordWrap: { width: width - 24, useAdvancedWrap: true },
-          })
-          .setOrigin(0, 0),
-      );
-      statsY += 16;
-      this.detailDynamic.push(
-        this.add
-          .text(left + 12, statsY, skill.description, {
-            fontSize: "10px",
-            color: hex2css(theme.ink.primary),
-            wordWrap: { width: width - 24, useAdvancedWrap: true },
-          })
-          .setOrigin(0, 0),
-      );
+        .setOrigin(0, 0);
+      this.detailDynamic.push(descText);
     }
 
-    this.attachActionButton(inParty, partyFull, top + height - 32);
+    // ── アクションボタン + ヒント (パネル下端に固定)
+    this.attachActionButton(inParty, partyFull, top + height - 30);
     this.attachHint(inParty, partyFull, top + height - 10);
   }
 
