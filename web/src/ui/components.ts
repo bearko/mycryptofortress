@@ -21,9 +21,12 @@ import type { AttackType, HeroClass, HeroRarity } from "../game/types";
 
 // ─────────────────────────────────────────────
 // Btn — primary / secondary / ghost / destructive
+//
+// SPEC-030: MCT 風の "outlined" button が default。primary は gold アウトライン
+// + raised 背景、secondary は border 色背景の控えめパターン。
 // ─────────────────────────────────────────────
-export type BtnKind = "primary" | "secondary" | "ghost" | "destructive";
-export type BtnSize = "sm" | "md";
+export type BtnKind = "primary" | "secondary" | "ghost" | "destructive" | "solid";
+export type BtnSize = "sm" | "md" | "lg";
 
 export interface BtnOptions {
   x: number;
@@ -35,6 +38,8 @@ export interface BtnOptions {
   size?: BtnSize;
   onClick?: () => void;
   disabled?: boolean;
+  /** ラベル左に置く絵文字 / 1 文字アイコン */
+  icon?: string;
 }
 
 interface BtnPalette {
@@ -55,23 +60,25 @@ function btnPalette(kind: BtnKind, disabled: boolean): BtnPalette {
   }
   switch (kind) {
     case "primary":
-      return {
-        bg: theme.accent.primary,
-        fg: theme.ink.inverse,
-        border: theme.accent.primary,
-        hoverBg: theme.accent.primaryDk,
-      };
-    case "secondary":
+      // MCT button.primary: raised bg + gold accent border + gold text
       return {
         bg: theme.bg.raised,
-        fg: theme.ink.primary,
-        border: theme.line.strong,
+        fg: theme.accent.primary,
+        border: theme.accent.primary,
         hoverBg: theme.bg.overlay,
+      };
+    case "secondary":
+      // MCT button.action: surface bg + neutral border
+      return {
+        bg: theme.bg.surface,
+        fg: theme.ink.secondary,
+        border: theme.line.base,
+        hoverBg: theme.bg.raised,
       };
     case "ghost":
       return {
         bg: theme.bg.surface,
-        fg: theme.ink.secondary,
+        fg: theme.ink.tertiary,
         border: theme.bg.surface,
         hoverBg: theme.bg.raised,
       };
@@ -81,6 +88,14 @@ function btnPalette(kind: BtnKind, disabled: boolean): BtnPalette {
         fg: theme.accent.danger,
         border: theme.accent.danger,
         hoverBg: theme.bg.overlay,
+      };
+    case "solid":
+      // 強い CTA (報酬/開始など) — gold 全塗りで目立たせる
+      return {
+        bg: theme.accent.primary,
+        fg: theme.ink.inverse,
+        border: theme.accent.primary,
+        hoverBg: theme.accent.primaryDk,
       };
   }
 }
@@ -101,18 +116,22 @@ export class Btn extends Phaser.GameObjects.Container {
     this.disabled = opts.disabled ?? false;
 
     const sm = this.btnSize === "sm";
-    this.btnW = opts.width ?? (sm ? 100 : 160);
-    this.btnH = opts.height ?? (sm ? 26 : 36);
+    const lg = this.btnSize === "lg";
+    this.btnW = opts.width ?? (sm ? 100 : lg ? 220 : 160);
+    this.btnH = opts.height ?? (sm ? 26 : lg ? 44 : 36);
 
     const pal = btnPalette(this.kind, this.disabled);
+    const strokeW = lg ? 2 : 1;
 
     this.bg = scene.add
       .rectangle(0, 0, this.btnW, this.btnH, pal.bg, 1)
-      .setStrokeStyle(1, pal.border);
+      .setStrokeStyle(strokeW, pal.border);
 
+    const labelText = opts.icon ? `${opts.icon}  ${opts.label}` : opts.label;
+    const step: keyof typeof TYPE = sm ? "small" : lg ? "h3" : "body";
     this.label = scene.add
-      .text(0, 0, opts.label, {
-        ...textStyle(sm ? "small" : "body", { colorNum: pal.fg }),
+      .text(0, 0, labelText, {
+        ...textStyle(step, { colorNum: pal.fg }),
         fontStyle: "bold",
       })
       .setOrigin(0.5);
@@ -298,32 +317,62 @@ export interface TagOptions {
   colorNum?: ColorNum;
   /** display 書体（英字大文字） を使う */
   mono?: boolean;
+  /** SPEC-030: フィルタチップ用にトグル可能にする */
+  active?: boolean;
+  /** クリック時 callback (省略すると静的チップ) */
+  onClick?: () => void;
 }
 
+/**
+ * SPEC-030: 静的バッジ + フィルタチップを兼ねる Tag。
+ * `onClick` を渡すと interactive、`active=true` で塗りが反転する (MCT のフィルタ流儀)。
+ */
 export class Tag extends Phaser.GameObjects.Container {
+  private bg!: Phaser.GameObjects.Rectangle;
+  private label!: Phaser.GameObjects.Text;
+  private accentColor: ColorNum;
+  private isActive: boolean;
+
   constructor(scene: Phaser.Scene, opts: TagOptions) {
     super(scene, opts.x, opts.y);
+    this.accentColor = opts.colorNum ?? theme.ink.secondary;
+    this.isActive = opts.active ?? false;
 
-    const txt = scene.add
+    this.label = scene.add
       .text(6, 1, opts.mono ? opts.label.toUpperCase() : opts.label, {
         ...textStyle("badge", {
-          colorNum: opts.colorNum ?? theme.ink.secondary,
+          colorNum: this.isActive ? theme.ink.inverse : this.accentColor,
         }),
         fontFamily: opts.mono ? TYPE.badge.family : TYPE.caption.family,
       })
       .setOrigin(0, 0);
 
     const padX = 6;
-    const w = Math.ceil(txt.width) + padX * 2;
+    const w = Math.ceil(this.label.width) + padX * 2;
     const h = 16;
 
-    const bg = scene.add
-      .rectangle(0, h / 2, w, h, theme.bg.raised, 1)
-      .setStrokeStyle(1, opts.colorNum ?? theme.line.base)
+    this.bg = scene.add
+      .rectangle(0, h / 2, w, h, this.isActive ? this.accentColor : theme.bg.raised, 1)
+      .setStrokeStyle(1, this.accentColor)
       .setOrigin(0, 0.5);
 
-    this.add([bg, txt]);
+    this.add([this.bg, this.label]);
     scene.add.existing(this);
+
+    if (opts.onClick) {
+      this.bg.setInteractive({ useHandCursor: true });
+      this.bg.on("pointerdown", (p: Phaser.Input.Pointer) => {
+        if (p.rightButtonDown()) return;
+        opts.onClick?.();
+      });
+    }
+  }
+
+  setActive(active: boolean): this {
+    this.isActive = active;
+    this.bg.setFillStyle(active ? this.accentColor : theme.bg.raised, 1);
+    this.label.setColor(hex2css(active ? theme.ink.inverse : this.accentColor));
+    return this;
   }
 }
 
@@ -521,5 +570,300 @@ export class AttrChip extends Phaser.GameObjects.Container {
       .setOrigin(0, 0.5);
     this.add([bg, txt]);
     scene.add.existing(this);
+  }
+}
+
+// ─────────────────────────────────────────────
+// SPEC-030: Card / Modal / SidePanel / StatGrid
+//
+// 主要な surface プリミティブ。MCT の `.panel` (radius 10) / modal (radius 12) を
+// Phaser に移植したベース。
+// ─────────────────────────────────────────────
+
+export interface CardOptions {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** タイトル (省略可) */
+  title?: string;
+  /** サブタイトル / クラス表示など */
+  subtitle?: string;
+  /** タイトル色のオーバーライド (default: ink.primary) */
+  titleColor?: ColorNum;
+  /** サブタイトル色 (default: accent.primary) */
+  subtitleColor?: ColorNum;
+  /** padding (default: 12) */
+  padding?: number;
+  /** 透明度 (default: 1) */
+  alpha?: number;
+}
+
+/**
+ * MCT `.panel` / hero card 等の base surface。bg + border + 任意のヘッダ。
+ * `contentTop` の Y 値 (origin (0,0) からの相対) より下にコンテンツを置く想定。
+ */
+export class Card extends Phaser.GameObjects.Container {
+  public readonly cardW: number;
+  public readonly cardH: number;
+  public readonly padding: number;
+  /** タイトル行下端の Y。コンテンツ配置の基準 */
+  public readonly contentTop: number;
+
+  constructor(scene: Phaser.Scene, opts: CardOptions) {
+    super(scene, opts.x, opts.y);
+    this.cardW = opts.width;
+    this.cardH = opts.height;
+    this.padding = opts.padding ?? 12;
+
+    const bg = scene.add
+      .rectangle(0, 0, opts.width, opts.height, theme.bg.surface, opts.alpha ?? 1)
+      .setStrokeStyle(1, theme.line.base)
+      .setOrigin(0, 0);
+    this.add(bg);
+
+    let cursor = this.padding;
+    if (opts.title) {
+      const titleText = scene.add
+        .text(opts.width / 2, cursor, opts.title, {
+          ...textStyle("h3", {
+            colorNum: opts.titleColor ?? theme.ink.primary,
+          }),
+          align: "center",
+          wordWrap: { width: opts.width - this.padding * 2, useAdvancedWrap: true },
+        })
+        .setOrigin(0.5, 0);
+      this.add(titleText);
+      cursor += titleText.height + 2;
+    }
+    if (opts.subtitle) {
+      const subText = scene.add
+        .text(opts.width / 2, cursor, opts.subtitle, {
+          ...textStyle("caption", {
+            colorNum: opts.subtitleColor ?? theme.accent.primary,
+          }),
+        })
+        .setOrigin(0.5, 0);
+      this.add(subText);
+      cursor += subText.height + 6;
+    }
+    this.contentTop = cursor;
+    scene.add.existing(this);
+  }
+}
+
+// ─────────────────────────────────────────────
+// StatGrid — 2 列 (label / value) のステータス行
+// ─────────────────────────────────────────────
+export interface StatGridOptions {
+  x: number;
+  y: number;
+  width: number;
+  rows: Array<[string, string]>;
+  /** 行の高さ (default: 16) */
+  rowHeight?: number;
+  /** 文字サイズ step (default: caption) */
+  step?: keyof typeof TYPE;
+  /** 左右パディング (default: 4) */
+  padX?: number;
+}
+
+export class StatGrid extends Phaser.GameObjects.Container {
+  public readonly height: number;
+
+  constructor(scene: Phaser.Scene, opts: StatGridOptions) {
+    super(scene, opts.x, opts.y);
+    const rowH = opts.rowHeight ?? 16;
+    const step = opts.step ?? "caption";
+    const padX = opts.padX ?? 4;
+
+    opts.rows.forEach((pair, i) => {
+      const labelText = scene.add
+        .text(padX, i * rowH, pair[0], {
+          ...textStyle(step, { colorNum: theme.ink.tertiary }),
+        })
+        .setOrigin(0, 0);
+      const valueText = scene.add
+        .text(opts.width - padX, i * rowH, pair[1], {
+          ...textStyle(step, { colorNum: theme.ink.primary }),
+          fontStyle: "bold",
+        })
+        .setOrigin(1, 0);
+      this.add([labelText, valueText]);
+    });
+
+    this.height = opts.rows.length * rowH;
+    scene.add.existing(this);
+  }
+}
+
+// ─────────────────────────────────────────────
+// Modal / SidePanel — 共通ベース
+// ─────────────────────────────────────────────
+export interface ModalOptions {
+  /** 中央モーダル (`center`) かサイドパネル (`side-right`) か */
+  variant?: "center" | "side-right";
+  /** パネル幅 (`center` 時の最大幅 / `side-right` 時の固定幅) */
+  width: number;
+  /** パネル高さ (省略時は viewport 全高) */
+  height?: number;
+  /** バックドロップ (黒半透明) を出すか。`side-right` のとき false 推奨 */
+  backdrop?: boolean;
+  /** バックドロップタップで閉じるか (default: true if backdrop) */
+  closeOnBackdrop?: boolean;
+  /** モーダル外の close 動作 */
+  onClose?: () => void;
+}
+
+/**
+ * SPEC-030: モーダルの schema を統一。
+ *
+ * - `variant: "center"` — 画面中央にカード状。backdrop あり推奨。
+ * - `variant: "side-right"` — アークナイツ風の右からスライドイン。backdrop なし推奨。
+ *
+ * 中身は `body` Container に直接 `.add(child)` していく。`open()` で表示アニメーション、
+ * `close()` で逆アニメ + 破棄。
+ */
+export class Modal extends Phaser.GameObjects.Container {
+  public readonly panel: Phaser.GameObjects.Container;
+  private bg!: Phaser.GameObjects.Rectangle;
+  private backdrop?: Phaser.GameObjects.Rectangle;
+  private variant: "center" | "side-right";
+  private modalW: number;
+  private modalH: number;
+  private targetX: number;
+  private targetY: number;
+  private opts: ModalOptions;
+
+  constructor(scene: Phaser.Scene, opts: ModalOptions) {
+    super(scene, 0, 0);
+    this.opts = opts;
+    this.variant = opts.variant ?? "center";
+    const vpW = scene.scale.width;
+    const vpH = scene.scale.height;
+    this.modalW = opts.width;
+    this.modalH = opts.height ?? vpH;
+
+    if (opts.backdrop) {
+      this.backdrop = scene.add
+        .rectangle(vpW / 2, vpH / 2, vpW, vpH, 0x000000, 0.7)
+        .setInteractive({ useHandCursor: false });
+      if (opts.closeOnBackdrop !== false) {
+        this.backdrop.on("pointerdown", () => opts.onClose?.());
+      }
+      this.add(this.backdrop);
+    }
+
+    if (this.variant === "side-right") {
+      this.targetX = vpW - this.modalW;
+      this.targetY = 0;
+      // パネル側自体は origin (0, 0) で配置
+      this.bg = scene.add
+        .rectangle(0, 0, this.modalW, this.modalH, theme.bg.surface, 0.98)
+        .setStrokeStyle(1, theme.line.base)
+        .setOrigin(0, 0);
+    } else {
+      // center
+      this.targetX = (vpW - this.modalW) / 2;
+      this.targetY = (vpH - this.modalH) / 2;
+      this.bg = scene.add
+        .rectangle(0, 0, this.modalW, this.modalH, theme.bg.surface, 1)
+        .setStrokeStyle(1, theme.line.base)
+        .setOrigin(0, 0);
+    }
+
+    this.panel = scene.add.container(0, 0, [this.bg]);
+    this.add(this.panel);
+    scene.add.existing(this);
+  }
+
+  /** モーダルを開くアニメーション。`onComplete` で完了時に追加処理可能。 */
+  open(onComplete?: () => void): this {
+    if (this.variant === "side-right") {
+      // 右画面外から targetX へスライドイン
+      const vpW = this.scene.scale.width;
+      this.panel.x = vpW;
+      this.panel.y = this.targetY;
+      this.scene.tweens.add({
+        targets: this.panel,
+        x: this.targetX,
+        duration: 220,
+        ease: "Sine.easeOut",
+        onComplete: () => onComplete?.(),
+      });
+      if (this.backdrop) {
+        this.backdrop.alpha = 0;
+        this.scene.tweens.add({
+          targets: this.backdrop,
+          alpha: 1,
+          duration: 180,
+        });
+      }
+    } else {
+      // center: scale + fade in (MCT pop)
+      this.panel.x = this.targetX;
+      this.panel.y = this.targetY + 20;
+      this.panel.alpha = 0;
+      this.scene.tweens.add({
+        targets: this.panel,
+        y: this.targetY,
+        alpha: 1,
+        duration: 220,
+        ease: "Sine.easeOut",
+        onComplete: () => onComplete?.(),
+      });
+      if (this.backdrop) {
+        this.backdrop.alpha = 0;
+        this.scene.tweens.add({
+          targets: this.backdrop,
+          alpha: 1,
+          duration: 180,
+        });
+      }
+    }
+    return this;
+  }
+
+  /** モーダルを閉じてGameObject を破棄。`onComplete` 後に this.destroy() */
+  close(onComplete?: () => void): void {
+    if (this.variant === "side-right") {
+      const vpW = this.scene.scale.width;
+      this.scene.tweens.add({
+        targets: this.panel,
+        x: vpW,
+        duration: 180,
+        ease: "Sine.easeIn",
+      });
+      if (this.backdrop) {
+        this.scene.tweens.add({
+          targets: this.backdrop,
+          alpha: 0,
+          duration: 160,
+        });
+      }
+    } else {
+      this.scene.tweens.add({
+        targets: this.panel,
+        alpha: 0,
+        y: this.targetY + 20,
+        duration: 160,
+        ease: "Sine.easeIn",
+      });
+      if (this.backdrop) {
+        this.scene.tweens.add({
+          targets: this.backdrop,
+          alpha: 0,
+          duration: 160,
+        });
+      }
+    }
+    this.scene.time.delayedCall(220, () => {
+      onComplete?.();
+      this.destroy(true);
+    });
+  }
+  /** opts への外部参照 (close 時の追跡用) */
+  getOpts(): ModalOptions {
+    return this.opts;
   }
 }
