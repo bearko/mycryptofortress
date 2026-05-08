@@ -110,7 +110,8 @@ export class BootScene extends Phaser.Scene {
       texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     }, this);
 
-    this.scene.start("StageScene");
+    // SPEC-011: アセット読み込み完了後はワールド選択画面へ
+    this.scene.start("WorldSelectScene");
   }
 
   heroKey(id: number): string {
