@@ -68,7 +68,9 @@ import {
 import { makeClassIcon } from "../ui/icons";
 import { Bar, Btn, KPI } from "../ui/components";
 
-const HUD_HEIGHT = 144;
+// SPEC-024: KPI ストリップに breathing room を取り、HUD_HEIGHT を 144 → 156 に拡張。
+// `BASE HP` / `CE` の数値 (20px) と Bar (6px) の縦衝突解消、palette もこれに合わせて下げる。
+const HUD_HEIGHT = 156;
 /** SPEC-006 §5.5: Arknights 風サイドパネル領域。ステージ右に常駐。 */
 const PANEL_SLOT_WIDTH = 280;
 
@@ -547,7 +549,8 @@ export class StageScene extends Phaser.Scene {
     });
     this.hpBar = new Bar(this, {
       x: hpX,
-      y: hudY + 30,
+      // SPEC-024: KPI 値 (20px) が y=hudY+16〜40 を占めるため bar は y=44 に
+      y: hudY + 44,
       width: 110,
       height: 6,
       value: this.baseHp,
@@ -568,7 +571,7 @@ export class StageScene extends Phaser.Scene {
     });
     this.ceBar = new Bar(this, {
       x: ceX,
-      y: hudY + 30,
+      y: hudY + 44,
       width: 90,
       height: 6,
       value: 0,
@@ -613,8 +616,9 @@ export class StageScene extends Phaser.Scene {
     // パーティ枠は最大 10 体、stageWidth 640 / 10 = 64px。8 体なら 80px。
     const partyHeroes = this.partyHeroes;
     const slotW = this.stageWidth / Math.max(1, partyHeroes.length);
-    // SPEC-020: 上段 KPI ストリップ (44px) を空けて palette を下げる
-    const palTop = hudY + 46;
+    // SPEC-024: 上段 KPI ストリップ (label + value 20px + bar 6px = ~56) を
+    // 空けて palette を下げる
+    const palTop = hudY + 58;
     partyHeroes.forEach((hero, i) => {
       const cx = slotW * i + slotW / 2;
       const slotCenterY = palTop + 41; // 高さ ~82
@@ -676,9 +680,10 @@ export class StageScene extends Phaser.Scene {
     });
 
     // 下段ステータステキスト (palette 直下)
+    // SPEC-024: HUD_HEIGHT 156 / palTop 58 / palette 高 82 → 下端 hudY+140
     this.statusText = this.add.text(
       10,
-      hudY + 132,
+      hudY + 144,
       "ヒーローアイコンをタップ → タイルへドラッグして配置",
       { fontSize: "13px", color: hex2css(theme.ink.tertiary) },
     );
