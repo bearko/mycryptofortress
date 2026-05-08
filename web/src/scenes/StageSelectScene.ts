@@ -4,7 +4,7 @@ import { getClearedStageIds } from "../game/progress";
 import { SE_KEYS } from "./BootScene";
 import { playSe } from "./seUtil";
 import { getViewport, onResize } from "./layout";
-import { theme, textStyle, GAP } from "../ui/tokens";
+import { theme, textStyle, GAP, setTheme } from "../ui/tokens";
 import { ScreenHeader, Tag } from "../ui/components";
 
 /**
@@ -36,6 +36,11 @@ export class StageSelectScene extends Phaser.Scene {
     this.children.removeAll(true);
     const { width, isPortrait } = getViewport(this);
     const world = findWorld(this.worldId);
+    // SPEC-019: ワールドの themeId に追従（リロード時 / 直接遷移対応）
+    if (world?.themeId) {
+      setTheme(world.themeId);
+      this.cameras.main.setBackgroundColor(theme.bg.base);
+    }
     if (!world) {
       this.add
         .text(width / 2, 80, `ワールドが見つかりません: ${this.worldId}`, {
