@@ -1,11 +1,19 @@
 import { describe, it, expect } from "vitest";
 import { ENEMIES, findEnemy } from "./enemyData";
 
-describe("ENEMIES (SPEC-013 軽量版)", () => {
-  it("4 種類の敵が登録されている", () => {
-    expect(ENEMIES.length).toBe(4);
-    const ids = ENEMIES.map((e) => e.id).sort();
-    expect(ids).toEqual([101, 104, 121, 131]);
+describe("ENEMIES (SPEC-013 / SPEC-019)", () => {
+  it("10 種類の敵が登録されている (基本 4 + 拡張 6)", () => {
+    expect(ENEMIES.length).toBe(10);
+    const ids = ENEMIES.map((e) => e.id).sort((a, b) => a - b);
+    expect(ids).toEqual([101, 104, 105, 121, 122, 131, 132, 141, 151, 161]);
+  });
+
+  it("拡張エネミーは多様な役割をカバー", () => {
+    const rusher = findEnemy(141)!;
+    const tank = findEnemy(151)!;
+    expect(rusher.speed).toBeGreaterThan(1.3); // 高速ラッシャー
+    expect(tank.phyDef).toBeGreaterThan(30); // 高耐久タンク
+    expect(tank.speed).toBeLessThan(0.7);
   });
 
   it("findEnemy で id 検索ができる", () => {
