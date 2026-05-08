@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import { findWorld } from "../game/stages";
 import { getClearedStageIds } from "../game/progress";
+import { SE_KEYS } from "./BootScene";
+import { playSe } from "./seUtil";
 
 /**
  * SPEC-011: ステージ選択シーン。
@@ -59,6 +61,7 @@ export class StageSelectScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     backBtn.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (pointer.rightButtonDown()) return;
+      playSe(this, SE_KEYS.uiMenu());
       this.scene.start("WorldSelectScene");
     });
 
@@ -129,6 +132,7 @@ export class StageSelectScene extends Phaser.Scene {
       bg.on("pointerout", () => bg.setStrokeStyle(2, baseStroke));
       bg.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
         if (pointer.rightButtonDown()) return;
+        playSe(this, SE_KEYS.uiMenu());
         // SPEC-015: バトル画面に行く前にパーティ編成を挟む
         this.scene.start("PartyFormationScene", { stageId: stage.id });
       });
