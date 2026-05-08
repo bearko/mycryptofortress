@@ -298,6 +298,9 @@ export class StageScene extends Phaser.Scene {
 
   private statusPanel: Phaser.GameObjects.Container | null = null;
   private statusPanelHeroId: number | null = null;
+  /** SPEC-029: 縦画面で詳細パネルを開く前の worldRoot 変換を保存 */
+  private statusPanelOriginalMapX: number | null = null;
+  private statusPanelOriginalScale: number | null = null;
 
   private endOverlay: Phaser.GameObjects.Container | null = null;
   private gameOver = false;
@@ -373,6 +376,8 @@ export class StageScene extends Phaser.Scene {
     this.paused = false;
     this.statusPanel = null;
     this.statusPanelHeroId = null;
+    this.statusPanelOriginalMapX = null;
+    this.statusPanelOriginalScale = null;
     this.endOverlay = null;
     this.gameOver = false;
     this.currentCutIn = null;
@@ -2149,77 +2154,120 @@ export class StageScene extends Phaser.Scene {
     this.refreshSpeedButton();
   }
 
-  /** SPEC-028: 縦画面用 — 画面中央のモーダル + バックドロップ */
+  /**
+   * SPEC-029: 縦画面用 — アークナイツ風の右側スライドパネル。
+   *
+   * - ステージ (worldRoot) を左にずらして横方向に縮小し、空いた右領域に
+   *   詳細パネルを表示する。背景はグレーアウトしないので、パネル表示中も
+   *   ステージの様子を確認できる。
+   * - パネル幅は viewport の 50% （min 180 / max 240）。
+   */
   private openStatusPanelPortrait(hero: PlacedHero): void {
     const vpW = this.scale.width;
     const vpH = this.scale.height;
-    const modalW = Math.min(vpW - 16, 420);
-    const modalX = vpW / 2;
-    const modalY = vpH / 2;
 
-    // バックドロップ: タップで閉じる
-    const backdrop = this.add
-      .rectangle(modalX, modalY, vpW, vpH, 0x000000, 0.55)
-      .setInteractive({ useHandCursor: false });
-    backdrop.on("pointerdown", () => this.closeStatusPanel());
+    const layout = this.computePortraitLayout();
+    const panelW = Math.min(240, Math.max(180, Math.floor(vpW * 0.5)));
+    const PAD = 12;
 
-    // モーダル本体 (フィット)
+    // ステージを左寄せ + 縮小して、右側に panel 領域を空ける
+    const newAvailW = vpW - panelW - PAD * 2;
+    const newScale = Math.max(0.1, newAvailW / this.stageWidth);
+    const newMapX = PAD;
+
+    // ── パネル本体 (右側) ──
+    // パネル左端 = vpW - panelW、上端 = layout.hudH（HUD はそのまま全幅）
+    const panelX = vpW - panelW;
+    const panelTop = layout.hudH;
+    const panelH = vpH - panelTop;
+
     const interval = (1 / Math.max(0.1, hero.def.agi / 100)).toFixed(2);
     const tilesCount = hero.def.attackPattern.length;
     const ready = canActivate(hero.skillGauge) && hero.skill !== null;
 
-    // ── 高さを内容から組み立てる ──
-    const PAD = 14;
-    const PORTRAIT_SIZE = 128;
+    const items: Phaser.GameObjects.GameObject[] = [];
+    const innerW = panelW - PAD * 2;
     const cursor = { y: PAD };
 
-    const items: Phaser.GameObjects.GameObject[] = [];
+    // 背景 (内容の前面に置くので最初に作る)
+    const panelBg = this.add
+      .rectangle(0, 0, panelW, panelH, theme.bg.surface, 0.98)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, theme.line.weak);
+    items.push(panelBg);
 
-    // タイトル (x はモーダル相対座標 = 0 中心)
+    // タイトル
     const title = this.add
-      .text(0, cursor.y, `[${CLASS_LABEL[hero.def.class]}] ${hero.def.name}`, {
-        fontSize: "18px",
+      .text(panelW / 2, cursor.y, hero.def.name, {
+        fontSize: "16px",
         color: hex2css(theme.ink.primary),
         fontStyle: "bold",
         align: "center",
-        wordWrap: { width: modalW - PAD * 2 },
+        wordWrap: { width: innerW, useAdvancedWrap: true },
       })
       .setOrigin(0.5, 0);
     items.push(title);
-    cursor.y += title.height + 10;
+    cursor.y += title.height + 2;
 
-    // ── レイアウト: 左にポートレート + 右にステータス ──
+    const subTitle = this.add
+      .text(panelW / 2, cursor.y, `[${CLASS_LABEL[hero.def.class]}]`, {
+        fontSize: "12px",
+        color: hex2css(theme.accent.primary),
+      })
+      .setOrigin(0.5, 0);
+    items.push(subTitle);
+    cursor.y += subTitle.height + 8;
+
+    // ポートレート (中央に大きく)
+    const PORTRAIT_SIZE = Math.min(120, innerW - 8);
     const portrait = this.add
-      .sprite(-modalW / 2 + PAD + PORTRAIT_SIZE / 2, cursor.y + PORTRAIT_SIZE / 2, TEXTURE_KEYS.hero(hero.def.id))
+      .sprite(panelW / 2, cursor.y + PORTRAIT_SIZE / 2, TEXTURE_KEYS.hero(hero.def.id))
       .setDisplaySize(PORTRAIT_SIZE, PORTRAIT_SIZE);
     items.push(portrait);
+    cursor.y += PORTRAIT_SIZE + 10;
 
-    const statTextX = -modalW / 2 + PAD + PORTRAIT_SIZE + 12;
-    const statLines = [
-      `属性  ${hero.def.attackType}`,
-      `HP   ${hero.def.hp}`,
-      `PHY  ${hero.def.phy}`,
-      `INT  ${hero.def.int}`,
-      `AGI  ${hero.def.agi}`,
-      `間隔 ${interval}s`,
-      `範囲 ${tilesCount}マス(${hero.direction})`,
-      `block ${hero.blockNum}/${blockMaxFor(hero.def.class)}`,
-      `cost ${hero.def.cost} CE`,
+    // ステータス (2 列レイアウト)
+    const statPairs: Array<[string, string]> = [
+      ["属性", `${hero.def.attackType}`],
+      ["HP", `${hero.def.hp}`],
+      ["PHY", `${hero.def.phy}`],
+      ["INT", `${hero.def.int}`],
+      ["AGI", `${hero.def.agi}`],
+      ["間隔", `${interval}s`],
+      ["範囲", `${tilesCount}マス(${hero.direction})`],
+      ["block", `${hero.blockNum}/${blockMaxFor(hero.def.class)}`],
+      ["cost", `${hero.def.cost} CE`],
     ];
-    const stats = this.add
-      .text(statTextX, cursor.y, statLines.join("\n"), {
-        fontSize: "13px",
-        color: hex2css(theme.ink.primary),
-        lineSpacing: 2,
-      })
-      .setOrigin(0, 0);
-    items.push(stats);
-    cursor.y += Math.max(PORTRAIT_SIZE, stats.height) + 12;
+    const statLineH = 16;
+    statPairs.forEach((pair, i) => {
+      const labelText = this.add
+        .text(PAD, cursor.y + i * statLineH, pair[0], {
+          fontSize: "12px",
+          color: hex2css(theme.ink.tertiary),
+        })
+        .setOrigin(0, 0);
+      const valueText = this.add
+        .text(panelW - PAD, cursor.y + i * statLineH, pair[1], {
+          fontSize: "12px",
+          color: hex2css(theme.ink.primary),
+          fontStyle: "bold",
+        })
+        .setOrigin(1, 0);
+      items.push(labelText, valueText);
+    });
+    cursor.y += statPairs.length * statLineH + 10;
 
-    // ── スキルセクション ──
+    // 区切り線
+    const sepLine = this.add
+      .line(0, cursor.y, PAD, 0, panelW - PAD, 0, theme.line.weak, 1)
+      .setOrigin(0, 0.5);
+    items.push(sepLine);
+    cursor.y += 8;
+
+    // スキル
     const skillTitle = this.add
-      .text(0, cursor.y, "[ スキル ]", {
-        fontSize: "14px",
+      .text(panelW / 2, cursor.y, "スキル", {
+        fontSize: "12px",
         color: hex2css(theme.accent.warn),
         fontStyle: "bold",
       })
@@ -2229,23 +2277,23 @@ export class StageScene extends Phaser.Scene {
 
     if (hero.skill) {
       const skillName = this.add
-        .text(0, cursor.y, hero.skill.name, {
-          fontSize: "16px",
+        .text(panelW / 2, cursor.y, hero.skill.name, {
+          fontSize: "14px",
           color: hex2css(theme.ink.primary),
           fontStyle: "bold",
           align: "center",
-          wordWrap: { width: modalW - PAD * 2 },
+          wordWrap: { width: innerW, useAdvancedWrap: true },
         })
         .setOrigin(0.5, 0);
       items.push(skillName);
       cursor.y += skillName.height + 4;
 
       const skillDesc = this.add
-        .text(0, cursor.y, hero.skill.description, {
-          fontSize: "13px",
+        .text(panelW / 2, cursor.y, hero.skill.description, {
+          fontSize: "11px",
           color: hex2css(theme.ink.secondary),
           align: "center",
-          wordWrap: { width: modalW - PAD * 2 },
+          wordWrap: { width: innerW, useAdvancedWrap: true },
           lineSpacing: 2,
         })
         .setOrigin(0.5, 0);
@@ -2253,8 +2301,8 @@ export class StageScene extends Phaser.Scene {
       cursor.y += skillDesc.height + 8;
     } else {
       const noSkill = this.add
-        .text(0, cursor.y, "（スキル無し）", {
-          fontSize: "13px",
+        .text(panelW / 2, cursor.y, "（スキル無し）", {
+          fontSize: "11px",
           color: hex2css(theme.ink.tertiary),
         })
         .setOrigin(0.5, 0);
@@ -2262,35 +2310,35 @@ export class StageScene extends Phaser.Scene {
       cursor.y += noSkill.height + 8;
     }
 
-    // ── ゲージ ──
-    const gaugeW = modalW - PAD * 2;
-    const gaugeH = 10;
+    // ゲージ
+    const gaugeW = innerW;
+    const gaugeH = 8;
     const gaugeBg = this.add
-      .rectangle(0, cursor.y + gaugeH / 2, gaugeW, gaugeH, theme.bg.overlay, 1)
-      .setOrigin(0.5);
+      .rectangle(PAD, cursor.y + gaugeH / 2, gaugeW, gaugeH, theme.bg.overlay, 1)
+      .setOrigin(0, 0.5);
     const fillW = gaugeW * (hero.skillGauge / GAUGE_MAX);
     const gaugeFill = this.add
-      .rectangle(-gaugeW / 2, cursor.y + gaugeH / 2, fillW, gaugeH, theme.accent.warn)
+      .rectangle(PAD, cursor.y + gaugeH / 2, fillW, gaugeH, theme.accent.warn)
       .setOrigin(0, 0.5);
     items.push(gaugeBg, gaugeFill);
     cursor.y += gaugeH + 4;
 
     const gaugeLabel = this.add
-      .text(0, cursor.y, `${Math.floor(hero.skillGauge)} / ${GAUGE_MAX}`, {
-        fontSize: "13px",
+      .text(panelW / 2, cursor.y, `${Math.floor(hero.skillGauge)} / ${GAUGE_MAX}`, {
+        fontSize: "11px",
         color: hex2css(theme.accent.primary),
       })
       .setOrigin(0.5, 0);
     items.push(gaugeLabel);
-    cursor.y += gaugeLabel.height + 12;
+    cursor.y += gaugeLabel.height + 8;
 
-    // ── 発動ボタン ──
-    const btnH = 44;
+    // 発動ボタン
+    const btnH = 38;
     const btnY = cursor.y + btnH / 2;
     const activateBg = this.add.rectangle(
-      0,
+      panelW / 2,
       btnY,
-      modalW - PAD * 2,
+      innerW,
       btnH,
       ready ? theme.accent.warn : theme.line.base,
       0.95,
@@ -2298,8 +2346,8 @@ export class StageScene extends Phaser.Scene {
     activateBg.setStrokeStyle(2, ready ? theme.accent.primary : theme.line.bright);
     if (ready) activateBg.setInteractive({ useHandCursor: true });
     const activateText = this.add
-      .text(0, btnY, ready ? "▶ スキル発動" : "ゲージ不足", {
-        fontSize: "16px",
+      .text(panelW / 2, btnY, ready ? "▶ スキル発動" : "ゲージ不足", {
+        fontSize: "14px",
         color: ready ? hex2css(theme.ink.inverse) : hex2css(theme.ink.tertiary),
         fontStyle: "bold",
       })
@@ -2311,19 +2359,19 @@ export class StageScene extends Phaser.Scene {
       });
     }
     items.push(activateBg, activateText);
-    cursor.y += btnH + 10;
+    cursor.y += btnH + 8;
 
-    // ── 売却 / 閉じる ──
-    const subBtnW = (modalW - PAD * 2 - 8) / 2;
-    const subBtnH = 36;
+    // 売却 / 閉じる
+    const subBtnW = (innerW - 6) / 2;
+    const subBtnH = 32;
     const subY = cursor.y + subBtnH / 2;
     const sellBg = this.add
-      .rectangle(-subBtnW / 2 - 4, subY, subBtnW, subBtnH, theme.bg.overlay, 1)
+      .rectangle(PAD + subBtnW / 2, subY, subBtnW, subBtnH, theme.bg.overlay, 1)
       .setStrokeStyle(1, theme.accent.danger)
       .setInteractive({ useHandCursor: true });
     const sellText = this.add
-      .text(-subBtnW / 2 - 4, subY, "売却", {
-        fontSize: "14px",
+      .text(PAD + subBtnW / 2, subY, "売却", {
+        fontSize: "12px",
         color: hex2css(theme.accent.danger),
       })
       .setOrigin(0.5);
@@ -2333,50 +2381,42 @@ export class StageScene extends Phaser.Scene {
     });
 
     const closeBg = this.add
-      .rectangle(subBtnW / 2 + 4, subY, subBtnW, subBtnH, theme.bg.overlay, 1)
+      .rectangle(panelW - PAD - subBtnW / 2, subY, subBtnW, subBtnH, theme.bg.overlay, 1)
       .setStrokeStyle(1, theme.accent.primary)
       .setInteractive({ useHandCursor: true });
     const closeText = this.add
-      .text(subBtnW / 2 + 4, subY, "閉じる", {
-        fontSize: "14px",
+      .text(panelW - PAD - subBtnW / 2, subY, "閉じる", {
+        fontSize: "12px",
         color: hex2css(theme.accent.primary),
       })
       .setOrigin(0.5);
     closeBg.on("pointerdown", () => this.closeStatusPanel());
 
     items.push(sellBg, sellText, closeBg, closeText);
-    cursor.y += subBtnH + PAD;
 
-    // ── 背景パネル (内容の高さで決定) ──
-    const modalH = Math.min(cursor.y, vpH - 24);
-    const panelBg = this.add
-      .rectangle(0, modalH / 2, modalW, modalH, theme.bg.surface, 0.98)
-      .setStrokeStyle(2, theme.line.bright);
+    // ── パネルコンテナ (右側) ──
+    // 開始位置: 画面右端の外 (vpW)、終了位置: panelX
+    const panel = this.add.container(vpW, panelTop, items);
 
-    // panel を配列の先頭 (背景) に挿入
-    items.unshift(panelBg);
+    // ── ステージ縮小トランジション保存 ──
+    this.statusPanelOriginalMapX = this.worldRoot.x;
+    this.statusPanelOriginalScale = this.worldRoot.scaleX;
 
-    // モーダル全体 = backdrop + container(items, 中心 modalX, modalY - modalH/2)
-    // items の y は 0 起点で組まれているので、Container を modalY - modalH/2 に置く
-    const modal = this.add.container(modalX, modalY - modalH / 2, items);
-
-    this.statusPanel = this.add.container(0, 0, [backdrop, modal]);
+    this.statusPanel = this.add.container(0, 0, [panel]);
     this.statusPanel.setDepth(100);
 
-    // ── 下からスライドアップ ──
-    modal.y = modalY - modalH / 2 + 24;
-    modal.alpha = 0;
-    backdrop.alpha = 0;
+    // ── アニメーション: ステージ縮小 + パネル右からスライドイン ──
     this.tweens.add({
-      targets: backdrop,
-      alpha: 1,
-      duration: 180,
+      targets: this.worldRoot,
+      x: newMapX,
+      scaleX: newScale,
+      scaleY: newScale,
+      duration: 220,
       ease: "Sine.easeOut",
     });
     this.tweens.add({
-      targets: modal,
-      y: modalY - modalH / 2,
-      alpha: 1,
+      targets: panel,
+      x: panelX,
       duration: 220,
       ease: "Sine.easeOut",
     });
@@ -2590,14 +2630,42 @@ export class StageScene extends Phaser.Scene {
     if (!this.statusPanel) return;
     const panel = this.statusPanel;
     if (this.isPortrait()) {
-      // SPEC-028: 縦画面はフェードアウト
-      this.tweens.add({
-        targets: panel,
-        alpha: 0,
-        duration: 180,
-        ease: "Sine.easeIn",
-        onComplete: () => panel.destroy(true),
-      });
+      // SPEC-029: 縦画面 — パネルを右へスライドアウト + ステージ復元
+      const vpW = this.scale.width;
+      const inner = panel.list[0] as Phaser.GameObjects.Container | undefined;
+      if (inner) {
+        this.tweens.add({
+          targets: inner,
+          x: vpW,
+          duration: 180,
+          ease: "Sine.easeIn",
+        });
+      }
+      // ステージを元に戻す
+      if (
+        this.statusPanelOriginalMapX != null &&
+        this.statusPanelOriginalScale != null
+      ) {
+        this.tweens.add({
+          targets: this.worldRoot,
+          x: this.statusPanelOriginalMapX,
+          scaleX: this.statusPanelOriginalScale,
+          scaleY: this.statusPanelOriginalScale,
+          duration: 200,
+          ease: "Sine.easeOut",
+          onComplete: () => panel.destroy(true),
+        });
+      } else {
+        this.tweens.add({
+          targets: panel,
+          alpha: 0,
+          duration: 180,
+          ease: "Sine.easeIn",
+          onComplete: () => panel.destroy(true),
+        });
+      }
+      this.statusPanelOriginalMapX = null;
+      this.statusPanelOriginalScale = null;
     } else {
       // SPEC-006 §5.5: 右へスライドアウト → 完了で破棄
       this.tweens.add({
