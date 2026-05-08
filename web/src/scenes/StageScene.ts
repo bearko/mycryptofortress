@@ -1273,12 +1273,32 @@ export class StageScene extends Phaser.Scene {
       this.currentTileHelp = null;
     }
 
+    // SPEC-010 fix: ツールチップ幅を 220 → 300 に拡大、CJK 用 advancedWordWrap で
+    // どこでも改行できるように。実テキストの行数で動的に高さを伸ばす。
+    const helpW = 300;
+    const wrapWidth = helpW - 24;
+    const accent = parseInt(info.accentColor.slice(1), 16);
+
+    // 先に description テキストを作って実高さを測ってから背景サイズを決める
+    const descTextStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontSize: "12px",
+      color: "#e5e7eb",
+      align: "center",
+      wordWrap: { width: wrapWidth, useAdvancedWrap: true },
+    };
+    const descTemp = this.add
+      .text(0, 0, info.description, descTextStyle)
+      .setOrigin(0.5, 0);
+    const descHeight = descTemp.height;
+
+    // 全体のレイアウト: title (16) + descHeight + footer (14) + padding 上下 8
+    const helpH = Math.max(76, 16 + descHeight + 14 + 16);
+
     const px = tileToPixel(tile);
-    // タイルの上に出すか下に出すかを画面端から決める
     const placedAbove = px.y > this.stageHeight / 2;
-    const helpY = placedAbove ? px.y - TILE_SIZE * 1.0 : px.y + TILE_SIZE * 1.0;
-    const helpW = 220;
-    const helpH = 78;
+    const helpY = placedAbove
+      ? px.y - TILE_SIZE * 0.6 - helpH / 2
+      : px.y + TILE_SIZE * 0.6 + helpH / 2;
 
     // ステージ端で見切れないよう x をクランプ
     const helpX = Math.max(
@@ -1286,26 +1306,19 @@ export class StageScene extends Phaser.Scene {
       Math.min(this.stageWidth - helpW / 2 - 6, px.x),
     );
 
-    const accent = parseInt(info.accentColor.slice(1), 16);
     const bg = this.add.rectangle(helpX, helpY, helpW, helpH, 0x0b0d12, 0.95);
     bg.setStrokeStyle(2, accent, 0.9);
 
     const title = this.add
-      .text(helpX, helpY - helpH / 2 + 12, `［${info.label}］`, {
+      .text(helpX, helpY - helpH / 2 + 8, `［${info.label}］`, {
         fontSize: "13px",
         color: info.accentColor,
         fontStyle: "bold",
       })
       .setOrigin(0.5, 0);
 
-    const desc = this.add
-      .text(helpX, helpY - helpH / 2 + 30, info.description, {
-        fontSize: "11px",
-        color: "#e5e7eb",
-        align: "center",
-        wordWrap: { width: helpW - 16 },
-      })
-      .setOrigin(0.5, 0);
+    descTemp.setPosition(helpX, helpY - helpH / 2 + 26);
+    const desc = descTemp;
 
     const placeableLabel =
       info.placeable.length === 0
@@ -1313,7 +1326,7 @@ export class StageScene extends Phaser.Scene {
         : "配置可: " +
           info.placeable.map((c) => CLASS_LABEL[c]).join(" / ");
     const placeable = this.add
-      .text(helpX, helpY + helpH / 2 - 14, placeableLabel, {
+      .text(helpX, helpY + helpH / 2 - 16, placeableLabel, {
         fontSize: "10px",
         color: "#a7f3d0",
       })
