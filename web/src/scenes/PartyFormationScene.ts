@@ -48,6 +48,9 @@ const CLASS_LABEL: Record<HeroClass, string> = {
 const RARITY_LABEL: Record<HeroRarity, string> = {
   common: "Common",
   uncommon: "Uncommon",
+  rare: "Rare",
+  superRare: "SuperRare",
+  legendary: "Legendary",
 };
 
 interface SlotEntry {
@@ -439,16 +442,11 @@ export class PartyFormationScene extends Phaser.Scene {
       .setDisplaySize(portraitSize, portraitSize);
 
     this.add
-      .text(
-        cx - w / 2 + 4,
-        cy - h / 2 + 4,
-        hero.rarity === "uncommon" ? "U" : "C",
-        {
-          fontSize: "10px",
-          color: hero.rarity === "uncommon" ? hex2css(RARITY.uncommon.hex) : hex2css(theme.accent.primary),
-          fontStyle: "bold",
-        },
-      )
+      .text(cx - w / 2 + 4, cy - h / 2 + 4, RARITY[hero.rarity].label, {
+        fontSize: "10px",
+        color: hex2css(RARITY[hero.rarity].hex),
+        fontStyle: "bold",
+      })
       .setOrigin(0, 0);
 
     this.add
@@ -588,7 +586,7 @@ export class PartyFormationScene extends Phaser.Scene {
     );
     y += 24;
 
-    const rarityColor = hero.rarity === "uncommon" ? hex2css(RARITY.uncommon.hex) : hex2css(theme.accent.primary);
+    const rarityColor = hex2css(RARITY[hero.rarity].hex);
     this.detailDynamic.push(
       this.add
         .text(
@@ -756,7 +754,7 @@ export class PartyFormationScene extends Phaser.Scene {
     );
     ty += 18;
 
-    const rarityColor = hero.rarity === "uncommon" ? hex2css(RARITY.uncommon.hex) : hex2css(theme.accent.primary);
+    const rarityColor = hex2css(RARITY[hero.rarity].hex);
     this.detailDynamic.push(
       this.add
         .text(
