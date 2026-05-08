@@ -48,7 +48,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 1001,
     name: "シャーロック・ホームズ",
-    description: "推理が冴え、自身の与ダメージが 1.5 倍に。",
+    description: "自身のHPが70%未満の時に100%の確率で1回だけ発動 / 先頭の味方のINTを自身のINTの30%アップ",
     seCategory: "buff",
     effectType: "damageMultiplier",
     value: 1.5,
@@ -58,7 +58,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 1002,
     name: "浪切",
-    description: "刀の冴えで攻撃間隔を 1/1.5 に短縮。",
+    description: "自身がActive Skillを使用した後に40%の確率で発動 / 先頭の味方のPHYを自身のPHYの15%ダウン / 先頭の敵に自身のPHYの50%ダメージ",
     seCategory: "buff",
     effectType: "agiBuff",
     value: 1.5,
@@ -68,7 +68,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 1003,
     name: "遼来遼来",
-    description: "進行が最も先の敵 1 体に 3.0× の必殺射撃を放つ。",
+    description: "自身がActive Skillでダメージを受けた後に90%の確率で発動 / 最後尾の敵に自身のPHYの20%ダメージ",
     seCategory: "single_damage",
     effectType: "singleStrike",
     value: 3.0,
@@ -78,7 +78,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 1004,
     name: "狼王ロボ",
-    description: "範囲攻撃のキレが増し、与ダメージが 1.7 倍に。",
+    description: "バトル開始時に100%の確率で発動 / PHYが最も高い敵に自身のINTの40%ダメージ / PHYが最も高い敵に100%の確率で出血を付与",
     seCategory: "area_damage",
     effectType: "damageMultiplier",
     value: 1.7,
@@ -88,7 +88,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 1006,
     name: "テトラクテュス",
-    description: "数理の調和で与ダメージが 2.0 倍に。",
+    description: "自身のHPが40%未満の時に100%の確率で1回だけ発動 / PHYが最も高い味方のPHYを自身のINTの28%アップ / INTが最も高い味方のINTを自身のPHYの28%アップ",
     seCategory: "buff",
     effectType: "damageMultiplier",
     value: 2.0,
@@ -98,7 +98,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 1007,
     name: "李氏朝鮮、宮廷医女",
-    description: "範囲内の味方ヒーローを INT 回復公式で大きく回復する。",
+    description: "自身がActive Skillを使用した後に20%の確率で発動 / HPが最も低い味方のHPを回復係数の15%回復",
     seCategory: "heal_resurrection",
     effectType: "heal",
     value: 1.5,
@@ -108,7 +108,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 1008,
     name: "ボストン・ストロング・ボーイ",
-    description: "ボクサーの闘志で与ダメージが 1.8 倍に。",
+    description: "自身がActive Skillでダメージを受けた後に25%の確率で発動 / 自身のチャージを自身のHP減少量の100 ~ 250%アップ",
     seCategory: "buff",
     effectType: "damageMultiplier",
     value: 1.8,
@@ -118,7 +118,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 1009,
     name: "ローリングドライバー",
-    description: "範囲内の敵の防御を 0.5 倍（半減）に。",
+    description: "バトル開始時に100%の確率で発動 / INTが最も高い敵のINTを自身のINTの64%ダウン / INTが最も低い敵のINTを対象のPHYの100%アップ",
     seCategory: "debuff_status_effect",
     effectType: "enemyDefDebuff",
     value: 0.5,
@@ -130,7 +130,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 2002,
     name: "剣闘士の反乱",
-    description: "闘技場の血塗れで自身の与ダメージが 2.2 倍に。",
+    description: "自身のHPが60%未満の時に100%の確率で1回だけ発動 / 自身のPHYを敵全体のINT増加量合計の100%アップ / 「INTが最も高い敵に自身のPHYの30 ~ 50%ダメージ」を2回繰り返す / 自身のPHYを敵全体のINT増加量合計の100%ダウン",
     seCategory: "buff",
     effectType: "damageMultiplier",
     value: 2.2,
@@ -140,7 +140,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 2013,
     name: "虎痴",
-    description: "猛虎の咆哮で与ダメージが 2.0 倍に。",
+    description: "自身がActive Skillを使用した後に65%の確率で発動 / 自身のINTを自身のINT減少量の45%アップ / 自身のPHYを自身のINT減少量の200%アップ / 自身のAGIを自身のINT減少量の100%アップ / 自身のINTを70ダウン",
     seCategory: "buff",
     effectType: "damageMultiplier",
     value: 2.0,
@@ -150,7 +150,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 2009,
     name: "天下人の使者",
-    description: "信長の号令で攻撃間隔が 1/1.6 に短縮。",
+    description: "敵の誰かがActive Skillを使用した後に25%の確率で発動 / AGIが最も高い敵のAGIを自身の最大HPの25%アップ / AGIが最も高い敵のAGIを対象のAGIの40%ダウン / AGIが最も高い敵に100%の確率でバインドを付与",
     seCategory: "buff",
     effectType: "agiBuff",
     value: 1.6,
@@ -160,7 +160,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 2016,
     name: "幻の生存者",
-    description: "範囲内の敵の防御を 0.4 倍（60% カット）に。",
+    description: "自身のHPが50%未満の時に100%の確率で1回だけ発動 / 敵全体のINTを自身のINTの30 ~ 40%ダウン / 敵全体に対象のINT減少量の50%ダメージ / 味方全体のPHYを自身のINTの20%ダウン",
     seCategory: "debuff_status_effect",
     effectType: "enemyDefDebuff",
     value: 0.4,
@@ -170,7 +170,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 2003,
     name: "ランゲルライン",
-    description: "進行が最も先の敵 1 体に 4.0 倍の必殺の刺突。",
+    description: "自身がActive Skillを使用した後に100%の確率で発動 / 最後尾の敵に自身のPHY減少量の80%ダメージ / 最後尾の敵に自身のPHYの20%ダメージ / 中衛の味方のPHYを自身のINTの20%ダウン / 自身のAGIを自身のAGIの5%アップ",
     seCategory: "single_damage",
     effectType: "singleStrike",
     value: 4.0,
@@ -180,7 +180,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 2006,
     name: "ヘウレーカ！ヘウレーカ！",
-    description: "閃きが冴え、与ダメージが 1.8 倍に。",
+    description: "バトル開始時に100%の確率で発動 / 自身のシールドを対象の最大HPの100%に更新",
     seCategory: "area_damage",
     effectType: "damageMultiplier",
     value: 1.8,
@@ -190,7 +190,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 2014,
     name: "大政奉還",
-    description: "歴史の転換点。与ダメージが 1.7 倍に。",
+    description: "自身がActive Skillを使用した後に50%の確率で発動 / 自身のINTを自身のINT減少量の30%アップ / 敵全体のPHYを自身のINTの15%ダウン / 敵全体のINTを自身のINTの15%ダウン / 自身のINTを自身のINTの40%ダウン",
     seCategory: "area_damage",
     effectType: "damageMultiplier",
     value: 1.7,
@@ -200,7 +200,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 2011,
     name: "兵は詭道なり",
-    description: "範囲内の敵の防御を 0.4 倍に。戦術の要点で必中。",
+    description: "バトル開始時に100%の確率で発動 / 敵全体のAGIを自身のINTの15 ~ 20%ダウン / 味方全体のAGIを自身のINTの10%ダウン",
     seCategory: "debuff_status_effect",
     effectType: "enemyDefDebuff",
     value: 0.4,
@@ -210,7 +210,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 2007,
     name: "プレゼント・フォー・ユー",
-    description: "範囲内の味方を INT 回復公式で 2.0 倍係数で回復する。",
+    description: "自身がActive Skillを使用した後に30%の確率で発動 / 「HPが最も低い味方のHPを回復係数の12 ~ 25%回復」を3回繰り返す",
     seCategory: "heal_resurrection",
     effectType: "heal",
     value: 2.0,
@@ -220,7 +220,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 2010,
     name: "変身",
-    description: "蝶の羽ばたき。与ダメージが 1.6 倍に。",
+    description: "バトル開始時に100%の確率で発動 / 味方全体のHPを回復係数の30%回復 / 味方全体のAGIを自身のAGIの10%アップ",
     seCategory: "buff",
     effectType: "damageMultiplier",
     value: 1.6,
@@ -235,7 +235,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 3001,
     name: "キャリスラッシュ",
-    description: "PHY +6 の刃で先頭の敵を切り裂く。与ダメージが 2.5 倍に。",
+    description: "敵の誰かがActive Skillを使用した後に0%の確率で発動 / 自身のPHYを自身のPHY減少量の70%アップ / 先頭の敵に自身のPHYの70%ダメージ",
     seCategory: "buff",
     effectType: "damageMultiplier",
     value: 2.5,
@@ -245,7 +245,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 3002,
     name: "ワンフォーオール・オールフォーワン",
-    description: "三銃士の連携で PHY/INT を底上げ。与ダメージが 2.0 倍に。",
+    description: "バトル開始時に100%の確率で発動 / 味方全体のPHYを自身のINTの10%アップ / 味方全体のINTを自身のINTの10%アップ",
     seCategory: "buff",
     effectType: "damageMultiplier",
     value: 2.0,
@@ -255,7 +255,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 3003,
     name: "エレキテル",
-    description: "電流で味方の攻撃間隔を 1/1.7 に短縮。",
+    description: "自身のHPが60%未満の時に100%の確率で1回だけ発動 / 自身のINTを自身のINT減少量の90%アップ / 敵全体に自身のINTの40%ダメージ",
     seCategory: "buff",
     effectType: "agiBuff",
     value: 1.7,
@@ -265,7 +265,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 3004,
     name: "アイ・オブ・ザ・デイ",
-    description: "毒の蜜を仕込み、範囲内の敵防御を 0.35 倍に削る。",
+    description: "自身がActive Skillを使用した後に60%の確率で発動 / INTが最も低い敵のINTを自身のINTの10%ダウン / INTが最も低い敵に自身のINTの20%ダメージ / INTが最も低い敵に100%の確率でバインドを付与",
     seCategory: "debuff_status_effect",
     effectType: "enemyDefDebuff",
     value: 0.35,
@@ -275,7 +275,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 3005,
     name: "オムノンタクティクス",
-    description: "INT/AGI を同時強化。与ダメージが 2.3 倍に。",
+    description: "自身がActive Skillを使用した後かつ自身のHPが75%未満の時に40%の確率で発動 / 自身のINTを自身のINT減少量の50%アップ / 自身のAGIを自身のAGI減少量の50%アップ / 先頭の敵に自身のINTの50%ダメージ",
     seCategory: "buff",
     effectType: "damageMultiplier",
     value: 2.3,
@@ -285,7 +285,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 3006,
     name: "ミントルアート",
-    description: "範囲内の味方を INT 回復公式で 2.5 倍係数で回復する。",
+    description: "自身がActive Skillを使用した後に40%の確率で発動 / 味方全体のPHYを対象のPHY減少量の50%アップ / 味方全体のINTを対象のINT減少量の50%アップ / 味方全体のHPを回復係数の30%回復",
     seCategory: "heal_resurrection",
     effectType: "heal",
     value: 2.5,
@@ -295,7 +295,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 3007,
     name: "暴君",
-    description: "ローマ皇帝の威光で与ダメージが 2.4 倍に。",
+    description: "自身がActive Skillでダメージを受けた後に0%の確率で発動 / 自身のINTを受けたダメージの50%アップ / 自身のHPを自身のINTの40%回復 / 味方全体のPHYを自身のINTの30%ダウン",
     seCategory: "buff",
     effectType: "damageMultiplier",
     value: 2.4,
@@ -305,7 +305,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 3008,
     name: "大予言",
-    description: "進行が最も先の敵 1 体に予言の災厄を落とす（4.5 倍）。",
+    description: "自身のHPが50%未満の時に100%の確率で1回だけ発動 / 敵全体に100%の確率で混乱を付与 / 敵全体のPHY/INT/AGIの最も高い方を対象のPHY/INT/AGI増加量合計の100%ダウン",
     seCategory: "single_damage",
     effectType: "singleStrike",
     value: 4.5,
@@ -317,7 +317,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 4001,
     name: "一騎当千",
-    description: "致死の刃を耐え抜く豪傑。与ダメージが 3.0 倍に。",
+    description: "自身が死亡した後に100%の確率で1回だけ発動 / 自身を自身の最大HPの50%回復した状態で復活",
     seCategory: "buff",
     effectType: "damageMultiplier",
     value: 3.0,
@@ -327,7 +327,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 4002,
     name: "白衣の天使",
-    description: "範囲内の味方を INT 回復公式で 3.0 倍係数で全快近くまで回復。",
+    description: "自身がActive Skillを使用した後かつ自身のHPが60%未満の時に70%の確率で発動 / 味方全体のHPを回復係数の100%回復",
     seCategory: "heal_resurrection",
     effectType: "heal",
     value: 3.0,
@@ -337,7 +337,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 4003,
     name: "歓喜の歌",
-    description: "範囲内の敵の PHY/INT/AGI を同時に削り、防御を 0.25 倍に。",
+    description: "自身のHPが50%未満の時に100%の確率で1回だけ発動 / 敵全体のPHYを自身のINTの25%ダウン / 敵全体のINTを自身のINTの25%ダウン / 敵全体のAGIを自身のINTの25%ダウン",
     seCategory: "debuff_status_effect",
     effectType: "enemyDefDebuff",
     value: 0.25,
@@ -347,7 +347,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 4004,
     name: "燕返し",
-    description: "三段の燕返しで攻撃間隔を 1/2.0 に短縮。",
+    description: "自身がActive Skillを使用した後に100%の確率で発動 / 自身のAGIを自身のAGIの10%アップ / 自身のPHY/INTの低い方を自身のAGIの5 ~ 8%アップ / 中衛の敵のPHY/INTの高い方を自身のAGIの5 ~ 8%ダウン",
     seCategory: "buff",
     effectType: "agiBuff",
     value: 2.0,
@@ -357,7 +357,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 4005,
     name: "無血開城",
-    description: "PHY/INT を同時に底上げ。与ダメージが 2.6 倍に。",
+    description: "自身がActive Skillを使用した後かつ自身のHPが60%未満の時に45%の確率で発動 / 味方全体のPHYを自身のINTの30%アップ / 味方全体のINTを自身のINTの30%アップ",
     seCategory: "buff",
     effectType: "damageMultiplier",
     value: 2.6,
@@ -367,7 +367,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 4006,
     name: "ワンホールショット",
-    description: "進行が最も先の敵 1 体に必殺の一撃（5.0 倍）。",
+    description: "自身がActive Skillでダメージを受けた後に100%の確率で発動 / 先頭の敵に自身のINTの40%ダメージ",
     seCategory: "single_damage",
     effectType: "singleStrike",
     value: 5.0,
@@ -377,7 +377,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 4007,
     name: "エジソン・エフェクト",
-    description: "電灯の発明者の閃き。与ダメージが 2.8 倍に。",
+    description: "自身がActive Skillを使用した後に35%の確率で発動 / 味方全体のINTを自身のINTの30%アップ",
     seCategory: "buff",
     effectType: "damageMultiplier",
     value: 2.8,
@@ -387,7 +387,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 4008,
     name: "東方見聞録",
-    description: "未踏の知見で味方を癒す。INT 回復公式で 2.7 倍係数で回復。",
+    description: "自身が死亡した後に100%の確率で1回だけ発動 / 味方全体のHPを回復係数の70%回復 / 自身を自身の最大HPの30%回復した状態で復活 / PHYが最も高い敵のPHYを対象のPHYの40%ダウン",
     seCategory: "heal_resurrection",
     effectType: "heal",
     value: 2.7,
@@ -399,7 +399,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 5001,
     name: "天下布武",
-    description: "敵 1 体に PHY 150〜200% の覇王の一撃（6.0 倍）。",
+    description: "自身がActive Skillを使用した後に25%の確率で発動 / 先頭の敵に自身のPHYの150 ~ 200%ダメージ",
     seCategory: "single_damage",
     effectType: "singleStrike",
     value: 6.0,
@@ -409,7 +409,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 5002,
     name: "コルシカの悪魔",
-    description: "進行が最も先の敵 1 体に INT 150〜200% の閃光（6.5 倍）。",
+    description: "自身がActive Skillを使用した後に25%の確率で発動 / 先頭の敵に自身のINTの150 ~ 200%ダメージ",
     seCategory: "single_damage",
     effectType: "singleStrike",
     value: 6.5,
@@ -419,7 +419,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 5003,
     name: "乱世の奸雄",
-    description: "覇者の威圧で与ダメージが 3.5 倍に。",
+    description: "自身がActive Skillを使用した後に100%の確率で発動 / PHYが最も高い味方のPHYを自身のPHYの10%アップ / 自身のPHYを自身のPHYの15%アップ / 自身のHPを自身のPHYの30%回復",
     seCategory: "buff",
     effectType: "damageMultiplier",
     value: 3.5,
@@ -429,7 +429,7 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 5004,
     name: "1stプレジデント",
-    description: "建国の指導力で攻撃間隔を 1/2.2 に短縮。",
+    description: "自身がActive Skillを使用した後に35%の確率で発動 / 味方全体のINTを自身のINTの30%アップ / 味方全体のAGIを自身のINTの30%アップ",
     seCategory: "buff",
     effectType: "agiBuff",
     value: 2.2,
