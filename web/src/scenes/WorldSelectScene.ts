@@ -1,5 +1,7 @@
 import Phaser from "phaser";
 import { ALL_WORLDS } from "../game/stages";
+import { SE_KEYS } from "./BootScene";
+import { playSe } from "./seUtil";
 
 /**
  * SPEC-011: ワールド選択シーン。
@@ -78,8 +80,22 @@ export class WorldSelectScene extends Phaser.Scene {
       bg.on("pointerout", () => bg.setStrokeStyle(2, 0x4b5563));
       bg.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
         if (pointer.rightButtonDown()) return;
+        playSe(this, SE_KEYS.uiMenu());
         this.scene.start("StageSelectScene", { worldId: world.id });
       });
     });
+
+    // SE クレジット表記（Senses Circuit / 利用規約に基づくサイトリンク・著作権表示）
+    this.add
+      .text(
+        width / 2,
+        this.scale.height - 14,
+        "SE: Senses Circuit (hitoshi) — https://www.senses-circuit.com/  © Senses Circuit",
+        {
+          fontSize: "10px",
+          color: "#6b7280",
+        },
+      )
+      .setOrigin(0.5);
   }
 }

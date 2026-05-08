@@ -15,10 +15,16 @@ import {
 } from "./skill";
 
 describe("SKILLS テーブル", () => {
-  it("Common 8 体ぶんの skill が定義されている", () => {
-    expect(SKILLS.length).toBe(8);
-    const ids = SKILLS.map((s) => s.heroId).sort();
-    expect(ids).toEqual([1001, 1002, 1003, 1004, 1006, 1007, 1008, 1009]);
+  it("Common 8 体 + Uncommon 10 体ぶんの skill が定義されている", () => {
+    // SPEC-015 で Uncommon を追加。
+    expect(SKILLS.length).toBe(18);
+    const ids = SKILLS.map((s) => s.heroId).sort((a, b) => a - b);
+    // Common
+    expect(ids).toContain(1001);
+    expect(ids).toContain(1009);
+    // Uncommon
+    expect(ids).toContain(2002);
+    expect(ids).toContain(2010);
   });
 
   it("各 skill は heroId / name / cost が必須", () => {
