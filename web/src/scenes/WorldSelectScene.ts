@@ -3,7 +3,7 @@ import { ALL_WORLDS, type WorldDef } from "../game/stages";
 import { SE_KEYS } from "./BootScene";
 import { playSe } from "./seUtil";
 import { getViewport, onResize } from "./layout";
-import { theme, textStyle, hex2css, GAP } from "../ui/tokens";
+import { theme, textStyle, hex2css, GAP, setTheme } from "../ui/tokens";
 import { ScreenHeader } from "../ui/components";
 
 /**
@@ -16,6 +16,8 @@ export class WorldSelectScene extends Phaser.Scene {
   }
 
   create(): void {
+    // ワールド選択画面に戻るときは onyx テーマに復帰
+    setTheme("onyx");
     this.cameras.main.setBackgroundColor(theme.bg.base);
     this.layout();
     onResize(this, () => this.layout());
@@ -173,6 +175,8 @@ export class WorldSelectScene extends Phaser.Scene {
     bg.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (pointer.rightButtonDown()) return;
       playSe(this, SE_KEYS.uiMenu());
+      // SPEC-019: ワールドの themeId に応じてテーマを切替（戦国は朱赤）
+      if (world.themeId) setTheme(world.themeId);
       this.scene.start("StageSelectScene", { worldId: world.id });
     });
   }
