@@ -1,20 +1,27 @@
+import { HEROES } from "./heroData";
+
 /**
- * SPEC-014（軽量版）: クリア記録のセーブ / ロード。
+ * SPEC-014 / SPEC-015: クリア記録 + パーティ編成のセーブ / ロード。
  *
- * シンプルな localStorage バックエンドで、どのステージをクリアしたかを永続化する。
+ * シンプルな localStorage バックエンドで、
+ *   - どのステージをクリアしたか
+ *   - どのヒーローをパーティに編成しているか
+ * を永続化する。
+ *
  * 互換性を考えてバージョンを持たせ、将来データ構造が変わっても安全に migrate できる。
- *
- * 後続 (SPEC-014 続編 / SPEC-015 想定):
- *   - クリアタイム / 撃破数 などのスコア
- *   - チーム編成保存
- *   - 設定（速度デフォルト・音量）
+ * SPEC-015 で `partyHeroIds` を追加（旧データには無いので fallback で初期 8 体を返す）。
  */
 
 const STORAGE_KEY = "fortress.progress.v1";
 
+/** SPEC-015: パーティ枠の上限 */
+export const PARTY_LIMIT = 10;
+
 interface PersistedProgress {
   version: number;
   clearedStageIds: string[];
+  /** SPEC-015: 編成中のパーティ（hero ID の配列、最大 PARTY_LIMIT 体） */
+  partyHeroIds?: number[];
 }
 
 const CURRENT_VERSION = 1;
@@ -36,6 +43,9 @@ function readRaw(): PersistedProgress {
       clearedStageIds: parsed.clearedStageIds.filter(
         (id): id is string => typeof id === "string",
       ),
+      partyHeroIds: Array.isArray(parsed.partyHeroIds)
+        ? parsed.partyHeroIds.filter((id): id is number => typeof id === "number")
+        : undefined,
     };
   } catch {
     return emptyProgress();
@@ -77,4 +87,59 @@ export function clearAllProgress(): void {
   } catch {
     // 読み取り専用環境などでは何もしない
   }
+}
+
+// ────────────────────────── SPEC-015: パーティ編成 ──────────────────────────
+
+/**
+ * 初期パーティ。HEROES の先頭 8 体（Common 全員）。
+ * 既存 storage に partyHeroIds が無い場合のデフォルトとして使う。
+ */
+function defaultPartyIds(): number[] {
+  return HEROES.slice(0, 8).map((h) => h.id);
+}
+
+/**
+ * 現在のパーティ ID リストを返す。
+ * - 保存値が無ければ defaultPartyIds() を返す。
+ * - 保存値の中で「現存しない hero ID」「重複」「PARTY_LIMIT 超過」は除外する。
+ */
+export function getPartyHeroIds(): number[] {
+  const raw = readRaw();
+  if (!raw.partyHeroIds || raw.partyHeroIds.length === 0) {
+    return defaultPartyIds();
+  }
+  const validIds = new Set(HEROES.map((h) => h.id));
+  const seen = new Set<number>();
+  const result: number[] = [];
+  for (const id of raw.partyHeroIds) {
+    if (!validIds.has(id)) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+    if (result.length >= PARTY_LIMIT) break;
+  }
+  return result.length > 0 ? result : defaultPartyIds();
+}
+
+/**
+ * パーティ ID リストを保存。
+ * - PARTY_LIMIT を超えた分は切り捨て。
+ * - 重複はその場で排除。
+ * - HEROES に存在しない ID は無視。
+ */
+export function setPartyHeroIds(ids: number[]): void {
+  const validIds = new Set(HEROES.map((h) => h.id));
+  const seen = new Set<number>();
+  const filtered: number[] = [];
+  for (const id of ids) {
+    if (!validIds.has(id)) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    filtered.push(id);
+    if (filtered.length >= PARTY_LIMIT) break;
+  }
+  const p = readRaw();
+  p.partyHeroIds = filtered;
+  writeRaw(p);
 }

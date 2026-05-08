@@ -15,6 +15,9 @@ export type HeroClass =
   | "medic"
   | "supporter";
 
+/** SPEC-015: ヒーローのレアリティ。MCH 公式 DB の `rarity.name` と対応。 */
+export type HeroRarity = "common" | "uncommon";
+
 export interface HeroDef {
   /** mycryptoheroes ID（数値） */
   id: number;
@@ -22,6 +25,8 @@ export interface HeroDef {
   name: string;
   /** Arknights 風職業 (SPEC-003) */
   class: HeroClass;
+  /** レアリティ (SPEC-015) */
+  rarity: HeroRarity;
   /** 攻撃属性 */
   attackType: AttackType;
   /** コスト（CE） */
