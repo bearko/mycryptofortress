@@ -123,6 +123,13 @@ const STAGE_1_3_MAP: MapDef = {
 };
 
 // ─── 共通の Wave 定義
+// 敵 ID:
+//   101 = クリーパー ショート (PHY 標準)
+//   104 = クリーパー ヴェンティ (PHY 大型・遅い・タフ)
+//   121 = ハートブリード ショート (INT 速い・脆い)
+//   131 = メリッサ ショート (INT 標準)
+
+// 訓練用: クリーパー ショート 6 体
 const WAVE_BASIC_6: Wave = {
   patterns: [
     { time: 1.0, enemyId: 101, routeId: "A" },
@@ -134,29 +141,31 @@ const WAVE_BASIC_6: Wave = {
   ],
 };
 
+// 単一通路: クリーパー ヴェンティを 1 体だけ混ぜる（壁を超える）
 const WAVE_SOLO_8: Wave = {
   patterns: [
     { time: 1.0, enemyId: 101, routeId: "A" },
     { time: 2.5, enemyId: 101, routeId: "A" },
-    { time: 4.0, enemyId: 101, routeId: "A" },
+    { time: 4.0, enemyId: 121, routeId: "A" }, // INT で削れる
     { time: 5.5, enemyId: 101, routeId: "A" },
-    { time: 7.0, enemyId: 101, routeId: "A" },
+    { time: 7.0, enemyId: 104, routeId: "A" }, // 中ボス級
     { time: 8.5, enemyId: 101, routeId: "A" },
-    { time: 10.0, enemyId: 101, routeId: "A" },
+    { time: 10.0, enemyId: 121, routeId: "A" },
     { time: 11.5, enemyId: 101, routeId: "A" },
   ],
 };
 
+// 毒の沼地: ハートブリード / メリッサで INT 攻撃を体験させる
 const WAVE_HEAVY_8: Wave = {
   patterns: [
-    { time: 1.0, enemyId: 101, routeId: "A" },
-    { time: 2.0, enemyId: 101, routeId: "B" },
-    { time: 3.0, enemyId: 101, routeId: "A" },
+    { time: 1.0, enemyId: 121, routeId: "A" }, // 速い INT
+    { time: 2.0, enemyId: 101, routeId: "B" }, // 毒沼で削れる
+    { time: 3.0, enemyId: 131, routeId: "A" },
     { time: 4.0, enemyId: 101, routeId: "B" },
-    { time: 6.0, enemyId: 101, routeId: "A" },
-    { time: 7.0, enemyId: 101, routeId: "B" },
-    { time: 9.0, enemyId: 101, routeId: "A" },
-    { time: 10.0, enemyId: 101, routeId: "B" },
+    { time: 6.0, enemyId: 121, routeId: "A" },
+    { time: 7.0, enemyId: 104, routeId: "B" }, // タフだが毒沼を歩かされる
+    { time: 9.0, enemyId: 131, routeId: "A" },
+    { time: 10.0, enemyId: 131, routeId: "B" },
   ],
 };
 
