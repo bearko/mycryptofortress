@@ -259,6 +259,13 @@ export class StageScene extends Phaser.Scene {
   /** SPEC-007 §5.1: ユーザーによる明示的な一時停止 */
   private paused = false;
 
+  /**
+   * SPEC-025: マップ / 配置ヒーロー / 敵 / 弾など world 系オブジェクトを
+   * 集約する Container。orientation に合わせて position と scale を変える
+   * ことで、縦画面でもタイル座標 (TILE_SIZE=64) のまま画面幅にフィットさせる。
+   */
+  private worldRoot!: Phaser.GameObjects.Container;
+
   /** SPEC-020: HUD は KPI/Bar ヘルパで構成。下記は更新参照のために保持 */
   private hpBar!: Bar;
   private hpKPI!: KPI;
@@ -361,29 +368,122 @@ export class StageScene extends Phaser.Scene {
     this.panelPlaceholder = null;
 
     this.cameras.main.setBackgroundColor(theme.bg.base);
+    // SPEC-025: world 系オブジェクトを集約する container を先に作る。
+    // worldRoot に reparent された GameObject は worldRoot.scale * worldRoot.x/y
+    // のオフセットで描画される。drawTiles 等が `addWorld` ヘルパで自動で
+    // ここに登録する。
+    this.worldRoot = this.add.container(0, 0);
+
     this.drawTiles();
-    this.drawHud();
-    this.drawPanelSlot();
+    if (this.isPortrait()) {
+      this.drawPortraitHud();
+    } else {
+      this.drawHud();
+      this.drawPanelSlot();
+    }
     this.bindInput();
     this.refreshSpeedButton();
     this.startBgm();
 
-    // SPEC-016: ビューポートに対してカメラズームでフィット。
-    // 縦画面の専用レイアウトは別 SPEC で対応予定。現状は中央寄せ + 等倍縮小。
-    this.fitCameraToViewport();
-    onResize(this, () => this.fitCameraToViewport());
+    // SPEC-025: 縦画面なら worldRoot をマップ領域にスケール + 配置。
+    // 横画面なら既存の design 全体をカメラズームでフィット。
+    this.applyResponsiveLayout();
+    onResize(this, () => this.applyResponsiveLayout());
   }
 
-  private fitCameraToViewport(): void {
-    const designW = this.canvasWidth || this.stageWidth + PANEL_SLOT_WIDTH;
-    const designH = this.stageHeight + HUD_HEIGHT;
+  /**
+   * SPEC-025: 横画面 / 縦画面 で worldRoot と camera を切り替える。
+   *
+   * 横画面: design 全体 (920×656) をカメラズームでビューポートにフィット。
+   *         worldRoot は (0,0) 原点・等倍。
+   * 縦画面: カメラはズーム 1。worldRoot を HUD バーの下に配置し、
+   *         scale で画面幅にフィット。HUD と palette は drawHud / drawPanelSlot
+   *         が portrait モード対応で配置済み。
+   */
+  private applyResponsiveLayout(): void {
     const vpW = this.scale.width;
     const vpH = this.scale.height;
-    if (designW <= 0 || designH <= 0 || vpW <= 0 || vpH <= 0) return;
-    const zoom = Math.min(vpW / designW, vpH / designH);
+    if (vpW <= 0 || vpH <= 0) return;
+    const isPortrait = vpH > vpW;
     const cam = this.cameras.main;
-    cam.setZoom(zoom);
-    cam.centerOn(designW / 2, designH / 2);
+
+    if (!isPortrait) {
+      const designW = this.canvasWidth || this.stageWidth + PANEL_SLOT_WIDTH;
+      const designH = this.stageHeight + HUD_HEIGHT;
+      this.worldRoot.setPosition(0, 0);
+      this.worldRoot.setScale(1);
+      const zoom = Math.min(vpW / designW, vpH / designH);
+      cam.setZoom(zoom);
+      cam.centerOn(designW / 2, designH / 2);
+      return;
+    }
+
+    cam.setZoom(1);
+    cam.centerOn(vpW / 2, vpH / 2);
+
+    const layout = this.computePortraitLayout();
+    this.worldRoot.setPosition(layout.mapX, layout.mapY);
+    this.worldRoot.setScale(layout.scale);
+  }
+
+  /** 縦画面のレイアウト境界。drawHud / drawPanelSlot がこの値を共有する。 */
+  private computePortraitLayout(): {
+    hudH: number;
+    mapX: number;
+    mapY: number;
+    mapW: number;
+    mapH: number;
+    scale: number;
+    detailY: number;
+    detailH: number;
+    paletteY: number;
+    paletteH: number;
+  } {
+    const vpW = this.scale.width;
+    const vpH = this.scale.height;
+    const hudH = 92;
+    const margin = 8;
+    const detailH = 36;
+    const availW = vpW - margin * 2;
+    const scale = availW / this.stageWidth;
+    const mapW = this.stageWidth * scale;
+    const mapH = this.stageHeight * scale;
+    const mapX = (vpW - mapW) / 2;
+    const mapY = hudH;
+    const detailY = mapY + mapH + 4;
+    // SPEC-025: パレットは詳細ストリップ直下に配置し、残り高さを使う
+    const paletteY = detailY + detailH + 4;
+    const paletteH = Math.max(120, vpH - paletteY - 8);
+    return {
+      hudH,
+      mapX,
+      mapY,
+      mapW,
+      mapH,
+      scale,
+      detailY,
+      detailH,
+      paletteY,
+      paletteH,
+    };
+  }
+
+  private isPortrait(): boolean {
+    return this.scale.height > this.scale.width;
+  }
+
+  /** screen pointer を worldRoot の local 座標 (= タイル空間) に変換 */
+  private screenToWorld(p: Phaser.Input.Pointer): { x: number; y: number } {
+    return {
+      x: (p.worldX - this.worldRoot.x) / this.worldRoot.scaleX,
+      y: (p.worldY - this.worldRoot.y) / this.worldRoot.scaleY,
+    };
+  }
+
+  /** GameObject を worldRoot に reparent するヘルパ */
+  private addWorld<T extends Phaser.GameObjects.GameObject>(go: T): T {
+    this.worldRoot.add(go);
+    return go;
   }
 
   /**
@@ -434,68 +534,81 @@ export class StageScene extends Phaser.Scene {
         const cx = c * TILE_SIZE + TILE_SIZE / 2;
         const cy = r * TILE_SIZE + TILE_SIZE / 2;
         const { fill, stroke } = TILE_VISUAL[kind];
-        const rect = this.add.rectangle(
-          cx,
-          cy,
-          TILE_SIZE - 2,
-          TILE_SIZE - 2,
-          fill,
-          1,
+        const rect = this.addWorld(
+          this.add.rectangle(cx, cy, TILE_SIZE - 2, TILE_SIZE - 2, fill, 1),
         );
         rect.setStrokeStyle(1, stroke);
 
         if (kind === "wall") {
-          // 壁のテクスチャ感を出す簡易ドット
-          this.add
-            .rectangle(cx - 14, cy - 14, 4, 4, theme.ink.tertiary, 0.6)
-            .setDepth(2);
-          this.add
-            .rectangle(cx + 14, cy + 12, 4, 4, theme.ink.tertiary, 0.6)
-            .setDepth(2);
+          this.addWorld(
+            this.add
+              .rectangle(cx - 14, cy - 14, 4, 4, theme.ink.tertiary, 0.6)
+              .setDepth(2),
+          );
+          this.addWorld(
+            this.add
+              .rectangle(cx + 14, cy + 12, 4, 4, theme.ink.tertiary, 0.6)
+              .setDepth(2),
+          );
         }
         if (kind === "poison") {
-          // 毒沼: 紫の泡を 3 つ散らして「沼っぽさ」を出す
-          this.add.circle(cx - 12, cy - 10, 4, 0xc084fc, 0.85).setDepth(2);
-          this.add.circle(cx + 10, cy + 8, 5, 0xa855f7, 0.85).setDepth(2);
-          this.add.circle(cx - 6, cy + 14, 3, 0xd8b4fe, 0.85).setDepth(2);
+          this.addWorld(
+            this.add.circle(cx - 12, cy - 10, 4, 0xc084fc, 0.85).setDepth(2),
+          );
+          this.addWorld(
+            this.add.circle(cx + 10, cy + 8, 5, 0xa855f7, 0.85).setDepth(2),
+          );
+          this.addWorld(
+            this.add.circle(cx - 6, cy + 14, 3, 0xd8b4fe, 0.85).setDepth(2),
+          );
         }
         if (kind === "path_blocked") {
-          // 配置不可な床: ✕ パターン
           const lineColor = 0xfb7185;
-          this.add
-            .line(cx, cy, -16, -16, 16, 16, lineColor, 0.7)
-            .setLineWidth(2)
-            .setDepth(2);
-          this.add
-            .line(cx, cy, -16, 16, 16, -16, lineColor, 0.7)
-            .setLineWidth(2)
-            .setDepth(2);
+          this.addWorld(
+            this.add
+              .line(cx, cy, -16, -16, 16, 16, lineColor, 0.7)
+              .setLineWidth(2)
+              .setDepth(2),
+          );
+          this.addWorld(
+            this.add
+              .line(cx, cy, -16, 16, 16, -16, lineColor, 0.7)
+              .setLineWidth(2)
+              .setDepth(2),
+          );
         }
       }
     }
 
-    // ルートの始点と終点だけは常時マークする（経路本体は出現時アニメ）
+    // ルート IN/OUT マーカー
     for (const route of this.map.routes) {
       const start = tileToPixel(route.points[0]);
       const goal = tileToPixel(route.points[route.points.length - 1]);
       const color = ROUTE_COLOR[route.id] ?? 0xffffff;
-      this.add
-        .text(start.x, start.y - 22, `IN ${route.id}`, {
-          fontSize: "14px",
-          color: hex2css(theme.accent.success),
-          fontStyle: "bold",
-        })
-        .setOrigin(0.5);
-      this.add
-        .text(goal.x, goal.y - 22, `OUT ${route.id}`, {
-          fontSize: "14px",
-          color: hex2css(theme.accent.warn),
-          fontStyle: "bold",
-        })
-        .setOrigin(0.5);
-      // 出入口にカラーピン
-      this.add.circle(start.x, start.y, 5, color, 0.8).setDepth(3);
-      this.add.circle(goal.x, goal.y, 5, color, 0.8).setDepth(3);
+      this.addWorld(
+        this.add
+          .text(start.x, start.y - 22, `IN ${route.id}`, {
+            fontSize: "14px",
+            color: hex2css(theme.accent.success),
+            fontStyle: "bold",
+          })
+          .setOrigin(0.5),
+      );
+      this.addWorld(
+        this.add
+          .text(goal.x, goal.y - 22, `OUT ${route.id}`, {
+            fontSize: "14px",
+            color: hex2css(theme.accent.warn),
+            fontStyle: "bold",
+          })
+          .setOrigin(0.5),
+      );
+      this.addWorld(
+        this.add.circle(start.x, start.y, 5, color, 0.8).setDepth(3),
+      );
+      this.addWorld(
+        this.add.circle(goal.x, goal.y, 5, color, 0.8).setDepth(3),
+      );
     }
   }
 
@@ -684,6 +797,219 @@ export class StageScene extends Phaser.Scene {
     );
   }
 
+  /**
+   * SPEC-025: 縦画面用 HUD。上段 KPI ストリップ + 下段にフルワイドの
+   * パレット + ヒーロー詳細ストリップ。
+   */
+  private drawPortraitHud(): void {
+    const vpW = this.scale.width;
+    const vpH = this.scale.height;
+    const layout = this.computePortraitLayout();
+    const hudH = layout.hudH;
+
+    // ── 上段: HUD バー (背景 + 区切り線)
+    this.add.rectangle(vpW / 2, hudH / 2, vpW, hudH, theme.bg.surface, 1);
+    this.add
+      .line(0, 0, 0, hudH, vpW, hudH, theme.line.base, 1)
+      .setOrigin(0, 0);
+
+    // 左上: WORLD / STAGE バッジ
+    const worldStageLabel = this.currentStage
+      ? `${this.currentStage.worldId.toUpperCase()} / ${this.currentStage.id}`
+      : "STAGE";
+    this.add
+      .text(8, 4, worldStageLabel, {
+        ...textStyle("badge", { colorNum: theme.ink.tertiary }),
+      })
+      .setOrigin(0, 0);
+    if (this.currentStage) {
+      this.add
+        .text(8, 16, this.currentStage.name, {
+          ...textStyle("small", { colorNum: theme.ink.primary }),
+          fontStyle: "bold",
+          wordWrap: { width: 130, useAdvancedWrap: true },
+        })
+        .setOrigin(0, 0);
+    }
+
+    // KPI ストリップ (右側に詰める)
+    // 縦画面では幅が狭いため、HP / CE のラベル+値を縦に積み、その横に細い bar を置く
+    const stripRight = vpW - 8;
+    const stripTop = 4;
+    const colGap = 12;
+    const colWidth = 70;
+    const barW = 56;
+
+    // SPEED / PAUSE ボタン (右下)
+    this.speedBtn = new Btn(this, {
+      x: stripRight - 30,
+      y: hudH - 16,
+      width: 56,
+      height: 22,
+      size: "sm",
+      kind: "primary",
+      label: "1.0×",
+      onClick: () => this.togglePlaySpeed(),
+    });
+    this.pauseBtn = new Btn(this, {
+      x: stripRight - 92,
+      y: hudH - 16,
+      width: 60,
+      height: 22,
+      size: "sm",
+      kind: "secondary",
+      label: "⏸",
+      onClick: () => this.togglePause(),
+    });
+
+    // TIME (右上)
+    const timeX = stripRight - colWidth;
+    this.timeKPI = new KPI(this, {
+      x: timeX,
+      y: stripTop,
+      label: "TIME",
+      value: "00:00",
+      colorNum: theme.ink.primary,
+    });
+
+    // CE (TIME の左)
+    const ceX = timeX - colWidth - colGap;
+    this.ceKPI = new KPI(this, {
+      x: ceX,
+      y: stripTop,
+      label: "CE",
+      value: `${Math.floor(this.ce)}`,
+      colorNum: theme.accent.warn,
+    });
+    this.ceBar = new Bar(this, {
+      x: ceX,
+      y: stripTop + 38,
+      width: barW,
+      height: 5,
+      value: 0,
+      max: 1,
+      color: theme.accent.primary,
+    });
+
+    // BASE HP (CE の左)
+    const hpX = ceX - colWidth - colGap;
+    this.hpKPI = new KPI(this, {
+      x: hpX,
+      y: stripTop,
+      label: "BASE HP",
+      value: `${this.baseHp} / ${this.maxBaseHp}`,
+      colorNum: theme.accent.danger,
+    });
+    this.hpBar = new Bar(this, {
+      x: hpX,
+      y: stripTop + 38,
+      width: barW,
+      height: 5,
+      value: this.baseHp,
+      max: this.maxBaseHp,
+      color: theme.accent.danger,
+      segments: this.maxBaseHp,
+      glow: true,
+    });
+
+    // ── 中段: マップ領域 (worldRoot が描画) — 視覚境界線
+    this.add
+      .rectangle(layout.mapX - 1, layout.mapY - 1, layout.mapW + 2, layout.mapH + 2, 0x000000, 0)
+      .setStrokeStyle(1, theme.line.weak)
+      .setOrigin(0, 0);
+
+    // ── 詳細メッセージ帯 (マップ直下)
+    this.add
+      .rectangle(0, layout.detailY, vpW, layout.detailH, theme.bg.surface, 0.95)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, theme.line.weak);
+    this.statusText = this.add.text(
+      8,
+      layout.detailY + 8,
+      "ヒーローアイコンをタップ → タイルへドラッグして配置",
+      {
+        fontSize: "12px",
+        color: hex2css(theme.ink.secondary),
+        wordWrap: { width: vpW - 16, useAdvancedWrap: true },
+      },
+    );
+
+    // ── 下段: パレット (5 列 × 2 行)
+    this.add
+      .rectangle(0, layout.paletteY, vpW, layout.paletteH, theme.bg.surface, 1)
+      .setOrigin(0, 0);
+    this.add
+      .line(0, 0, 0, layout.paletteY, vpW, layout.paletteY, theme.line.base, 1)
+      .setOrigin(0, 0);
+
+    const partyHeroes = this.partyHeroes;
+    const palCols = 5;
+    const palRows = Math.ceil(partyHeroes.length / palCols);
+    const palMargin = 6;
+    const palGap = 4;
+    const palSlotW = (vpW - palMargin * 2 - palGap * (palCols - 1)) / palCols;
+    const palSlotH = Math.min(80, (layout.paletteH - palGap) / palRows);
+    partyHeroes.forEach((hero, i) => {
+      const col = i % palCols;
+      const row = Math.floor(i / palCols);
+      const cx = palMargin + col * (palSlotW + palGap) + palSlotW / 2;
+      const cy = layout.paletteY + 4 + row * (palSlotH + palGap) + palSlotH / 2;
+      const border = this.add.rectangle(cx, cy, palSlotW - 2, palSlotH - 2, theme.bg.surface, 1);
+      border.setStrokeStyle(2, theme.line.weak);
+      border.setInteractive({ useHandCursor: true });
+
+      const sprite = this.add
+        .sprite(cx, cy - 8, TEXTURE_KEYS.hero(hero.id))
+        .setDisplaySize(36, 36);
+      const labelCost = this.add
+        .text(cx + palSlotW / 2 - 6, cy - palSlotH / 2 + 4, `${hero.cost}`, {
+          fontSize: "11px",
+          color: hex2css(theme.ink.primary),
+          fontStyle: "bold",
+          stroke: hex2css(theme.bg.base),
+          strokeThickness: 3,
+        })
+        .setOrigin(1, 0);
+      const classColor = CLASS_COLORS[hero.class].hex;
+      const classIcon = makeClassIcon(this, cx - 12, cy + palSlotH / 2 - 12, hero.class, 10, classColor);
+      const labelClass = this.add
+        .text(cx + 2, cy + palSlotH / 2 - 12, CLASS_LABEL[hero.class], {
+          fontSize: "11px",
+          color: hex2css(classColor),
+          fontStyle: "bold",
+        })
+        .setOrigin(0, 0.5);
+      const labelStatus = this.add
+        .text(cx, cy + palSlotH / 2 - 4, "", {
+          fontSize: "10px",
+          color: hex2css(theme.accent.success),
+          fontStyle: "bold",
+        })
+        .setOrigin(0.5, 1);
+      void classIcon;
+
+      const container = this.add.container(0, 0, [
+        sprite,
+        labelCost,
+        labelClass,
+        labelStatus,
+      ]);
+
+      border.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+        if (pointer.rightButtonDown()) return;
+        this.onSelectHero(hero);
+      });
+      this.heroPaletteEntries.push({
+        hero,
+        container,
+        border,
+        statusLabel: labelStatus,
+      });
+    });
+
+    void vpH;
+  }
+
   /** SPEC-006 §5.3: パネルスロット背景（常駐） */
   private drawPanelSlot(): void {
     const slotCx = this.panelSlotX + PANEL_SLOT_WIDTH / 2;
@@ -721,29 +1047,26 @@ export class StageScene extends Phaser.Scene {
 
   private bindInput(): void {
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
+      // SPEC-025: worldRoot を介してマップ要素を描画しているので、
+      // pointer.worldX/Y を worldRoot の local 座標 (タイル空間) に戻す。
+      const wp = this.screenToWorld(p);
       if (this.placement?.kind === "selecting") {
-        this.placement.ghostSprite.x = p.worldX;
-        this.placement.ghostSprite.y = p.worldY;
+        this.placement.ghostSprite.x = wp.x;
+        this.placement.ghostSprite.y = wp.y;
         this.repositionPatternRects(
           this.placement.rangeRects,
           this.visualPattern(this.placement.hero),
           { col: 0, row: 0 },
           "right",
-          p.worldX,
-          p.worldY,
+          wp.x,
+          wp.y,
         );
-        // SPEC-006 §5.6: スナップタイル表示。カーソル下のタイルが配置可能なら緑、不可なら赤、ステージ外なら非表示。
-        const tileUnder = pixelToTile(
-          p.worldX,
-          p.worldY,
-          this.map.cols,
-          this.map.rows,
-        );
+        const tileUnder = pixelToTile(wp.x, wp.y, this.map.cols, this.map.rows);
         const sr = this.placement.snapRect;
         if (
           !tileUnder ||
-          p.worldX >= this.stageWidth ||
-          p.worldY >= this.stageHeight
+          wp.x >= this.stageWidth ||
+          wp.y >= this.stageHeight
         ) {
           sr.setVisible(false);
         } else {
@@ -751,20 +1074,22 @@ export class StageScene extends Phaser.Scene {
           sr.setPosition(center.x, center.y);
           sr.setVisible(true);
           const tt = tileTypeAt(this.map, tileUnder);
-          const occupied = this.placedHeroes.some((h) => tileEquals(h.tile, tileUnder));
+          const occupied = this.placedHeroes.some((h) =>
+            tileEquals(h.tile, tileUnder),
+          );
           const ok =
             tt &&
             canPlaceClassOnTile(this.placement.hero.class, tt) &&
             !occupied;
-          // SPEC-019: 塗りは alpha 0 のままでアウトラインだけ強調する。
-          sr.setStrokeStyle(3, ok ? theme.accent.primary : theme.accent.danger, 0.95);
+          sr.setStrokeStyle(
+            3,
+            ok ? theme.accent.primary : theme.accent.danger,
+            0.95,
+          );
         }
       } else if (this.placement?.kind === "orienting") {
         const center = tileToPixel(this.placement.tile);
-        const dir = directionFromDelta(
-          p.worldX - center.x,
-          p.worldY - center.y,
-        );
+        const dir = directionFromDelta(wp.x - center.x, wp.y - center.y);
         if (dir !== this.placement.direction) {
           this.placement.direction = dir;
           this.repositionPatternRects(
@@ -780,72 +1105,76 @@ export class StageScene extends Phaser.Scene {
 
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       if (this.gameOver) return;
+      const wp = this.screenToWorld(p);
       if (this.statusPanel) {
-        // SPEC-007 §5.3: パネル外（パネルスロット x < panelSlotX）をタップで閉じる
-        if (p.worldX < this.panelSlotX) {
-          this.closeStatusPanel();
+        // SPEC-007 §5.3: パネル外をタップで閉じる
+        // 縦画面では panelSlotX 概念を使わず、status panel の bg 矩形を直接判定
+        if (wp.x < this.panelSlotX || this.isPortrait()) {
+          // 縦画面ではマップ領域外の場合のみ閉じる
+          if (this.isPortrait()) {
+            // マップ領域 (worldRoot 内) の外なら閉じる
+            if (
+              wp.x < 0 ||
+              wp.x > this.stageWidth ||
+              wp.y < 0 ||
+              wp.y > this.stageHeight
+            ) {
+              this.closeStatusPanel();
+            }
+          } else {
+            this.closeStatusPanel();
+          }
         }
-        return; // パネル内クリックは個別ボタンが担当
+        return;
       }
-      if (p.worldY >= this.stageHeight) return;
-      if (p.worldX >= this.stageWidth) return; // パネルスロット領域はステージ入力対象外
+      // マップ範囲外の入力は無視 (UI 領域は scene root の各 UI が個別に処理する)
+      if (wp.y < 0 || wp.y >= this.stageHeight) return;
+      if (wp.x < 0 || wp.x >= this.stageWidth) return;
 
       if (p.rightButtonDown()) {
         if (this.placement) {
           this.cancelPlacement();
           return;
         }
-        const tile = pixelToTile(
-          p.worldX,
-          p.worldY,
-          this.map.cols,
-          this.map.rows,
-        );
+        const tile = pixelToTile(wp.x, wp.y, this.map.cols, this.map.rows);
         if (tile) this.tryReleaseHeroAt(tile);
         return;
       }
 
       if (this.placement?.kind === "selecting") {
-        this.tryCommitPlacement(p.worldX, p.worldY);
+        this.tryCommitPlacement(wp.x, wp.y);
         return;
       }
       if (this.placement?.kind === "orienting") {
         this.confirmOrientation();
         return;
       }
-      const tile = pixelToTile(
-        p.worldX,
-        p.worldY,
-        this.map.cols,
-        this.map.rows,
-      );
+      const tile = pixelToTile(wp.x, wp.y, this.map.cols, this.map.rows);
       if (tile) {
         const hero = this.placedHeroes.find((h) => tileEquals(h.tile, tile));
         if (hero) {
-          // SPEC-005 §5.5: タップしたら必ず詳細パネルを開く（スキル発動はパネル内ボタン）
           this.playUiSe(SE_KEYS.uiTap());
           this.openStatusPanel(hero);
         } else {
-          // SPEC-010 §5.4: ヒーロー無しタイルのタップでヘルプを表示
           this.showTileHelp(tile);
         }
       }
     });
 
-    // SPEC-006 §5.6: ドラッグ&ドロップ — selecting 中に pointerup したら、
-    // ステージ内の配置可能タイル上でリリースされていれば即 orienting に進む。
     this.input.on("pointerup", (p: Phaser.Input.Pointer) => {
       if (this.gameOver || this.statusPanel) return;
       if (this.placement?.kind !== "selecting") return;
-      if (p.worldX >= this.stageWidth || p.worldY >= this.stageHeight) return;
-      const tile = pixelToTile(
-        p.worldX,
-        p.worldY,
-        this.map.cols,
-        this.map.rows,
-      );
+      const wp = this.screenToWorld(p);
+      if (
+        wp.x < 0 ||
+        wp.x >= this.stageWidth ||
+        wp.y < 0 ||
+        wp.y >= this.stageHeight
+      )
+        return;
+      const tile = pixelToTile(wp.x, wp.y, this.map.cols, this.map.rows);
       if (!tile) return;
-      this.tryCommitPlacement(p.worldX, p.worldY);
+      this.tryCommitPlacement(wp.x, wp.y);
     });
   }
 
@@ -878,22 +1207,19 @@ export class StageScene extends Phaser.Scene {
     }
     this.cancelPlacement();
 
-    const ghost = this.add
-      .sprite(-100, -100, TEXTURE_KEYS.hero(hero.id))
-      .setDisplaySize(TILE_SIZE, TILE_SIZE)
-      .setAlpha(0.6)
-      .setDepth(50);
+    const ghost = this.addWorld(
+      this.add
+        .sprite(-100, -100, TEXTURE_KEYS.hero(hero.id))
+        .setDisplaySize(TILE_SIZE, TILE_SIZE)
+        .setAlpha(0.6)
+        .setDepth(50),
+    );
 
     const highlightRects = this.buildHighlightTilesFor(hero.class);
 
     // SPEC-006 §5.6: スナップタイル枠（カーソル直下のタイルを示す）
-    const snapRect = this.add.rectangle(
-      -100,
-      -100,
-      TILE_SIZE - 4,
-      TILE_SIZE - 4,
-      0x000000,
-      0,
+    const snapRect = this.addWorld(
+      this.add.rectangle(-100, -100, TILE_SIZE - 4, TILE_SIZE - 4, 0x000000, 0),
     );
     snapRect.setStrokeStyle(3, theme.accent.primary, 0.95);
     snapRect.setDepth(45);
@@ -931,13 +1257,8 @@ export class StageScene extends Phaser.Scene {
         const cx = c * TILE_SIZE + TILE_SIZE / 2;
         const cy = r * TILE_SIZE + TILE_SIZE / 2;
         // SPEC-019 §視覚刷新: 配置候補も outline のみ。塗りでパターンを潰さない。
-        const rect = this.add.rectangle(
-          cx,
-          cy,
-          TILE_SIZE - 6,
-          TILE_SIZE - 6,
-          0x000000,
-          0,
+        const rect = this.addWorld(
+          this.add.rectangle(cx, cy, TILE_SIZE - 6, TILE_SIZE - 6, 0x000000, 0),
         );
         rect.setStrokeStyle(1.5, theme.accent.success, 0.85);
         rect.setDepth(8);
@@ -1068,25 +1389,32 @@ export class StageScene extends Phaser.Scene {
     const gaugeW = 40;
     const gaugeH = 4;
     const gaugeY = px.y - 32;
-    const gaugeBg = this.add
-      .rectangle(px.x, gaugeY, gaugeW, gaugeH, theme.bg.surface, 0.9)
-      .setDepth(33);
-    const gaugeFill = this.add
-      .rectangle(px.x - gaugeW / 2, gaugeY, 0, gaugeH, theme.accent.warn)
-      .setOrigin(0, 0.5)
-      .setDepth(34);
+    const gaugeBg = this.addWorld(
+      this.add
+        .rectangle(px.x, gaugeY, gaugeW, gaugeH, theme.bg.surface, 0.9)
+        .setDepth(33),
+    );
+    const gaugeFill = this.addWorld(
+      this.add
+        .rectangle(px.x - gaugeW / 2, gaugeY, 0, gaugeH, theme.accent.warn)
+        .setOrigin(0, 0.5)
+        .setDepth(34),
+    );
 
-    // SPEC-008 §5.1: ヒーロー HP バー（currentHp < maxHp で表示）
     const hpBarY = px.y - 26;
-    const hpBarBg = this.add
-      .rectangle(px.x, hpBarY, gaugeW, gaugeH, theme.bg.surface, 0.9)
-      .setDepth(33)
-      .setVisible(false);
-    const hpBar = this.add
-      .rectangle(px.x - gaugeW / 2, hpBarY, gaugeW, gaugeH, theme.accent.success)
-      .setOrigin(0, 0.5)
-      .setDepth(34)
-      .setVisible(false);
+    const hpBarBg = this.addWorld(
+      this.add
+        .rectangle(px.x, hpBarY, gaugeW, gaugeH, theme.bg.surface, 0.9)
+        .setDepth(33)
+        .setVisible(false),
+    );
+    const hpBar = this.addWorld(
+      this.add
+        .rectangle(px.x - gaugeW / 2, hpBarY, gaugeW, gaugeH, theme.accent.success)
+        .setOrigin(0, 0.5)
+        .setDepth(34)
+        .setVisible(false),
+    );
 
     this.placedHeroes.push({
       def: hero,
@@ -1154,13 +1482,8 @@ export class StageScene extends Phaser.Scene {
     while (rects.length < rotated.length) {
       // SPEC-019 §視覚刷新: 攻撃範囲は塗りなしのアウトラインのみ。床/壁の
       // パターンを潰さない。
-      const r = this.add.rectangle(
-        0,
-        0,
-        TILE_SIZE - 4,
-        TILE_SIZE - 4,
-        0x000000,
-        0,
+      const r = this.addWorld(
+        this.add.rectangle(0, 0, TILE_SIZE - 4, TILE_SIZE - 4, 0x000000, 0),
       );
       r.setStrokeStyle(2, theme.accent.primary, 0.7);
       r.setDepth(10);
@@ -1292,12 +1615,14 @@ export class StageScene extends Phaser.Scene {
     // オーラ表示（持続効果のみ）
     if (skill.effectType !== "singleStrike" && skill.effectType !== "heal") {
       hero.aura?.destroy();
-      const aura = this.add.circle(
-        hero.sprite.x,
-        hero.sprite.y,
-        TILE_SIZE * 0.7,
-        CLASS_AURA_COLOR[hero.def.class],
-        0.18,
+      const aura = this.addWorld(
+        this.add.circle(
+          hero.sprite.x,
+          hero.sprite.y,
+          TILE_SIZE * 0.7,
+          CLASS_AURA_COLOR[hero.def.class],
+          0.18,
+        ),
       );
       aura.setStrokeStyle(2, CLASS_AURA_COLOR[hero.def.class], 0.6);
       aura.setDepth(15);
@@ -1461,7 +1786,9 @@ export class StageScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0);
 
-    const container = this.add.container(0, 0, [bg, title, desc, placeable]);
+    const container = this.addWorld(
+      this.add.container(0, 0, [bg, title, desc, placeable]),
+    );
     container.setDepth(80);
     container.setAlpha(0);
     this.currentTileHelp = container;
@@ -2096,10 +2423,12 @@ export class StageScene extends Phaser.Scene {
       // 満タンリング
       const ready = canActivate(hero.skillGauge);
       if (ready && !hero.readyRing) {
-        hero.readyRing = this.add
-          .circle(hero.sprite.x, hero.sprite.y, TILE_SIZE * 0.45, theme.accent.primary, 0)
-          .setStrokeStyle(2, theme.accent.primary, 0.9)
-          .setDepth(22);
+        hero.readyRing = this.addWorld(
+          this.add
+            .circle(hero.sprite.x, hero.sprite.y, TILE_SIZE * 0.45, theme.accent.primary, 0)
+            .setStrokeStyle(2, theme.accent.primary, 0.9)
+            .setDepth(22),
+        );
       } else if (!ready && hero.readyRing) {
         hero.readyRing.destroy();
         hero.readyRing = null;
@@ -2158,17 +2487,23 @@ export class StageScene extends Phaser.Scene {
     }
 
     const start = tileToPixel(route.points[0]);
-    const sprite = this.add
-      .sprite(start.x, start.y, TEXTURE_KEYS.enemy(def.id))
-      .setDisplaySize(TILE_SIZE, TILE_SIZE)
-      .setDepth(30);
-    const hpBg = this.add
-      .rectangle(start.x, start.y - 28, 40, 5, theme.bg.surface, 0.9)
-      .setDepth(31);
-    const hp = this.add
-      .rectangle(start.x - 20, start.y - 28, 40, 5, theme.accent.danger)
-      .setOrigin(0, 0.5)
-      .setDepth(32);
+    const sprite = this.addWorld(
+      this.add
+        .sprite(start.x, start.y, TEXTURE_KEYS.enemy(def.id))
+        .setDisplaySize(TILE_SIZE, TILE_SIZE)
+        .setDepth(30),
+    );
+    const hpBg = this.addWorld(
+      this.add
+        .rectangle(start.x, start.y - 28, 40, 5, theme.bg.surface, 0.9)
+        .setDepth(31),
+    );
+    const hp = this.addWorld(
+      this.add
+        .rectangle(start.x - 20, start.y - 28, 40, 5, theme.accent.danger)
+        .setOrigin(0, 0.5)
+        .setDepth(32),
+    );
 
     this.enemies.push({
       def,
@@ -2190,7 +2525,7 @@ export class StageScene extends Phaser.Scene {
   /** SPEC-003 §5.5: 出現直前にルートを 1.8 秒だけ光らせる。 */
   private playRouteAnimation(route: RouteDef): void {
     const color = ROUTE_COLOR[route.id] ?? 0xffffff;
-    const g = this.add.graphics();
+    const g = this.addWorld(this.add.graphics());
     g.setDepth(5);
     g.lineStyle(6, color, 0.0);
     g.beginPath();
@@ -2399,9 +2734,9 @@ export class StageScene extends Phaser.Scene {
     });
 
     const color = hero.def.attackType === "INT" ? theme.accent.primary : theme.accent.warn;
-    const bulletSprite = this.add
-      .circle(hero.sprite.x, hero.sprite.y, 5, color)
-      .setDepth(40);
+    const bulletSprite = this.addWorld(
+      this.add.circle(hero.sprite.x, hero.sprite.y, 5, color).setDepth(40),
+    );
     bulletSprite.setStrokeStyle(1, 0xffffff, 0.8);
 
     this.bullets.push({
@@ -2478,10 +2813,12 @@ export class StageScene extends Phaser.Scene {
       enemyIntDef: target.def.intDef,
     });
     const color = enemy.def.attackType === "INT" ? 0xc084fc : 0xfb7185;
-    const bulletSprite = this.add
-      .circle(enemy.sprite.x, enemy.sprite.y, 4, color)
-      .setStrokeStyle(1, 0xffffff, 0.7)
-      .setDepth(40);
+    const bulletSprite = this.addWorld(
+      this.add
+        .circle(enemy.sprite.x, enemy.sprite.y, 4, color)
+        .setStrokeStyle(1, 0xffffff, 0.7)
+        .setDepth(40),
+    );
     this.enemyBullets.push({
       sprite: bulletSprite,
       target,
