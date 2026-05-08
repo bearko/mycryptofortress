@@ -10,17 +10,13 @@ import { findSkill } from "../game/skill";
 import type { HeroClass, HeroDef, HeroRarity } from "../game/types";
 import { TEXTURE_KEYS, SE_KEYS } from "./BootScene";
 import { playSe } from "./seUtil";
+import { getViewport, onResize } from "./layout";
 
 /**
- * SPEC-015: パーティ編成シーン（2 ペイン版）。
+ * SPEC-015 / SPEC-016: パーティ編成シーン。
  *
- * 左ペイン:
- *  - 編成中スロット (5 × 2)
- *  - 保有ヒーロー一覧 (6 × 3)
- *  - 出撃 ボタン
- *
- * 右ペイン:
- *  - フォーカス中ヒーローの詳細（ステータス + スキル + アクションボタン）
+ * 横画面 (landscape): 左に編成 + 保有、右に詳細パネルの 2 ペイン構成。
+ * 縦画面 (portrait): 上から「編成 → 保有 → 詳細 → 出撃」の縦スタック構成。
  *
  * 操作仕様:
  *  - 編成中スロット (hero あり) をタップ → 詳細表示 + アイコンをグレーアウト + 「外す」表示。
@@ -68,17 +64,17 @@ interface RosterEntry {
   selectedMark: Phaser.GameObjects.Text;
 }
 
-const DETAIL_CARD = {
-  left: 524,
-  width: 376,
-  top: 82,
-  height: 512,
-};
+interface DetailGeometry {
+  left: number;
+  width: number;
+  top: number;
+  height: number;
+}
 
 export class PartyFormationScene extends Phaser.Scene {
   private stageId = "1-1";
   private party: number[] = [];
-  /** フォーカス対象の hero ID（左の編成スロット or 右の保有一覧、どちらでも共通） */
+  /** フォーカス対象の hero ID（左の編成スロット or 保有一覧、どちらでも共通） */
   private focusedHeroId: number | null = null;
 
   private slots: SlotEntry[] = [];
@@ -90,6 +86,12 @@ export class PartyFormationScene extends Phaser.Scene {
 
   /** 詳細パネル: focus に依存して再生成する子要素 */
   private detailDynamic: Phaser.GameObjects.GameObject[] = [];
+  private detailGeometry: DetailGeometry = {
+    left: 0,
+    width: 0,
+    top: 0,
+    height: 0,
+  };
 
   constructor() {
     super("PartyFormationScene");
@@ -101,28 +103,41 @@ export class PartyFormationScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor(0x0e1117);
-    const { width, height } = this.scale;
 
     // restart 対策: scene field を毎回明示的にリセット
     this.party = getPartyHeroIds();
+    this.focusedHeroId = null;
     this.slots = [];
     this.roster = [];
-    this.focusedHeroId = null;
     this.detailDynamic = [];
 
+    this.buildLayout();
+    onResize(this, () => this.buildLayout());
+  }
+
+  // ─────────────────────────────────────────────
+  // レイアウトビルダー（landscape / portrait の振り分け）
+  // ─────────────────────────────────────────────
+  private buildLayout(): void {
+    this.children.removeAll(true);
+    this.slots = [];
+    this.roster = [];
+    this.detailDynamic = [];
+
+    const vp = getViewport(this);
     const stage = findStage(this.stageId);
     const stageLabel = stage ? `${stage.name}` : `ステージ ${this.stageId}`;
 
-    // ── ヘッダ
+    // ── ヘッダ（共通）
     this.add
-      .text(width / 2, 28, "パーティ編成", {
+      .text(vp.width / 2, 28, "パーティ編成", {
         fontSize: "20px",
         color: "#fde68a",
         fontStyle: "bold",
       })
       .setOrigin(0.5);
     this.add
-      .text(width / 2, 50, `出撃先: ${stageLabel}`, {
+      .text(vp.width / 2, 50, `出撃先: ${stageLabel}`, {
         fontSize: "11px",
         color: "#bae6fd",
       })
@@ -142,9 +157,21 @@ export class PartyFormationScene extends Phaser.Scene {
       });
     });
 
-    // ── 左ペイン: パーティ + 保有 + 出撃ボタン
+    if (vp.isLandscape) {
+      this.buildLandscape(vp.width, vp.height);
+    } else {
+      this.buildPortrait(vp.width, vp.height);
+    }
+    this.refresh();
+  }
+
+  // ─── Landscape (2-pane) ───────────────────────
+  private buildLandscape(width: number, height: number): void {
     const leftPaneX = 8;
-    const leftPaneW = 504;
+    const rightPaneRightMargin = 8;
+    const detailW = Math.max(320, Math.min(380, width * 0.4));
+    const detailLeft = width - detailW - rightPaneRightMargin;
+    const leftPaneW = detailLeft - leftPaneX - 16;
     const leftCenter = leftPaneX + leftPaneW / 2;
 
     this.add
@@ -155,29 +182,38 @@ export class PartyFormationScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    const slotW = 78;
-    const slotH = 88;
-    const slotGap = 6;
-    const partyGridW = slotW * 5 + slotGap * 4;
+    // パーティ枠 5×2
+    const partyGap = 6;
+    const partySlotW = Math.min(
+      82,
+      Math.floor((leftPaneW - 16 - partyGap * 4) / 5),
+    );
+    const partySlotH = Math.min(92, partySlotW + 12);
+    const partyGridW = partySlotW * 5 + partyGap * 4;
     const partyStartX = leftPaneX + (leftPaneW - partyGridW) / 2;
     const partyTopY = 96;
     for (let i = 0; i < PARTY_LIMIT; i++) {
       const col = i % 5;
       const row = Math.floor(i / 5);
-      const cx = partyStartX + col * (slotW + slotGap) + slotW / 2;
-      const cy = partyTopY + row * (slotH + slotGap) + slotH / 2;
-      this.slots.push(this.buildSlot(i, cx, cy, slotW, slotH));
+      const cx =
+        partyStartX + col * (partySlotW + partyGap) + partySlotW / 2;
+      const cy =
+        partyTopY + row * (partySlotH + partyGap) + partySlotH / 2;
+      this.slots.push(this.buildSlot(i, cx, cy, partySlotW, partySlotH));
     }
 
     this.partyCountText = this.add
-      .text(leftCenter, partyTopY + slotH * 2 + slotGap + 14, "", {
-        fontSize: "11px",
-        color: "#cbd5e1",
-      })
+      .text(
+        leftCenter,
+        partyTopY + partySlotH * 2 + partyGap + 14,
+        "",
+        { fontSize: "11px", color: "#cbd5e1" },
+      )
       .setOrigin(0.5);
 
     // 保有ヒーロー
-    const rosterHeadingY = partyTopY + slotH * 2 + slotGap + 38;
+    const rosterHeadingY =
+      partyTopY + partySlotH * 2 + partyGap + 38;
     this.add
       .text(leftCenter, rosterHeadingY, "保有ヒーロー", {
         fontSize: "12px",
@@ -187,10 +223,14 @@ export class PartyFormationScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     const rosterCols = 6;
-    const rosterSlotW = 78;
-    const rosterSlotH = 84;
     const rosterGap = 4;
-    const rosterGridW = rosterSlotW * rosterCols + rosterGap * (rosterCols - 1);
+    const rosterSlotW = Math.min(
+      80,
+      Math.floor((leftPaneW - 16 - rosterGap * (rosterCols - 1)) / rosterCols),
+    );
+    const rosterSlotH = Math.max(76, rosterSlotW + 4);
+    const rosterGridW =
+      rosterSlotW * rosterCols + rosterGap * (rosterCols - 1);
     const rosterStartX = leftPaneX + (leftPaneW - rosterGridW) / 2;
     const rosterTopY = rosterHeadingY + 22;
 
@@ -199,7 +239,8 @@ export class PartyFormationScene extends Phaser.Scene {
       const row = Math.floor(i / rosterCols);
       const cx =
         rosterStartX + col * (rosterSlotW + rosterGap) + rosterSlotW / 2;
-      const cy = rosterTopY + row * (rosterSlotH + rosterGap) + rosterSlotH / 2;
+      const cy =
+        rosterTopY + row * (rosterSlotH + rosterGap) + rosterSlotH / 2;
       this.roster.push(
         this.buildRosterEntry(hero, cx, cy, rosterSlotW, rosterSlotH),
       );
@@ -225,10 +266,135 @@ export class PartyFormationScene extends Phaser.Scene {
       this.confirmAndStart();
     });
 
-    // ── 右ペイン: 詳細
-    this.buildDetailPane();
+    // 詳細パネル
+    this.detailGeometry = {
+      left: detailLeft,
+      width: detailW,
+      top: 82,
+      height: height - 110,
+    };
+    this.buildDetailPaneFrame();
+  }
 
-    this.refresh();
+  // ─── Portrait (vertical stack) ────────────────
+  private buildPortrait(width: number, height: number): void {
+    const sidePad = 8;
+    const innerW = width - sidePad * 2;
+
+    // 編成中ラベル
+    let cursorY = 76;
+    this.add
+      .text(width / 2, cursorY, `編成中  ( 最大 ${PARTY_LIMIT} 体 )`, {
+        fontSize: "12px",
+        color: "#fcd34d",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5);
+    cursorY += 12;
+
+    // パーティ枠 5×2（縦画面では幅基準で）
+    const partyCols = 5;
+    const partyGap = 4;
+    const partySlotW = Math.floor(
+      (innerW - partyGap * (partyCols - 1)) / partyCols,
+    );
+    const partySlotH = Math.min(86, partySlotW + 8);
+    const partyGridW = partySlotW * partyCols + partyGap * (partyCols - 1);
+    const partyStartX = sidePad + (innerW - partyGridW) / 2;
+    const partyTopY = cursorY + 6;
+    for (let i = 0; i < PARTY_LIMIT; i++) {
+      const col = i % partyCols;
+      const row = Math.floor(i / partyCols);
+      const cx =
+        partyStartX + col * (partySlotW + partyGap) + partySlotW / 2;
+      const cy =
+        partyTopY + row * (partySlotH + partyGap) + partySlotH / 2;
+      this.slots.push(this.buildSlot(i, cx, cy, partySlotW, partySlotH));
+    }
+    cursorY = partyTopY + partySlotH * 2 + partyGap + 6;
+
+    // 編成中数
+    this.partyCountText = this.add
+      .text(width / 2, cursorY + 6, "", {
+        fontSize: "11px",
+        color: "#cbd5e1",
+      })
+      .setOrigin(0.5);
+    cursorY += 22;
+
+    // 保有ヒーロー
+    this.add
+      .text(width / 2, cursorY, "保有ヒーロー", {
+        fontSize: "12px",
+        color: "#fcd34d",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5);
+    cursorY += 14;
+
+    const rosterCols = 6;
+    const rosterGap = 4;
+    const rosterSlotW = Math.floor(
+      (innerW - rosterGap * (rosterCols - 1)) / rosterCols,
+    );
+    const rosterSlotH = Math.max(64, rosterSlotW + 8);
+    const rosterRows = Math.ceil(HEROES.length / rosterCols);
+    const rosterGridW =
+      rosterSlotW * rosterCols + rosterGap * (rosterCols - 1);
+    const rosterStartX = sidePad + (innerW - rosterGridW) / 2;
+    const rosterTopY = cursorY + 6;
+
+    HEROES.forEach((hero, i) => {
+      const col = i % rosterCols;
+      const row = Math.floor(i / rosterCols);
+      const cx =
+        rosterStartX + col * (rosterSlotW + rosterGap) + rosterSlotW / 2;
+      const cy =
+        rosterTopY + row * (rosterSlotH + rosterGap) + rosterSlotH / 2;
+      this.roster.push(
+        this.buildRosterEntry(hero, cx, cy, rosterSlotW, rosterSlotH),
+      );
+    });
+    cursorY =
+      rosterTopY +
+      rosterSlotH * rosterRows +
+      rosterGap * (rosterRows - 1) +
+      6;
+
+    // 出撃ボタン
+    const btnH = 40;
+    const btnY = height - btnH / 2 - 10;
+    const btnW = Math.min(280, innerW);
+    this.startBtnBg = this.add.rectangle(
+      width / 2,
+      btnY,
+      btnW,
+      btnH,
+      0xfacc15,
+      1,
+    );
+    this.startBtnBg.setStrokeStyle(2, 0xfde047);
+    this.startBtnBg.setInteractive({ useHandCursor: true });
+    this.startBtnText = this.add
+      .text(width / 2, btnY, "出撃 ▶", {
+        fontSize: "16px",
+        color: "#1f2937",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5);
+    this.startBtnBg.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (pointer.rightButtonDown()) return;
+      this.confirmAndStart();
+    });
+
+    // 詳細パネル: 残り領域を使う
+    this.detailGeometry = {
+      left: sidePad,
+      width: innerW,
+      top: cursorY + 4,
+      height: btnY - btnH / 2 - cursorY - 12,
+    };
+    this.buildDetailPaneFrame();
   }
 
   // ─── スロット / 保有ヒーロー要素の構築 ─────────────
@@ -261,9 +427,15 @@ export class PartyFormationScene extends Phaser.Scene {
     border.setStrokeStyle(2, 0x4b5563);
     border.setInteractive({ useHandCursor: true });
 
+    // 名前を入れる余裕があるかどうか（縦画面の細いスロットでは名前を省く）
+    const compact = w < 72;
+    const labelStripH = compact ? 14 : 32;
+    const portraitSize = Math.min(48, Math.max(24, h - 14 - labelStripH));
+    const portraitCY = cy - h / 2 + 14 + portraitSize / 2;
+
     const sprite = this.add
-      .sprite(cx, cy - 16, TEXTURE_KEYS.hero(hero.id))
-      .setDisplaySize(44, 44);
+      .sprite(cx, portraitCY, TEXTURE_KEYS.hero(hero.id))
+      .setDisplaySize(portraitSize, portraitSize);
 
     this.add
       .text(
@@ -286,21 +458,25 @@ export class PartyFormationScene extends Phaser.Scene {
       })
       .setOrigin(1, 0);
 
+    // 職業ラベル
     this.add
-      .text(cx, cy + 14, CLASS_LABEL[hero.class], {
+      .text(cx, cy + h / 2 - (compact ? 4 : 22), CLASS_LABEL[hero.class], {
         fontSize: "10px",
         color: "#fcd34d",
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5, 1);
 
-    this.add
-      .text(cx, cy + 27, hero.name, {
-        fontSize: "9px",
-        color: "#e5e7eb",
-        align: "center",
-        wordWrap: { width: w - 6, useAdvancedWrap: true },
-      })
-      .setOrigin(0.5, 0);
+    // 名前（コンパクト時は省く: 詳細パネルで確認可能）
+    if (!compact) {
+      this.add
+        .text(cx, cy + h / 2 - 4, hero.name, {
+          fontSize: "9px",
+          color: "#e5e7eb",
+          align: "center",
+          wordWrap: { width: w - 6, useAdvancedWrap: true },
+        })
+        .setOrigin(0.5, 1);
+    }
 
     const selectedMark = this.add
       .text(cx + w / 2 - 4, cy + h / 2 - 4, "✓", {
@@ -320,8 +496,8 @@ export class PartyFormationScene extends Phaser.Scene {
   }
 
   // ─── 詳細パネル ─────────────────────────────────
-  private buildDetailPane(): void {
-    const { left, width, top, height } = DETAIL_CARD;
+  private buildDetailPaneFrame(): void {
+    const { left, width, top, height } = this.detailGeometry;
     const cardCX = left + width / 2;
     const cardCY = top + height / 2;
 
@@ -345,15 +521,16 @@ export class PartyFormationScene extends Phaser.Scene {
   private refreshDetail(): void {
     this.clearDetailDynamic();
 
-    const { left, width } = DETAIL_CARD;
+    const { left, width, top, height } = this.detailGeometry;
     const cardCX = left + width / 2;
+    const cardCY = top + height / 2;
+    const compact = height < 280;
 
-    // ── 何も選んでいない時の placeholder
     if (this.focusedHeroId === null) {
       const empty = this.add
         .text(
           cardCX,
-          DETAIL_CARD.top + DETAIL_CARD.height / 2,
+          cardCY,
           "ヒーローをタップすると\nここに詳細が表示されます",
           {
             fontSize: "12px",
@@ -373,16 +550,33 @@ export class PartyFormationScene extends Phaser.Scene {
     const inParty = this.party.includes(this.focusedHeroId);
     const partyFull = this.party.length >= PARTY_LIMIT;
 
-    // ── ポートレート
-    const portrait = this.add
-      .sprite(cardCX, 154, TEXTURE_KEYS.hero(hero.id))
-      .setDisplaySize(96, 96);
-    this.detailDynamic.push(portrait);
+    if (compact) {
+      this.layoutDetailCompact(hero, skill, inParty, partyFull);
+    } else {
+      this.layoutDetailFull(hero, skill, inParty, partyFull);
+    }
+  }
 
-    // 名前
+  private layoutDetailFull(
+    hero: HeroDef,
+    skill: ReturnType<typeof findSkill>,
+    inParty: boolean,
+    partyFull: boolean,
+  ): void {
+    const { left, width, top, height } = this.detailGeometry;
+    const cardCX = left + width / 2;
+
+    const portraitY = top + 72;
     this.detailDynamic.push(
       this.add
-        .text(cardCX, 214, hero.name, {
+        .sprite(cardCX, portraitY, TEXTURE_KEYS.hero(hero.id))
+        .setDisplaySize(96, 96),
+    );
+
+    let y = portraitY + 60;
+    this.detailDynamic.push(
+      this.add
+        .text(cardCX, y, hero.name, {
           fontSize: "16px",
           color: "#f9fafb",
           fontStyle: "bold",
@@ -391,39 +585,36 @@ export class PartyFormationScene extends Phaser.Scene {
         })
         .setOrigin(0.5),
     );
+    y += 24;
 
-    // レアリティ + 職業 + 攻撃属性
     const rarityColor = hero.rarity === "uncommon" ? "#a5f3fc" : "#fcd34d";
     this.detailDynamic.push(
       this.add
         .text(
           cardCX,
-          238,
+          y,
           `[${RARITY_LABEL[hero.rarity]}]  ${CLASS_LABEL[hero.class]}  /  ${hero.attackType}`,
-          {
-            fontSize: "11px",
-            color: rarityColor,
-          },
+          { fontSize: "11px", color: rarityColor },
         )
         .setOrigin(0.5),
     );
+    y += 18;
 
-    // コスト
     this.detailDynamic.push(
       this.add
-        .text(cardCX, 256, `配置コスト: ${hero.cost} CE`, {
+        .text(cardCX, y, `配置コスト: ${hero.cost} CE`, {
           fontSize: "11px",
           color: "#fde68a",
         })
         .setOrigin(0.5),
     );
+    y += 18;
 
-    // 区切り線
     this.detailDynamic.push(
-      this.add.rectangle(cardCX, 274, width - 32, 1, 0x374151, 1),
+      this.add.rectangle(cardCX, y, width - 32, 1, 0x374151, 1),
     );
+    y += 10;
 
-    // ステータス（2 列）
     const statL = left + 28;
     const statR = left + width / 2 + 14;
     const statRows: Array<[string, string, string, string]> = [
@@ -433,15 +624,15 @@ export class PartyFormationScene extends Phaser.Scene {
     ];
     for (let r = 0; r < statRows.length; r++) {
       const [k1, v1, k2, v2] = statRows[r];
-      const y = 290 + r * 22;
+      const ry = y + r * 22 + 6;
       this.detailDynamic.push(
         this.add
-          .text(statL, y, k1, { fontSize: "11px", color: "#94a3b8" })
+          .text(statL, ry, k1, { fontSize: "11px", color: "#94a3b8" })
           .setOrigin(0, 0.5),
       );
       this.detailDynamic.push(
         this.add
-          .text(statL + 78, y, v1, {
+          .text(statL + 78, ry, v1, {
             fontSize: "12px",
             color: "#e5e7eb",
             fontStyle: "bold",
@@ -450,12 +641,12 @@ export class PartyFormationScene extends Phaser.Scene {
       );
       this.detailDynamic.push(
         this.add
-          .text(statR, y, k2, { fontSize: "11px", color: "#94a3b8" })
+          .text(statR, ry, k2, { fontSize: "11px", color: "#94a3b8" })
           .setOrigin(0, 0.5),
       );
       this.detailDynamic.push(
         this.add
-          .text(statR + 78, y, v2, {
+          .text(statR + 78, ry, v2, {
             fontSize: "12px",
             color: "#e5e7eb",
             fontStyle: "bold",
@@ -463,27 +654,28 @@ export class PartyFormationScene extends Phaser.Scene {
           .setOrigin(0, 0.5),
       );
     }
+    y += statRows.length * 22 + 8;
 
-    // 区切り線
     this.detailDynamic.push(
-      this.add.rectangle(cardCX, 372, width - 32, 1, 0x374151, 1),
+      this.add.rectangle(cardCX, y, width - 32, 1, 0x374151, 1),
     );
+    y += 10;
 
-    // スキル
     this.detailDynamic.push(
       this.add
-        .text(left + 16, 388, "■ スキル", {
+        .text(left + 16, y, "■ スキル", {
           fontSize: "12px",
           color: "#fcd34d",
           fontStyle: "bold",
         })
         .setOrigin(0, 0.5),
     );
+    y += 16;
 
     if (skill) {
       this.detailDynamic.push(
         this.add
-          .text(left + 16, 410, skill.name, {
+          .text(left + 16, y, skill.name, {
             fontSize: "13px",
             color: "#fde68a",
             fontStyle: "bold",
@@ -491,24 +683,24 @@ export class PartyFormationScene extends Phaser.Scene {
           })
           .setOrigin(0, 0.5),
       );
-
+      y += 16;
       this.detailDynamic.push(
         this.add
-          .text(left + 16, 428, skill.description, {
+          .text(left + 16, y, skill.description, {
             fontSize: "11px",
             color: "#e5e7eb",
             wordWrap: { width: width - 32, useAdvancedWrap: true },
           })
           .setOrigin(0, 0),
       );
-
+      y += 36;
       const meta =
         skill.durationSec > 0
           ? `効果: ${skill.value}×  /  持続 ${skill.durationSec} 秒  /  Cost ${skill.cost}`
           : `効果: ${skill.value}×  /  即発  /  Cost ${skill.cost}`;
       this.detailDynamic.push(
         this.add
-          .text(left + 16, 478, meta, {
+          .text(left + 16, y, meta, {
             fontSize: "10px",
             color: "#94a3b8",
           })
@@ -517,7 +709,7 @@ export class PartyFormationScene extends Phaser.Scene {
     } else {
       this.detailDynamic.push(
         this.add
-          .text(left + 16, 408, "(スキル未定義)", {
+          .text(left + 16, y, "(スキル未定義)", {
             fontSize: "11px",
             color: "#64748b",
           })
@@ -525,7 +717,122 @@ export class PartyFormationScene extends Phaser.Scene {
       );
     }
 
-    // ── アクションボタン
+    this.attachActionButton(inParty, partyFull, top + height - 56);
+    this.attachHint(inParty, partyFull, top + height - 16);
+  }
+
+  private layoutDetailCompact(
+    hero: HeroDef,
+    skill: ReturnType<typeof findSkill>,
+    inParty: boolean,
+    partyFull: boolean,
+  ): void {
+    const { left, width, top, height } = this.detailGeometry;
+    const portraitSize = Math.min(64, Math.max(48, height - 80));
+
+    const portraitX = left + 12 + portraitSize / 2;
+    const portraitY = top + 36 + portraitSize / 2;
+    this.detailDynamic.push(
+      this.add
+        .sprite(portraitX, portraitY, TEXTURE_KEYS.hero(hero.id))
+        .setDisplaySize(portraitSize, portraitSize),
+    );
+
+    const textLeft = portraitX + portraitSize / 2 + 12;
+    const textRight = left + width - 12;
+    const textW = textRight - textLeft;
+    let ty = top + 32;
+
+    this.detailDynamic.push(
+      this.add
+        .text(textLeft, ty, hero.name, {
+          fontSize: "14px",
+          color: "#f9fafb",
+          fontStyle: "bold",
+          wordWrap: { width: textW, useAdvancedWrap: true },
+        })
+        .setOrigin(0, 0),
+    );
+    ty += 18;
+
+    const rarityColor = hero.rarity === "uncommon" ? "#a5f3fc" : "#fcd34d";
+    this.detailDynamic.push(
+      this.add
+        .text(
+          textLeft,
+          ty,
+          `[${RARITY_LABEL[hero.rarity]}] ${CLASS_LABEL[hero.class]} / ${hero.attackType}`,
+          { fontSize: "10px", color: rarityColor },
+        )
+        .setOrigin(0, 0),
+    );
+    ty += 14;
+    this.detailDynamic.push(
+      this.add
+        .text(textLeft, ty, `Cost ${hero.cost} CE`, {
+          fontSize: "10px",
+          color: "#fde68a",
+        })
+        .setOrigin(0, 0),
+    );
+
+    let statsY = top + 36 + portraitSize + 8;
+    const statsLine1 = `HP ${hero.hp}    AGI ${hero.agi}    PHY ${hero.phy}    INT ${hero.int}`;
+    const statsLine2 = `PHY DEF ${hero.phyDef}    INT DEF ${hero.intDef}`;
+    this.detailDynamic.push(
+      this.add
+        .text(left + 12, statsY, statsLine1, {
+          fontSize: "10px",
+          color: "#cbd5e1",
+        })
+        .setOrigin(0, 0),
+    );
+    statsY += 14;
+    this.detailDynamic.push(
+      this.add
+        .text(left + 12, statsY, statsLine2, {
+          fontSize: "10px",
+          color: "#cbd5e1",
+        })
+        .setOrigin(0, 0),
+    );
+    statsY += 16;
+
+    if (skill) {
+      this.detailDynamic.push(
+        this.add
+          .text(left + 12, statsY, `■ ${skill.name}`, {
+            fontSize: "11px",
+            color: "#fde68a",
+            fontStyle: "bold",
+            wordWrap: { width: width - 24, useAdvancedWrap: true },
+          })
+          .setOrigin(0, 0),
+      );
+      statsY += 16;
+      this.detailDynamic.push(
+        this.add
+          .text(left + 12, statsY, skill.description, {
+            fontSize: "10px",
+            color: "#e5e7eb",
+            wordWrap: { width: width - 24, useAdvancedWrap: true },
+          })
+          .setOrigin(0, 0),
+      );
+    }
+
+    this.attachActionButton(inParty, partyFull, top + height - 32);
+    this.attachHint(inParty, partyFull, top + height - 10);
+  }
+
+  private attachActionButton(
+    inParty: boolean,
+    partyFull: boolean,
+    y: number,
+  ): void {
+    const { left, width } = this.detailGeometry;
+    const cardCX = left + width / 2;
+
     let btnLabel: string;
     let btnEnabled: boolean;
     let btnFill = 0xfacc15;
@@ -549,16 +856,14 @@ export class PartyFormationScene extends Phaser.Scene {
       btnEnabled = true;
     }
 
-    const actX = cardCX;
-    const actY = 540;
-    const actW = width - 40;
-    const actH = 36;
-    const actBg = this.add.rectangle(actX, actY, actW, actH, btnFill, 1);
+    const actW = width - 24;
+    const actH = 30;
+    const actBg = this.add.rectangle(cardCX, y, actW, actH, btnFill, 1);
     actBg.setStrokeStyle(2, btnStroke);
     if (btnEnabled) actBg.setInteractive({ useHandCursor: true });
     const actTxt = this.add
-      .text(actX, actY, btnLabel, {
-        fontSize: "13px",
+      .text(cardCX, y, btnLabel, {
+        fontSize: "12px",
         color: btnTextColor,
         fontStyle: "bold",
         wordWrap: { width: actW - 16, useAdvancedWrap: true },
@@ -573,18 +878,27 @@ export class PartyFormationScene extends Phaser.Scene {
       });
     }
     this.detailDynamic.push(actBg, actTxt);
+  }
 
-    // ヒント
+  private attachHint(
+    inParty: boolean,
+    partyFull: boolean,
+    y: number,
+  ): void {
+    const { left, width } = this.detailGeometry;
+    const cardCX = left + width / 2;
     const hint = inParty
       ? "もう一度同じヒーローをタップでも外せます"
       : partyFull
-        ? "編成中スロット（左）をタップで 1 タップ交代"
+        ? "編成中スロットをタップで 1 タップ交代"
         : "もう一度タップで編成";
     this.detailDynamic.push(
       this.add
-        .text(cardCX, 580, hint, {
+        .text(cardCX, y, hint, {
           fontSize: "10px",
           color: "#64748b",
+          wordWrap: { width: width - 16, useAdvancedWrap: true },
+          align: "center",
         })
         .setOrigin(0.5),
     );
@@ -594,9 +908,7 @@ export class PartyFormationScene extends Phaser.Scene {
   private onPartySlotTap(slotIndex: number): void {
     const heroId = this.party[slotIndex];
 
-    // 空スロット
     if (heroId === undefined) {
-      // フォーカス中の未編成ヒーローがいるなら、空きに追加
       if (
         this.focusedHeroId !== null &&
         !this.party.includes(this.focusedHeroId)
@@ -609,7 +921,6 @@ export class PartyFormationScene extends Phaser.Scene {
       return;
     }
 
-    // フォーカスが「未編成 roster ヒーロー」かつ満員 → 1 タップで交代
     if (
       this.focusedHeroId !== null &&
       !this.party.includes(this.focusedHeroId) &&
@@ -622,7 +933,6 @@ export class PartyFormationScene extends Phaser.Scene {
       return;
     }
 
-    // 同じヒーローを 2 度タップ → 外す
     if (this.focusedHeroId === heroId) {
       playSe(this, SE_KEYS.uiMenu());
       this.party.splice(slotIndex, 1);
@@ -631,7 +941,6 @@ export class PartyFormationScene extends Phaser.Scene {
       return;
     }
 
-    // それ以外 → フォーカス切替
     playSe(this, SE_KEYS.uiMenu());
     this.focusedHeroId = heroId;
     this.refresh();
@@ -640,7 +949,6 @@ export class PartyFormationScene extends Phaser.Scene {
   private onRosterTap(heroId: number): void {
     const inParty = this.party.includes(heroId);
 
-    // 同じヒーローを 2 度タップ → 確定アクション
     if (this.focusedHeroId === heroId) {
       if (inParty) {
         playSe(this, SE_KEYS.uiMenu());
@@ -657,7 +965,6 @@ export class PartyFormationScene extends Phaser.Scene {
         this.refresh();
         return;
       }
-      // 満員 + 未編成 → 維持（編成中スロットをタップしてもらう）
       return;
     }
 
@@ -689,7 +996,6 @@ export class PartyFormationScene extends Phaser.Scene {
 
   // ─── 表示更新 ──────────────────────────────────
   private refresh(): void {
-    // パーティスロット
     for (let i = 0; i < this.slots.length; i++) {
       const slot = this.slots[i];
       for (const c of slot.children) c.destroy();
@@ -721,10 +1027,18 @@ export class PartyFormationScene extends Phaser.Scene {
       slot.border.setStrokeStyle(2, stroke);
       slot.border.setFillStyle(fill, 1);
 
+      const compact = slot.w < 72;
+      const labelStripH = compact ? 14 : 32;
+      const portraitSize = Math.min(
+        48,
+        Math.max(24, slot.h - 14 - labelStripH),
+      );
+      const portraitCY = slot.cy - slot.h / 2 + 14 + portraitSize / 2;
+
       slot.children.push(
         this.add
-          .sprite(slot.cx, slot.cy - 14, TEXTURE_KEYS.hero(hero.id))
-          .setDisplaySize(44, 44)
+          .sprite(slot.cx, portraitCY, TEXTURE_KEYS.hero(hero.id))
+          .setDisplaySize(portraitSize, portraitSize)
           .setAlpha(isFocused ? 0.45 : 1),
       );
 
@@ -745,23 +1059,27 @@ export class PartyFormationScene extends Phaser.Scene {
 
       slot.children.push(
         this.add
-          .text(slot.cx, slot.cy + 14, CLASS_LABEL[hero.class], {
-            fontSize: "10px",
-            color: "#fcd34d",
-          })
-          .setOrigin(0.5),
+          .text(
+            slot.cx,
+            slot.cy + slot.h / 2 - (compact ? 4 : 22),
+            CLASS_LABEL[hero.class],
+            { fontSize: "10px", color: "#fcd34d" },
+          )
+          .setOrigin(0.5, 1),
       );
 
-      slot.children.push(
-        this.add
-          .text(slot.cx, slot.cy + 27, hero.name, {
-            fontSize: "9px",
-            color: "#e5e7eb",
-            align: "center",
-            wordWrap: { width: slot.w - 6, useAdvancedWrap: true },
-          })
-          .setOrigin(0.5, 0),
-      );
+      if (!compact) {
+        slot.children.push(
+          this.add
+            .text(slot.cx, slot.cy + slot.h / 2 - 4, hero.name, {
+              fontSize: "9px",
+              color: "#e5e7eb",
+              align: "center",
+              wordWrap: { width: slot.w - 6, useAdvancedWrap: true },
+            })
+            .setOrigin(0.5, 1),
+        );
+      }
 
       if (isFocused) {
         slot.children.push(
@@ -776,7 +1094,6 @@ export class PartyFormationScene extends Phaser.Scene {
       }
     }
 
-    // 保有ヒーロー
     const inParty = new Set(this.party);
     for (const r of this.roster) {
       const sel = inParty.has(r.hero.id);
@@ -789,17 +1106,14 @@ export class PartyFormationScene extends Phaser.Scene {
       r.sprite.setAlpha(isFocused ? 0.45 : sel ? 0.5 : 1);
     }
 
-    // 編成人数
     this.partyCountText.setText(`${this.party.length} / ${PARTY_LIMIT} 体編成中`);
 
-    // 出撃ボタン
     const ok = this.party.length > 0;
     this.startBtnBg.setFillStyle(ok ? 0xfacc15 : 0x374151, 1);
     this.startBtnBg.setStrokeStyle(2, ok ? 0xfde047 : 0x6b7280);
     this.startBtnText.setColor(ok ? "#1f2937" : "#9ca3af");
     this.startBtnText.setText(ok ? "出撃 ▶" : "ヒーローを編成してください");
 
-    // 詳細パネル
     this.refreshDetail();
   }
 
