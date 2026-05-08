@@ -15,8 +15,17 @@ export type HeroClass =
   | "medic"
   | "supporter";
 
-/** SPEC-015: ヒーローのレアリティ。MCH 公式 DB の `rarity.name` と対応。 */
-export type HeroRarity = "common" | "uncommon";
+/**
+ * SPEC-015 / SPEC-019: ヒーローのレアリティ。MCH 公式 DB の `rarity.name` と対応。
+ * SPEC-019 で rare / superRare / legendary を追加（DB 上の Rare / SuperRare /
+ * Legendary に対応、Mythic は今後の拡張で扱う）。
+ */
+export type HeroRarity =
+  | "common"
+  | "uncommon"
+  | "rare"
+  | "superRare"
+  | "legendary";
 
 export interface HeroDef {
   /** mycryptoheroes ID（数値） */
