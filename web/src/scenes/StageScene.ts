@@ -96,6 +96,12 @@ interface PlacedHero {
   rangeRects: Phaser.GameObjects.Rectangle[];
   lastAttackAt: number;
   blockNum: number;
+  /** SPEC-008 §5.1: 現在 HP / 最大 HP（敵の攻撃で減る） */
+  currentHp: number;
+  maxHp: number;
+  /** HP バー（currentHp < maxHp で表示） */
+  hpBar: Phaser.GameObjects.Rectangle;
+  hpBarBg: Phaser.GameObjects.Rectangle;
   /** SPEC-004 §5.3 スキルゲージ（0..100） */
   skillGauge: number;
   /** ゲージ満タン時に頭上に出すリング（null=未表示） */
@@ -124,11 +130,22 @@ interface ActiveEnemy {
   /** SPEC-004 §5.5 enemyDefDebuff: 1.0 が通常、debuff 中は < 1.0 */
   phyDefMul: number;
   intDefMul: number;
+  /** SPEC-008 §5.2: 直近の攻撃時刻（攻撃間隔判定用） */
+  lastAttackAt: number;
 }
 
 interface ActiveBullet {
   sprite: Phaser.GameObjects.Arc;
   target: ActiveEnemy;
+  damage: number;
+  speed: number;
+  done: boolean;
+}
+
+/** SPEC-008 §5.3: 敵 → ヒーローの弾。Unity 版 EnemyBullet.cs の port。 */
+interface EnemyBullet {
+  sprite: Phaser.GameObjects.Arc;
+  target: PlacedHero;
   damage: number;
   speed: number;
   done: boolean;
@@ -186,6 +203,8 @@ export class StageScene extends Phaser.Scene {
   private placedHeroes: PlacedHero[] = [];
   private enemies: ActiveEnemy[] = [];
   private bullets: ActiveBullet[] = [];
+  /** SPEC-008 §5.3: 敵から発射された弾（heroes 狙い） */
+  private enemyBullets: EnemyBullet[] = [];
 
   /** 既に経路アニメを再生済みの routeId の集合 */
   private routesAnimated = new Set<string>();
@@ -249,6 +268,7 @@ export class StageScene extends Phaser.Scene {
     this.placedHeroes = [];
     this.enemies = [];
     this.bullets = [];
+    this.enemyBullets = [];
     this.routesAnimated = new Set();
     this.playSpeed = 1.0;
     this.playSpeedToggle = 1.0;
@@ -895,6 +915,18 @@ export class StageScene extends Phaser.Scene {
       .setOrigin(0, 0.5)
       .setDepth(34);
 
+    // SPEC-008 §5.1: ヒーロー HP バー（currentHp < maxHp で表示）
+    const hpBarY = px.y - 26;
+    const hpBarBg = this.add
+      .rectangle(px.x, hpBarY, gaugeW, gaugeH, 0x111827, 0.9)
+      .setDepth(33)
+      .setVisible(false);
+    const hpBar = this.add
+      .rectangle(px.x - gaugeW / 2, hpBarY, gaugeW, gaugeH, 0x4ade80)
+      .setOrigin(0, 0.5)
+      .setDepth(34)
+      .setVisible(false);
+
     this.placedHeroes.push({
       def: hero,
       skill: findSkill(hero.id) ?? null,
@@ -904,6 +936,10 @@ export class StageScene extends Phaser.Scene {
       rangeRects,
       lastAttackAt: this.elapsed,
       blockNum: 0,
+      currentHp: hero.hp,
+      maxHp: hero.hp,
+      hpBar,
+      hpBarBg,
       skillGauge: 0,
       readyRing: null,
       gaugeBg,
@@ -1052,6 +1088,8 @@ export class StageScene extends Phaser.Scene {
     for (const r of hero.rangeRects) r.destroy();
     hero.gaugeBg.destroy();
     hero.gaugeFill.destroy();
+    hero.hpBar.destroy();
+    hero.hpBarBg.destroy();
     hero.readyRing?.destroy();
     hero.aura?.destroy();
     this.placedHeroes.splice(idx, 1);
@@ -1200,21 +1238,24 @@ export class StageScene extends Phaser.Scene {
 
     // ── ヒーロー portrait（image-rendering: pixelated を効かすため scale を整数で）
     // CSS は max-width 128px / scale(2) なので実効 256px。Phaser 側では 96 にしておく。
-    const portraitX = -bandW * 0.32;
+    // SPEC-008 §5.4: 旧 -0.32（左端寄り）→ -0.18（少し中央寄り）に調整。
+    // スキル名と被らないよう、テキスト側も右に寄せる。
+    const portraitX = -bandW * 0.18;
     const portrait = this.add
       .sprite(portraitX, 0, TEXTURE_KEYS.hero(hero.def.id))
       .setDisplaySize(96, 96);
 
-    // ── スキル名 + ヒーロー名
+    // ── スキル名 + ヒーロー名（portrait の右側に十分余白を取って配置）
+    const textX = bandW * 0.12;
     const skillName = this.add
-      .text(bandW * 0.05, -14, hero.skill.name, {
+      .text(textX, -14, hero.skill.name, {
         fontSize: "30px",
         color: "#fde68a",
         fontStyle: "bold",
       })
       .setOrigin(0.5);
     const heroName = this.add
-      .text(bandW * 0.05, 22, `${CLASS_LABEL[hero.def.class]}・${hero.def.name}`, {
+      .text(textX, 22, `${CLASS_LABEL[hero.def.class]}・${hero.def.name}`, {
         fontSize: "14px",
         color: "#e5e7eb",
       })
@@ -1602,8 +1643,11 @@ export class StageScene extends Phaser.Scene {
     this.tickWave();
     this.tickEnemies(dt);
     this.tickHeroAttacks();
+    this.tickEnemyAttacks();
     this.tickBullets(dt);
+    this.tickEnemyBullets(dt);
     this.tickSkills(dt);
+    this.tickHeroHpUI();
     this.tickPlacementUI(time);
     this.refreshHud();
     this.checkEndCondition();
@@ -1726,6 +1770,7 @@ export class StageScene extends Phaser.Scene {
       blockedBy: null,
       phyDefMul: 1,
       intDefMul: 1,
+      lastAttackAt: this.elapsed,
     });
     this.spawnedTotal++;
   }
@@ -1989,6 +2034,122 @@ export class StageScene extends Phaser.Scene {
       }
       return true;
     });
+  }
+
+  // ========== SPEC-008: 敵 → ヒーロー攻撃 ==========
+
+  /**
+   * SPEC-008 §5.2: 敵の攻撃ロジック。
+   *
+   * Unity 版 `EnemyRange.cs` は collider overlap で hero を見つけて撃つが、
+   * 本実装では「敵がブロックされている == ヒーローと同じタイル」のとき、
+   * そのブロック元ヒーローを melee 攻撃する。攻撃間隔 1 秒（Unity 版準拠）。
+   */
+  private tickEnemyAttacks(): void {
+    const ENEMY_ATTACK_INTERVAL = 1.0;
+    for (const enemy of this.enemies) {
+      if (!enemy.blockedBy) continue;
+      const target = enemy.blockedBy;
+      if (target.currentHp <= 0) continue;
+      if (this.elapsed - enemy.lastAttackAt < ENEMY_ATTACK_INTERVAL) continue;
+      enemy.lastAttackAt = this.elapsed;
+      this.fireEnemyBullet(enemy, target);
+    }
+  }
+
+  private fireEnemyBullet(enemy: ActiveEnemy, target: PlacedHero): void {
+    const damage = calculateDamage({
+      attackType: enemy.def.attackType,
+      heroPhy: enemy.def.phy,
+      heroInt: enemy.def.int,
+      enemyPhyDef: target.def.phyDef,
+      enemyIntDef: target.def.intDef,
+    });
+    const color = enemy.def.attackType === "INT" ? 0xc084fc : 0xfb7185;
+    const bulletSprite = this.add
+      .circle(enemy.sprite.x, enemy.sprite.y, 4, color)
+      .setStrokeStyle(1, 0xffffff, 0.7)
+      .setDepth(40);
+    this.enemyBullets.push({
+      sprite: bulletSprite,
+      target,
+      damage,
+      speed: 480,
+      done: false,
+    });
+  }
+
+  private tickEnemyBullets(dt: number): void {
+    for (const b of this.enemyBullets) {
+      if (b.done) continue;
+      const target = b.target;
+      if (!target.sprite.active || target.currentHp <= 0) {
+        b.done = true;
+        continue;
+      }
+      const dx = target.sprite.x - b.sprite.x;
+      const dy = target.sprite.y - b.sprite.y;
+      const dist = Math.hypot(dx, dy);
+      const step = b.speed * dt;
+      if (dist <= step) {
+        target.currentHp = Math.max(0, target.currentHp - b.damage);
+        b.done = true;
+        if (target.currentHp <= 0) this.killHero(target);
+      } else {
+        b.sprite.x += (dx / dist) * step;
+        b.sprite.y += (dy / dist) * step;
+      }
+    }
+    this.enemyBullets = this.enemyBullets.filter((b) => {
+      if (b.done) {
+        b.sprite.destroy();
+        return false;
+      }
+      return true;
+    });
+  }
+
+  /** 配置済みヒーローの HP バー位置 / 表示制御 */
+  private tickHeroHpUI(): void {
+    for (const hero of this.placedHeroes) {
+      const x = hero.sprite.x;
+      const y = hero.sprite.y - 26;
+      hero.hpBarBg.setPosition(x, y);
+      hero.hpBar.setPosition(x - 20, y);
+      const ratio = Math.max(0, hero.currentHp / hero.maxHp);
+      hero.hpBar.displayWidth = 40 * ratio;
+      const dmgd = hero.currentHp < hero.maxHp;
+      hero.hpBar.setVisible(dmgd);
+      hero.hpBarBg.setVisible(dmgd);
+      // HP 残量で色分け
+      hero.hpBar.fillColor = ratio > 0.5 ? 0x4ade80 : ratio > 0.25 ? 0xfacc15 : 0xef4444;
+    }
+  }
+
+  /** ヒーロー死亡処理（敵攻撃で HP 0） */
+  private killHero(hero: PlacedHero): void {
+    // ステータスパネル開いていれば閉じる
+    if (this.statusPanel && this.statusPanelHeroId === hero.def.id) {
+      this.closeStatusPanel();
+    }
+    // ブロック中の敵を解放
+    for (const e of this.enemies) {
+      if (e.blockedBy === hero) e.blockedBy = null;
+    }
+    // デバフ巻き戻し
+    this.revertDebuffs(hero);
+    // ゴースト・各種 UI 破棄
+    hero.sprite.destroy();
+    for (const r of hero.rangeRects) r.destroy();
+    hero.gaugeBg.destroy();
+    hero.gaugeFill.destroy();
+    hero.hpBar.destroy();
+    hero.hpBarBg.destroy();
+    hero.readyRing?.destroy();
+    hero.aura?.destroy();
+    const idx = this.placedHeroes.indexOf(hero);
+    if (idx !== -1) this.placedHeroes.splice(idx, 1);
+    this.statusText.setText(`${hero.def.name} は撤退しました`);
   }
 
   private refreshHud(): void {
