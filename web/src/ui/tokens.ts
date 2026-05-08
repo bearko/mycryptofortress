@@ -156,8 +156,33 @@ export const THEMES = {
   sengoku: THEME_SENGOKU,
 } as const;
 
-/** デフォルトテーマ。シーンはこれを参照する。 */
-export const theme: Theme = THEME_ONYX;
+/**
+ * SPEC-019: アクティブテーマ。シーンは `theme.bg.base` のように直接参照する。
+ * `setTheme(id)` で内容を入れ替えると同一参照のままフィールド値だけが書き換わるため、
+ * 既存 import 箇所はそのままで動的切替できる。ただし既に描画済みの色は
+ * 自動更新されないので、シーン側でレイアウト再構築 (`buildLayout` / 再起動)
+ * を呼ぶ必要がある。
+ */
+export const theme: Theme = { ...THEME_ONYX };
+
+export type ThemeId = keyof typeof THEMES;
+
+export function setTheme(id: ThemeId): void {
+  const next = THEMES[id];
+  // フィールド単位で copy（参照は維持）
+  theme.id = next.id;
+  theme.name = next.name;
+  Object.assign(theme.bg, next.bg);
+  Object.assign(theme.line, next.line);
+  Object.assign(theme.ink, next.ink);
+  Object.assign(theme.accent, next.accent);
+  theme.hudTint = next.hudTint;
+}
+
+/** 現在のテーマ ID を取得 */
+export function getThemeId(): ThemeId {
+  return theme.id;
+}
 
 // ─────────────────────────────────────────────
 // 8 職業カラー（コード上の HeroClass で索引）
