@@ -81,29 +81,18 @@ export class BootScene extends Phaser.Scene {
       );
     });
 
-    // SPEC-019: 既存の MCH CDN に画像があるのは Common (1xxx) / Uncommon (2xxx)
-    // および基本エネミー (101 / 104 / 121 / 131) のみ。それ以外 (Rare 3xxx /
-    // SR 4xxx / Legendary 5xxx / 拡張エネミー 105/122/132/141/151/161) は
-    // CDN 未配置なので、`load.image` を呼ばずに `failedKeys` に直接登録して
-    // create() で placeholder を被せる。これにより BootScene の preload が
-    // 死んだ URL の HTTP request を発行しなくなり起動が止まらない。
-    const HERO_HAS_IMAGE = (id: number) => id < 3000;
-    const ENEMY_HAS_IMAGE = (id: number) =>
-      id === 101 || id === 104 || id === 121 || id === 131;
-
+    // SPEC-020: 全ヒーロー / 全エネミー画像をロード。
+    // SPEC-019 で「Rare 以上は CDN 未配置」として skip していたが、実は MCH CDN
+    // (raw.githubusercontent.com/bearko/mycryptoheroes/main/Image/...) に
+    // 3xxx / 4xxx / 5xxx および拡張エネミー (105 / 122 / 132 / 141 / 151 / 161)
+    // も存在することを確認したため、whitelist を撤廃し全 ID を load する。
+    // 万が一 404 になっても loaderror ハンドラで failedKeys に積まれて
+    // placeholder にフォールバックするため安全。
     for (const h of HEROES) {
-      if (HERO_HAS_IMAGE(h.id)) {
-        this.load.image(this.heroKey(h.id), h.imageUrl);
-      } else {
-        this.failedKeys.add(this.heroKey(h.id));
-      }
+      this.load.image(this.heroKey(h.id), h.imageUrl);
     }
     for (const e of ENEMIES) {
-      if (ENEMY_HAS_IMAGE(e.id)) {
-        this.load.image(this.enemyKey(e.id), e.imageUrl);
-      } else {
-        this.failedKeys.add(this.enemyKey(e.id));
-      }
+      this.load.image(this.enemyKey(e.id), e.imageUrl);
     }
     for (const se of SE_FILES) {
       this.load.audio(SE_KEYS.category(se.key), [se.url]);
