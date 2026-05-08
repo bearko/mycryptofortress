@@ -21,11 +21,13 @@ import type {
   HeroClass,
   HeroDef,
   MapDef,
+  MapTileType,
   RouteDef,
   SpawnPattern,
   TilePos,
 } from "../game/types";
 import { calculateDamage, calculateHeal } from "../game/damage";
+import { POISON_DAMAGE_PER_SEC, TILE_INFO } from "../game/tileInfo";
 import {
   applyPatternToTile,
   directionFromDelta,
@@ -67,6 +69,15 @@ const CLASS_LABEL: Record<HeroClass, string> = {
 const ROUTE_COLOR: Record<string, number> = {
   A: 0xfacc15,
   B: 0x60a5fa,
+};
+
+/** SPEC-010 §5.2: タイル種別ごとの描画色（fill / stroke） */
+const TILE_VISUAL: Record<MapTileType, { fill: number; stroke: number }> = {
+  path: { fill: 0x3b2a1a, stroke: 0x6b4a2a },
+  wall: { fill: 0x374151, stroke: 0x6b7280 },
+  obstacle: { fill: 0x111827, stroke: 0x1f2937 },
+  poison: { fill: 0x3a1f4d, stroke: 0xa855f7 },
+  path_blocked: { fill: 0x3b2a1a, stroke: 0xfb7185 },
 };
 
 /** SPEC-004 §5.6: 職業ごとのカットイン色 */
@@ -239,6 +250,9 @@ export class StageScene extends Phaser.Scene {
   /** 表示中のカットイン（同時 1 個だけ） */
   private currentCutIn: Phaser.GameObjects.Container | null = null;
 
+  /** SPEC-010 §5.4: 表示中のタイルヘルプツールチップ（同時 1 個） */
+  private currentTileHelp: Phaser.GameObjects.Container | null = null;
+
   /** SPEC-005 §5.4: 戦闘 BGM の再生インスタンス（停止用に保持） */
   private bgm: Phaser.Sound.BaseSound | null = null;
 
@@ -278,6 +292,7 @@ export class StageScene extends Phaser.Scene {
     this.endOverlay = null;
     this.gameOver = false;
     this.currentCutIn = null;
+    this.currentTileHelp = null;
     this.heroPaletteEntries = [];
     this.panelPlaceholder = null;
 
@@ -337,10 +352,7 @@ export class StageScene extends Phaser.Scene {
         const kind = this.map.tiles[r][c];
         const cx = c * TILE_SIZE + TILE_SIZE / 2;
         const cy = r * TILE_SIZE + TILE_SIZE / 2;
-        const fill =
-          kind === "path" ? 0x3b2a1a : kind === "wall" ? 0x374151 : 0x111827;
-        const stroke =
-          kind === "path" ? 0x6b4a2a : kind === "wall" ? 0x6b7280 : 0x1f2937;
+        const { fill, stroke } = TILE_VISUAL[kind];
         const rect = this.add.rectangle(
           cx,
           cy,
@@ -350,6 +362,7 @@ export class StageScene extends Phaser.Scene {
           1,
         );
         rect.setStrokeStyle(1, stroke);
+
         if (kind === "wall") {
           // 壁のテクスチャ感を出す簡易ドット
           this.add
@@ -357,6 +370,24 @@ export class StageScene extends Phaser.Scene {
             .setDepth(2);
           this.add
             .rectangle(cx + 14, cy + 12, 4, 4, 0x9ca3af, 0.6)
+            .setDepth(2);
+        }
+        if (kind === "poison") {
+          // 毒沼: 紫の泡を 3 つ散らして「沼っぽさ」を出す
+          this.add.circle(cx - 12, cy - 10, 4, 0xc084fc, 0.85).setDepth(2);
+          this.add.circle(cx + 10, cy + 8, 5, 0xa855f7, 0.85).setDepth(2);
+          this.add.circle(cx - 6, cy + 14, 3, 0xd8b4fe, 0.85).setDepth(2);
+        }
+        if (kind === "path_blocked") {
+          // 配置不可な床: ✕ パターン
+          const lineColor = 0xfb7185;
+          this.add
+            .line(cx, cy, -16, -16, 16, 16, lineColor, 0.7)
+            .setLineWidth(2)
+            .setDepth(2);
+          this.add
+            .line(cx, cy, -16, 16, 16, -16, lineColor, 0.7)
+            .setLineWidth(2)
             .setDepth(2);
         }
       }
@@ -668,6 +699,9 @@ export class StageScene extends Phaser.Scene {
           // SPEC-005 §5.5: タップしたら必ず詳細パネルを開く（スキル発動はパネル内ボタン）
           this.playUiSe(SE_KEYS.uiTap());
           this.openStatusPanel(hero);
+        } else {
+          // SPEC-010 §5.4: ヒーロー無しタイルのタップでヘルプを表示
+          this.showTileHelp(tile);
         }
       }
     });
@@ -1221,6 +1255,113 @@ export class StageScene extends Phaser.Scene {
    * 背景は Graphics で 2 色の三角形を重ねて分割を表現する。
    * シャインは alpha 0.3 ↔ 0.8 を 0.5 秒で yoyo して再現する。
    */
+  /**
+   * SPEC-010 §5.4: タイルヘルプツールチップ。
+   * ヒーロー無しタイルをタップした時に呼ぶ。
+   * 名称 / 説明 / 配置可能職業 を 3 行で表示し、3 秒後フェードアウト。
+   * 別タイルがタップされたら即時切替。
+   */
+  private showTileHelp(tile: TilePos): void {
+    const tileType = this.map.tiles[tile.row]?.[tile.col];
+    if (!tileType) return;
+    const info = TILE_INFO[tileType];
+    if (!info) return;
+
+    // 既存の help を破棄
+    if (this.currentTileHelp) {
+      this.currentTileHelp.destroy(true);
+      this.currentTileHelp = null;
+    }
+
+    // SPEC-010 fix: ツールチップ幅を 220 → 300 に拡大、CJK 用 advancedWordWrap で
+    // どこでも改行できるように。実テキストの行数で動的に高さを伸ばす。
+    const helpW = 300;
+    const wrapWidth = helpW - 24;
+    const accent = parseInt(info.accentColor.slice(1), 16);
+
+    // 先に description テキストを作って実高さを測ってから背景サイズを決める
+    const descTextStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontSize: "12px",
+      color: "#e5e7eb",
+      align: "center",
+      wordWrap: { width: wrapWidth, useAdvancedWrap: true },
+    };
+    const descTemp = this.add
+      .text(0, 0, info.description, descTextStyle)
+      .setOrigin(0.5, 0);
+    const descHeight = descTemp.height;
+
+    // 全体のレイアウト: title (16) + descHeight + footer (14) + padding 上下 8
+    const helpH = Math.max(76, 16 + descHeight + 14 + 16);
+
+    const px = tileToPixel(tile);
+    const placedAbove = px.y > this.stageHeight / 2;
+    const helpY = placedAbove
+      ? px.y - TILE_SIZE * 0.6 - helpH / 2
+      : px.y + TILE_SIZE * 0.6 + helpH / 2;
+
+    // ステージ端で見切れないよう x をクランプ
+    const helpX = Math.max(
+      helpW / 2 + 6,
+      Math.min(this.stageWidth - helpW / 2 - 6, px.x),
+    );
+
+    const bg = this.add.rectangle(helpX, helpY, helpW, helpH, 0x0b0d12, 0.95);
+    bg.setStrokeStyle(2, accent, 0.9);
+
+    const title = this.add
+      .text(helpX, helpY - helpH / 2 + 8, `［${info.label}］`, {
+        fontSize: "13px",
+        color: info.accentColor,
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5, 0);
+
+    descTemp.setPosition(helpX, helpY - helpH / 2 + 26);
+    const desc = descTemp;
+
+    const placeableLabel =
+      info.placeable.length === 0
+        ? "配置不可"
+        : "配置可: " +
+          info.placeable.map((c) => CLASS_LABEL[c]).join(" / ");
+    const placeable = this.add
+      .text(helpX, helpY + helpH / 2 - 16, placeableLabel, {
+        fontSize: "10px",
+        color: "#a7f3d0",
+      })
+      .setOrigin(0.5, 0);
+
+    const container = this.add.container(0, 0, [bg, title, desc, placeable]);
+    container.setDepth(80);
+    container.setAlpha(0);
+    this.currentTileHelp = container;
+
+    this.tweens.add({
+      targets: container,
+      alpha: 1,
+      duration: 120,
+      onComplete: () => {
+        this.tweens.add({
+          targets: container,
+          alpha: 1,
+          duration: 2400,
+          onComplete: () => {
+            this.tweens.add({
+              targets: container,
+              alpha: 0,
+              duration: 300,
+              onComplete: () => {
+                if (this.currentTileHelp === container) this.currentTileHelp = null;
+                container.destroy(true);
+              },
+            });
+          },
+        });
+      },
+    });
+  }
+
   private playCutIn(hero: PlacedHero): void {
     if (!hero.skill) return;
     if (this.currentCutIn) {
@@ -1690,6 +1831,7 @@ export class StageScene extends Phaser.Scene {
     this.tickCe(dt);
     this.tickWave();
     this.tickEnemies(dt);
+    this.tickPoisonDamage(dt);
     this.tickHeroAttacks();
     this.tickEnemyAttacks();
     this.tickBullets(dt);
@@ -1699,6 +1841,27 @@ export class StageScene extends Phaser.Scene {
     this.tickPlacementUI(time);
     this.refreshHud();
     this.checkEndCondition();
+  }
+
+  /**
+   * SPEC-010 §5.3: poison タイル上の敵に毎秒ダメージ。
+   * 各敵の現在タイルが `poison` なら `POISON_DAMAGE_PER_SEC * dt` を hp から減らす。
+   * dt 単位で適用するため、フレームレートに依存しない。
+   */
+  private tickPoisonDamage(dt: number): void {
+    for (const enemy of this.enemies) {
+      if (enemy.goalReached) continue;
+      const eTile = pixelToTile(
+        enemy.sprite.x,
+        enemy.sprite.y,
+        this.map.cols,
+        this.map.rows,
+      );
+      if (!eTile) continue;
+      const tileType = this.map.tiles[eTile.row]?.[eTile.col];
+      if (tileType !== "poison") continue;
+      enemy.hp -= POISON_DAMAGE_PER_SEC * dt;
+    }
   }
 
   /**
