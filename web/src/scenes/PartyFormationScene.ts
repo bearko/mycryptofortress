@@ -11,6 +11,14 @@ import type { HeroClass, HeroDef, HeroRarity } from "../game/types";
 import { TEXTURE_KEYS, SE_KEYS } from "./BootScene";
 import { playSe } from "./seUtil";
 import { getViewport, onResize } from "./layout";
+import {
+  CLASS_COLORS,
+  RARITY,
+  hex2css,
+  textStyle,
+  theme,
+} from "../ui/tokens";
+import { Btn, ScreenHeader } from "../ui/components";
 
 /**
  * SPEC-015 / SPEC-016: パーティ編成シーン。
@@ -102,7 +110,7 @@ export class PartyFormationScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.setBackgroundColor(0x0e1117);
+    this.cameras.main.setBackgroundColor(theme.bg.base);
 
     // restart 対策: scene field を毎回明示的にリセット
     this.party = getPartyHeroIds();
@@ -128,34 +136,27 @@ export class PartyFormationScene extends Phaser.Scene {
     const stage = findStage(this.stageId);
     const stageLabel = stage ? `${stage.name}` : `ステージ ${this.stageId}`;
 
-    // ── ヘッダ（共通）
-    this.add
-      .text(vp.width / 2, 28, "パーティ編成", {
-        fontSize: "20px",
-        color: "#fde68a",
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5);
-    this.add
-      .text(vp.width / 2, 50, `出撃先: ${stageLabel}`, {
-        fontSize: "11px",
-        color: "#bae6fd",
-      })
-      .setOrigin(0.5);
-
-    const backBtn = this.add
-      .text(20, 24, "← ステージ選択", {
-        fontSize: "14px",
-        color: "#93c5fd",
-      })
-      .setInteractive({ useHandCursor: true });
-    backBtn.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      if (pointer.rightButtonDown()) return;
-      playSe(this, SE_KEYS.uiMenu());
-      this.scene.start("StageSelectScene", {
-        worldId: stage?.worldId ?? "world-1",
-      });
+    // ── ヘッダ（ScreenHeader + 出撃先サブ表示）
+    new ScreenHeader(this, {
+      x: 0,
+      y: 0,
+      width: vp.width,
+      enHeading: "PARTY FORMATION",
+      jpHeading: "編成",
+      onBack: () => {
+        playSe(this, SE_KEYS.uiMenu());
+        this.scene.start("StageSelectScene", {
+          worldId: stage?.worldId ?? "world-1",
+        });
+      },
     });
+
+    // 出撃先（右上に小さく）
+    this.add
+      .text(vp.width - 14, 18, `→ ${stageLabel}`, {
+        ...textStyle("small", { colorNum: theme.ink.secondary }),
+      })
+      .setOrigin(1, 0);
 
     if (vp.isLandscape) {
       this.buildLandscape(vp.width, vp.height);
@@ -177,7 +178,7 @@ export class PartyFormationScene extends Phaser.Scene {
     this.add
       .text(leftCenter, 80, `編成中  ( 最大 ${PARTY_LIMIT} 体 )`, {
         fontSize: "12px",
-        color: "#fcd34d",
+        color: hex2css(theme.accent.primary),
         fontStyle: "bold",
       })
       .setOrigin(0.5);
@@ -207,7 +208,7 @@ export class PartyFormationScene extends Phaser.Scene {
         leftCenter,
         partyTopY + partySlotH * 2 + partyGap + 14,
         "",
-        { fontSize: "11px", color: "#cbd5e1" },
+        { fontSize: "11px", color: hex2css(theme.ink.secondary) },
       )
       .setOrigin(0.5);
 
@@ -217,7 +218,7 @@ export class PartyFormationScene extends Phaser.Scene {
     this.add
       .text(leftCenter, rosterHeadingY, "保有ヒーロー", {
         fontSize: "12px",
-        color: "#fcd34d",
+        color: hex2css(theme.accent.primary),
         fontStyle: "bold",
       })
       .setOrigin(0.5);
@@ -251,13 +252,13 @@ export class PartyFormationScene extends Phaser.Scene {
     const btnH = 36;
     const btnX = leftCenter;
     const btnY = height - 24;
-    this.startBtnBg = this.add.rectangle(btnX, btnY, btnW, btnH, 0xfacc15, 1);
-    this.startBtnBg.setStrokeStyle(2, 0xfde047);
+    this.startBtnBg = this.add.rectangle(btnX, btnY, btnW, btnH, theme.accent.primary, 1);
+    this.startBtnBg.setStrokeStyle(2, theme.accent.primary);
     this.startBtnBg.setInteractive({ useHandCursor: true });
     this.startBtnText = this.add
       .text(btnX, btnY, "出撃 ▶", {
         fontSize: "16px",
-        color: "#1f2937",
+        color: hex2css(theme.ink.inverse),
         fontStyle: "bold",
       })
       .setOrigin(0.5);
@@ -286,7 +287,7 @@ export class PartyFormationScene extends Phaser.Scene {
     this.add
       .text(width / 2, cursorY, `編成中  ( 最大 ${PARTY_LIMIT} 体 )`, {
         fontSize: "12px",
-        color: "#fcd34d",
+        color: hex2css(theme.accent.primary),
         fontStyle: "bold",
       })
       .setOrigin(0.5);
@@ -317,7 +318,7 @@ export class PartyFormationScene extends Phaser.Scene {
     this.partyCountText = this.add
       .text(width / 2, cursorY + 6, "", {
         fontSize: "11px",
-        color: "#cbd5e1",
+        color: hex2css(theme.ink.secondary),
       })
       .setOrigin(0.5);
     cursorY += 22;
@@ -326,7 +327,7 @@ export class PartyFormationScene extends Phaser.Scene {
     this.add
       .text(width / 2, cursorY, "保有ヒーロー", {
         fontSize: "12px",
-        color: "#fcd34d",
+        color: hex2css(theme.accent.primary),
         fontStyle: "bold",
       })
       .setOrigin(0.5);
@@ -370,15 +371,15 @@ export class PartyFormationScene extends Phaser.Scene {
       btnY,
       btnW,
       btnH,
-      0xfacc15,
+      theme.accent.primary,
       1,
     );
-    this.startBtnBg.setStrokeStyle(2, 0xfde047);
+    this.startBtnBg.setStrokeStyle(2, theme.accent.primary);
     this.startBtnBg.setInteractive({ useHandCursor: true });
     this.startBtnText = this.add
       .text(width / 2, btnY, "出撃 ▶", {
         fontSize: "16px",
-        color: "#1f2937",
+        color: hex2css(theme.ink.inverse),
         fontStyle: "bold",
       })
       .setOrigin(0.5);
@@ -405,8 +406,8 @@ export class PartyFormationScene extends Phaser.Scene {
     w: number,
     h: number,
   ): SlotEntry {
-    const border = this.add.rectangle(cx, cy, w, h, 0x111827, 1);
-    border.setStrokeStyle(2, 0x4b5563);
+    const border = this.add.rectangle(cx, cy, w, h, theme.bg.surface, 1);
+    border.setStrokeStyle(2, theme.line.base);
     border.setInteractive({ useHandCursor: true });
     const slot: SlotEntry = { index, cx, cy, w, h, border, children: [] };
     border.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
@@ -423,8 +424,8 @@ export class PartyFormationScene extends Phaser.Scene {
     w: number,
     h: number,
   ): RosterEntry {
-    const border = this.add.rectangle(cx, cy, w, h, 0x111827, 1);
-    border.setStrokeStyle(2, 0x4b5563);
+    const border = this.add.rectangle(cx, cy, w, h, theme.bg.surface, 1);
+    border.setStrokeStyle(2, theme.line.base);
     border.setInteractive({ useHandCursor: true });
 
     // 名前を入れる余裕があるかどうか（縦画面の細いスロットでは名前を省く）
@@ -444,7 +445,7 @@ export class PartyFormationScene extends Phaser.Scene {
         hero.rarity === "uncommon" ? "U" : "C",
         {
           fontSize: "10px",
-          color: hero.rarity === "uncommon" ? "#a5f3fc" : "#fcd34d",
+          color: hero.rarity === "uncommon" ? hex2css(RARITY.uncommon.hex) : hex2css(theme.accent.primary),
           fontStyle: "bold",
         },
       )
@@ -453,7 +454,7 @@ export class PartyFormationScene extends Phaser.Scene {
     this.add
       .text(cx + w / 2 - 4, cy - h / 2 + 4, `${hero.cost}`, {
         fontSize: "10px",
-        color: "#fde68a",
+        color: hex2css(theme.ink.primary),
         fontStyle: "bold",
       })
       .setOrigin(1, 0);
@@ -462,7 +463,7 @@ export class PartyFormationScene extends Phaser.Scene {
     this.add
       .text(cx, cy + h / 2 - (compact ? 4 : 22), CLASS_LABEL[hero.class], {
         fontSize: "10px",
-        color: "#fcd34d",
+        color: hex2css(theme.accent.primary),
       })
       .setOrigin(0.5, 1);
 
@@ -471,7 +472,7 @@ export class PartyFormationScene extends Phaser.Scene {
       this.add
         .text(cx, cy + h / 2 - 4, hero.name, {
           fontSize: "9px",
-          color: "#e5e7eb",
+          color: hex2css(theme.ink.primary),
           align: "center",
           wordWrap: { width: w - 6, useAdvancedWrap: true },
         })
@@ -481,7 +482,7 @@ export class PartyFormationScene extends Phaser.Scene {
     const selectedMark = this.add
       .text(cx + w / 2 - 4, cy + h / 2 - 4, "✓", {
         fontSize: "12px",
-        color: "#4ade80",
+        color: hex2css(theme.accent.success),
         fontStyle: "bold",
       })
       .setOrigin(1, 1);
@@ -501,13 +502,13 @@ export class PartyFormationScene extends Phaser.Scene {
     const cardCX = left + width / 2;
     const cardCY = top + height / 2;
 
-    const bg = this.add.rectangle(cardCX, cardCY, width, height, 0x111827, 0.95);
-    bg.setStrokeStyle(2, 0x374151);
+    const bg = this.add.rectangle(cardCX, cardCY, width, height, theme.bg.surface, 0.95);
+    bg.setStrokeStyle(2, theme.line.weak);
     void bg;
     this.add
       .text(cardCX, top + 14, "ヒーロー詳細", {
         fontSize: "12px",
-        color: "#fcd34d",
+        color: hex2css(theme.accent.primary),
         fontStyle: "bold",
       })
       .setOrigin(0.5);
@@ -534,7 +535,7 @@ export class PartyFormationScene extends Phaser.Scene {
           "ヒーローをタップすると\nここに詳細が表示されます",
           {
             fontSize: "12px",
-            color: "#64748b",
+            color: hex2css(theme.ink.muted),
             align: "center",
             wordWrap: { width: width - 32, useAdvancedWrap: true },
           },
@@ -578,7 +579,7 @@ export class PartyFormationScene extends Phaser.Scene {
       this.add
         .text(cardCX, y, hero.name, {
           fontSize: "16px",
-          color: "#f9fafb",
+          color: hex2css(theme.ink.primary),
           fontStyle: "bold",
           align: "center",
           wordWrap: { width: width - 24, useAdvancedWrap: true },
@@ -587,7 +588,7 @@ export class PartyFormationScene extends Phaser.Scene {
     );
     y += 24;
 
-    const rarityColor = hero.rarity === "uncommon" ? "#a5f3fc" : "#fcd34d";
+    const rarityColor = hero.rarity === "uncommon" ? hex2css(RARITY.uncommon.hex) : hex2css(theme.accent.primary);
     this.detailDynamic.push(
       this.add
         .text(
@@ -604,14 +605,14 @@ export class PartyFormationScene extends Phaser.Scene {
       this.add
         .text(cardCX, y, `配置コスト: ${hero.cost} CE`, {
           fontSize: "11px",
-          color: "#fde68a",
+          color: hex2css(theme.ink.primary),
         })
         .setOrigin(0.5),
     );
     y += 18;
 
     this.detailDynamic.push(
-      this.add.rectangle(cardCX, y, width - 32, 1, 0x374151, 1),
+      this.add.rectangle(cardCX, y, width - 32, 1, theme.line.weak, 1),
     );
     y += 10;
 
@@ -627,28 +628,28 @@ export class PartyFormationScene extends Phaser.Scene {
       const ry = y + r * 22 + 6;
       this.detailDynamic.push(
         this.add
-          .text(statL, ry, k1, { fontSize: "11px", color: "#94a3b8" })
+          .text(statL, ry, k1, { fontSize: "11px", color: hex2css(theme.ink.tertiary) })
           .setOrigin(0, 0.5),
       );
       this.detailDynamic.push(
         this.add
           .text(statL + 78, ry, v1, {
             fontSize: "12px",
-            color: "#e5e7eb",
+            color: hex2css(theme.ink.primary),
             fontStyle: "bold",
           })
           .setOrigin(0, 0.5),
       );
       this.detailDynamic.push(
         this.add
-          .text(statR, ry, k2, { fontSize: "11px", color: "#94a3b8" })
+          .text(statR, ry, k2, { fontSize: "11px", color: hex2css(theme.ink.tertiary) })
           .setOrigin(0, 0.5),
       );
       this.detailDynamic.push(
         this.add
           .text(statR + 78, ry, v2, {
             fontSize: "12px",
-            color: "#e5e7eb",
+            color: hex2css(theme.ink.primary),
             fontStyle: "bold",
           })
           .setOrigin(0, 0.5),
@@ -657,7 +658,7 @@ export class PartyFormationScene extends Phaser.Scene {
     y += statRows.length * 22 + 8;
 
     this.detailDynamic.push(
-      this.add.rectangle(cardCX, y, width - 32, 1, 0x374151, 1),
+      this.add.rectangle(cardCX, y, width - 32, 1, theme.line.weak, 1),
     );
     y += 10;
 
@@ -665,7 +666,7 @@ export class PartyFormationScene extends Phaser.Scene {
       this.add
         .text(left + 16, y, "■ スキル", {
           fontSize: "12px",
-          color: "#fcd34d",
+          color: hex2css(theme.accent.primary),
           fontStyle: "bold",
         })
         .setOrigin(0, 0.5),
@@ -677,7 +678,7 @@ export class PartyFormationScene extends Phaser.Scene {
         this.add
           .text(left + 16, y, skill.name, {
             fontSize: "13px",
-            color: "#fde68a",
+            color: hex2css(theme.ink.primary),
             fontStyle: "bold",
             wordWrap: { width: width - 32, useAdvancedWrap: true },
           })
@@ -688,7 +689,7 @@ export class PartyFormationScene extends Phaser.Scene {
         this.add
           .text(left + 16, y, skill.description, {
             fontSize: "11px",
-            color: "#e5e7eb",
+            color: hex2css(theme.ink.primary),
             wordWrap: { width: width - 32, useAdvancedWrap: true },
           })
           .setOrigin(0, 0),
@@ -702,7 +703,7 @@ export class PartyFormationScene extends Phaser.Scene {
         this.add
           .text(left + 16, y, meta, {
             fontSize: "10px",
-            color: "#94a3b8",
+            color: hex2css(theme.ink.tertiary),
           })
           .setOrigin(0, 0),
       );
@@ -711,7 +712,7 @@ export class PartyFormationScene extends Phaser.Scene {
         this.add
           .text(left + 16, y, "(スキル未定義)", {
             fontSize: "11px",
-            color: "#64748b",
+            color: hex2css(theme.ink.muted),
           })
           .setOrigin(0, 0.5),
       );
@@ -747,7 +748,7 @@ export class PartyFormationScene extends Phaser.Scene {
       this.add
         .text(textLeft, ty, hero.name, {
           fontSize: "14px",
-          color: "#f9fafb",
+          color: hex2css(theme.ink.primary),
           fontStyle: "bold",
           wordWrap: { width: textW, useAdvancedWrap: true },
         })
@@ -755,7 +756,7 @@ export class PartyFormationScene extends Phaser.Scene {
     );
     ty += 18;
 
-    const rarityColor = hero.rarity === "uncommon" ? "#a5f3fc" : "#fcd34d";
+    const rarityColor = hero.rarity === "uncommon" ? hex2css(RARITY.uncommon.hex) : hex2css(theme.accent.primary);
     this.detailDynamic.push(
       this.add
         .text(
@@ -771,7 +772,7 @@ export class PartyFormationScene extends Phaser.Scene {
       this.add
         .text(textLeft, ty, `Cost ${hero.cost} CE`, {
           fontSize: "10px",
-          color: "#fde68a",
+          color: hex2css(theme.ink.primary),
         })
         .setOrigin(0, 0),
     );
@@ -783,7 +784,7 @@ export class PartyFormationScene extends Phaser.Scene {
       this.add
         .text(left + 12, statsY, statsLine1, {
           fontSize: "10px",
-          color: "#cbd5e1",
+          color: hex2css(theme.ink.secondary),
         })
         .setOrigin(0, 0),
     );
@@ -792,7 +793,7 @@ export class PartyFormationScene extends Phaser.Scene {
       this.add
         .text(left + 12, statsY, statsLine2, {
           fontSize: "10px",
-          color: "#cbd5e1",
+          color: hex2css(theme.ink.secondary),
         })
         .setOrigin(0, 0),
     );
@@ -803,7 +804,7 @@ export class PartyFormationScene extends Phaser.Scene {
         this.add
           .text(left + 12, statsY, `■ ${skill.name}`, {
             fontSize: "11px",
-            color: "#fde68a",
+            color: hex2css(theme.ink.primary),
             fontStyle: "bold",
             wordWrap: { width: width - 24, useAdvancedWrap: true },
           })
@@ -814,7 +815,7 @@ export class PartyFormationScene extends Phaser.Scene {
         this.add
           .text(left + 12, statsY, skill.description, {
             fontSize: "10px",
-            color: "#e5e7eb",
+            color: hex2css(theme.ink.primary),
             wordWrap: { width: width - 24, useAdvancedWrap: true },
           })
           .setOrigin(0, 0),
@@ -833,51 +834,34 @@ export class PartyFormationScene extends Phaser.Scene {
     const { left, width } = this.detailGeometry;
     const cardCX = left + width / 2;
 
-    let btnLabel: string;
-    let btnEnabled: boolean;
-    let btnFill = 0xfacc15;
-    let btnStroke = 0xfde047;
-    let btnTextColor = "#1f2937";
+    let label: string;
+    let kind: "primary" | "destructive" | "secondary";
+    let enabled = true;
 
     if (inParty) {
-      btnLabel = "外す";
-      btnEnabled = true;
-      btnFill = 0xef4444;
-      btnStroke = 0xfca5a5;
-      btnTextColor = "#fef2f2";
+      label = "外す";
+      kind = "destructive";
     } else if (partyFull) {
-      btnLabel = "枠 FULL — 編成中ヒーローをタップで交代";
-      btnEnabled = false;
-      btnFill = 0x374151;
-      btnStroke = 0x6b7280;
-      btnTextColor = "#cbd5e1";
+      label = "枠 FULL  /  編成中ヒーローをタップで交代";
+      kind = "secondary";
+      enabled = false;
     } else {
-      btnLabel = "編成する";
-      btnEnabled = true;
+      label = "編成する";
+      kind = "primary";
     }
 
-    const actW = width - 24;
-    const actH = 30;
-    const actBg = this.add.rectangle(cardCX, y, actW, actH, btnFill, 1);
-    actBg.setStrokeStyle(2, btnStroke);
-    if (btnEnabled) actBg.setInteractive({ useHandCursor: true });
-    const actTxt = this.add
-      .text(cardCX, y, btnLabel, {
-        fontSize: "12px",
-        color: btnTextColor,
-        fontStyle: "bold",
-        wordWrap: { width: actW - 16, useAdvancedWrap: true },
-        align: "center",
-      })
-      .setOrigin(0.5);
-
-    if (btnEnabled) {
-      actBg.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-        if (pointer.rightButtonDown()) return;
-        this.onActionConfirm();
-      });
-    }
-    this.detailDynamic.push(actBg, actTxt);
+    const btn = new Btn(this, {
+      x: cardCX,
+      y,
+      width: width - 24,
+      height: 30,
+      label,
+      kind,
+      size: "sm",
+      disabled: !enabled,
+      onClick: () => this.onActionConfirm(),
+    });
+    this.detailDynamic.push(btn);
   }
 
   private attachHint(
@@ -896,7 +880,7 @@ export class PartyFormationScene extends Phaser.Scene {
       this.add
         .text(cardCX, y, hint, {
           fontSize: "10px",
-          color: "#64748b",
+          color: hex2css(theme.ink.muted),
           wordWrap: { width: width - 16, useAdvancedWrap: true },
           align: "center",
         })
@@ -1006,13 +990,13 @@ export class PartyFormationScene extends Phaser.Scene {
         this.focusedHeroId !== null && heroId === this.focusedHeroId;
 
       if (heroId === undefined) {
-        slot.border.setStrokeStyle(2, 0x374151);
-        slot.border.setFillStyle(0x111827, 1);
+        slot.border.setStrokeStyle(2, theme.line.weak);
+        slot.border.setFillStyle(theme.bg.surface, 1);
         slot.children.push(
           this.add
             .text(slot.cx, slot.cy, "（空）", {
               fontSize: "11px",
-              color: "#475569",
+              color: hex2css(theme.ink.muted),
             })
             .setOrigin(0.5),
         );
@@ -1022,9 +1006,11 @@ export class PartyFormationScene extends Phaser.Scene {
       const hero = findHero(heroId);
       if (!hero) continue;
 
-      const stroke = isFocused ? 0xef4444 : 0xfde047;
-      const fill = isFocused ? 0x1f2937 : 0x111827;
-      slot.border.setStrokeStyle(2, stroke);
+      // 編成中スロットの枠は職業色（focus 時は太く + 上書き）
+      const classColor = CLASS_COLORS[hero.class].hex;
+      const stroke = isFocused ? classColor : theme.line.base;
+      const fill = isFocused ? theme.bg.raised : theme.bg.surface;
+      slot.border.setStrokeStyle(isFocused ? 2 : 1, stroke);
       slot.border.setFillStyle(fill, 1);
 
       const compact = slot.w < 72;
@@ -1050,7 +1036,7 @@ export class PartyFormationScene extends Phaser.Scene {
             `${hero.cost}`,
             {
               fontSize: "10px",
-              color: "#fde68a",
+              color: hex2css(theme.ink.primary),
               fontStyle: "bold",
             },
           )
@@ -1063,7 +1049,7 @@ export class PartyFormationScene extends Phaser.Scene {
             slot.cx,
             slot.cy + slot.h / 2 - (compact ? 4 : 22),
             CLASS_LABEL[hero.class],
-            { fontSize: "10px", color: "#fcd34d" },
+            { fontSize: "10px", color: hex2css(theme.accent.primary) },
           )
           .setOrigin(0.5, 1),
       );
@@ -1073,7 +1059,7 @@ export class PartyFormationScene extends Phaser.Scene {
           this.add
             .text(slot.cx, slot.cy + slot.h / 2 - 4, hero.name, {
               fontSize: "9px",
-              color: "#e5e7eb",
+              color: hex2css(theme.ink.primary),
               align: "center",
               wordWrap: { width: slot.w - 6, useAdvancedWrap: true },
             })
@@ -1086,7 +1072,7 @@ export class PartyFormationScene extends Phaser.Scene {
           this.add
             .text(slot.cx, slot.cy - slot.h / 2 + 4, "外す", {
               fontSize: "10px",
-              color: "#fca5a5",
+              color: hex2css(theme.accent.danger),
               fontStyle: "bold",
             })
             .setOrigin(0.5, 0),
@@ -1100,18 +1086,24 @@ export class PartyFormationScene extends Phaser.Scene {
       const isFocused =
         this.focusedHeroId !== null && r.hero.id === this.focusedHeroId;
       r.selectedMark.setVisible(sel);
-      const stroke = isFocused ? 0x60a5fa : sel ? 0x4ade80 : 0x4b5563;
-      r.border.setStrokeStyle(2, stroke);
-      r.border.setFillStyle(isFocused ? 0x1e293b : 0x111827, 1);
+      // フォーカス時は職業色 + 太枠、編成済みは accent.success の細枠
+      const classColor = CLASS_COLORS[r.hero.class].hex;
+      const stroke = isFocused
+        ? classColor
+        : sel
+          ? theme.accent.success
+          : theme.line.base;
+      r.border.setStrokeStyle(isFocused ? 2 : 1, stroke);
+      r.border.setFillStyle(isFocused ? theme.bg.raised : theme.bg.surface, 1);
       r.sprite.setAlpha(isFocused ? 0.45 : sel ? 0.5 : 1);
     }
 
     this.partyCountText.setText(`${this.party.length} / ${PARTY_LIMIT} 体編成中`);
 
     const ok = this.party.length > 0;
-    this.startBtnBg.setFillStyle(ok ? 0xfacc15 : 0x374151, 1);
-    this.startBtnBg.setStrokeStyle(2, ok ? 0xfde047 : 0x6b7280);
-    this.startBtnText.setColor(ok ? "#1f2937" : "#9ca3af");
+    this.startBtnBg.setFillStyle(ok ? theme.accent.primary : theme.line.weak, 1);
+    this.startBtnBg.setStrokeStyle(2, ok ? theme.accent.primary : theme.line.bright);
+    this.startBtnText.setColor(ok ? hex2css(theme.ink.inverse) : hex2css(theme.ink.tertiary));
     this.startBtnText.setText(ok ? "出撃 ▶" : "ヒーローを編成してください");
 
     this.refreshDetail();
