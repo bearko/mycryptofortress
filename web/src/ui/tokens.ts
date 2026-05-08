@@ -308,8 +308,20 @@ export const TYPE: Record<
 };
 
 /**
+ * SPEC-022: Phaser Text を高解像度で描くためのレンダリング倍率。
+ * `Text.setResolution()` に渡す。devicePixelRatio に追従し、Retina 環境で
+ * 日本語フォントの粒状感を解消する。
+ */
+export const TEXT_RESOLUTION = (() => {
+  if (typeof window === "undefined") return 2;
+  return Math.min(3, Math.max(2, window.devicePixelRatio || 2));
+})();
+
+/**
  * Phaser テキストスタイルを生成するヘルパ。
  * `color` は Theme の ink.primary をデフォルトに、上書き可能。
+ *
+ * SPEC-022: `resolution` プロパティで内部テクスチャを高解像度で描画する。
  */
 export function textStyle(
   step: keyof typeof TYPE,
@@ -325,8 +337,25 @@ export function textStyle(
     fontSize: `${t.px}px`,
     fontStyle: t.w >= 600 ? "bold" : "",
     color: colorNum !== undefined ? hex2css(colorNum) : hex2css(theme.ink.primary),
+    resolution: TEXT_RESOLUTION,
     ...rest,
   };
+}
+
+/**
+ * SPEC-022: 既存の `this.add.text(...)` 呼び出しを置き換えるヘルパ。
+ * 解像度を高くした Phaser.GameObjects.Text を返す。
+ */
+export function mkText(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  content: string,
+  style: Phaser.Types.GameObjects.Text.TextStyle,
+): Phaser.GameObjects.Text {
+  return scene.add
+    .text(x, y, content, { ...style, resolution: TEXT_RESOLUTION })
+    .setResolution(TEXT_RESOLUTION);
 }
 
 // ─────────────────────────────────────────────
