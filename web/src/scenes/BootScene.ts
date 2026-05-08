@@ -24,17 +24,26 @@ const BGM_BATTLE_URL =
 
 /**
  * SPEC-005 §5.5: UI 系 SE。
- * 元 Unity プロジェクト（MCHTowerDefence）に同梱されていた senses-circuit 提供の
+ * 元 Unity プロジェクト（MCHTowerDefence）に同梱されていた Senses Circuit (hitoshi 氏) 提供の
  * 効果音を `web/public/assets/se/` に配置して読み込む。
+ * 利用規約: https://www.senses-circuit.com/terms/  Copyright © Senses Circuit
+ *
+ * - menu.mp3            : メニュー選択（World/Stage/Party 各画面のタップ確定）
+ * - tap_decision_01.mp3 : 配置確定
+ * - swipe_01.mp3        : ヒーロー攻撃モーション
  */
 const UI_SE_KEYS = {
+  /** ステータスパネル等のタップ。menu.mp3 を共用。 */
   tap: "ui_tap",
+  /** ワールド/ステージ/パーティ画面の遷移系タップ。menu.mp3 を共用。 */
+  menu: "ui_menu",
   place: "ui_place",
   attackSwipe: "ui_attack_swipe",
 } as const;
 
 const UI_SE_FILES: Array<{ key: string; url: string }> = [
   { key: UI_SE_KEYS.tap, url: "assets/se/menu.mp3" },
+  { key: UI_SE_KEYS.menu, url: "assets/se/menu.mp3" },
   { key: UI_SE_KEYS.place, url: "assets/se/tap_decision_01.mp3" },
   { key: UI_SE_KEYS.attackSwipe, url: "assets/se/swipe_01.mp3" },
 ];
@@ -43,6 +52,7 @@ export const SE_KEYS = {
   category: (c: SkillCategory) => `se_${c}`,
   bgmBattle: () => BGM_BATTLE_KEY,
   uiTap: () => UI_SE_KEYS.tap,
+  uiMenu: () => UI_SE_KEYS.menu,
   uiPlace: () => UI_SE_KEYS.place,
   attackSwipe: () => UI_SE_KEYS.attackSwipe,
 };
