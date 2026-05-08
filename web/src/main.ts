@@ -10,17 +10,38 @@ const loaderEl = appEl?.querySelector(".loader");
 loaderEl?.remove();
 
 /**
- * SPEC-022: Phaser.GameObjects.Text の既定 resolution を上げる。
- * Phaser 3 は Text の内部テクスチャを fontSize 等倍 (resolution=1) で生成するため、
- * Retina 環境ではテキストが粒状に見える。`prototype.resolution` を上書きすると
- * 全 Text 生成時にこの値が適用される。
+ * SPEC-022 / SPEC-023: Phaser Text を高解像度で描く。
+ *
+ * Phaser 3 の `Text` は内部テクスチャを生成する際 `text.style.resolution`
+ * を参照する（`text.resolution` ではない）。プロトタイプ書き換えだけでは
+ * `style.resolution = 1` のデフォルトが効いてしまうので、`scene.add.text(...)`
+ * を呼ぶたびに `setResolution(value)` を呼んでスタイル側の値を上書きする。
+ *
+ * これにより Retina 環境で日本語フォントが粒状感なく描画される。
  */
 const TEXT_RES = Math.min(3, Math.max(2, window.devicePixelRatio || 2));
-(
-  Phaser.GameObjects.Text.prototype as Phaser.GameObjects.Text & {
-    resolution: number;
-  }
-).resolution = TEXT_RES;
+{
+  const factoryProto = Phaser.GameObjects.GameObjectFactory.prototype as {
+    text: (
+      x: number,
+      y: number,
+      text: string | string[],
+      style?: Phaser.Types.GameObjects.Text.TextStyle,
+    ) => Phaser.GameObjects.Text;
+  };
+  const original = factoryProto.text;
+  factoryProto.text = function (
+    this: Phaser.GameObjects.GameObjectFactory,
+    x: number,
+    y: number,
+    text: string | string[],
+    style?: Phaser.Types.GameObjects.Text.TextStyle,
+  ): Phaser.GameObjects.Text {
+    const t = original.call(this, x, y, text, style);
+    t.setResolution(TEXT_RES);
+    return t;
+  };
+}
 
 /**
  * SPEC-016: canvas はビューポート全体を埋める方針に切り替え。

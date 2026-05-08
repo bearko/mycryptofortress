@@ -233,7 +233,7 @@ export class PartyFormationScene extends Phaser.Scene {
 
     this.add
       .text(leftCenter, 80, `編成中  ( 最大 ${PARTY_LIMIT} 体 )`, {
-        fontSize: "12px",
+        fontSize: "14px",
         color: hex2css(theme.accent.primary),
         fontStyle: "bold",
       })
@@ -264,7 +264,7 @@ export class PartyFormationScene extends Phaser.Scene {
         leftCenter,
         partyTopY + partySlotH * 2 + partyGap + 14,
         "",
-        { fontSize: "11px", color: hex2css(theme.ink.secondary) },
+        { fontSize: "13px", color: hex2css(theme.ink.secondary) },
       )
       .setOrigin(0.5);
 
@@ -273,7 +273,7 @@ export class PartyFormationScene extends Phaser.Scene {
       partyTopY + partySlotH * 2 + partyGap + 38;
     this.add
       .text(leftCenter, rosterHeadingY, "保有ヒーロー", {
-        fontSize: "12px",
+        fontSize: "14px",
         color: hex2css(theme.accent.primary),
         fontStyle: "bold",
       })
@@ -347,7 +347,7 @@ export class PartyFormationScene extends Phaser.Scene {
     let cursorY = 76;
     this.add
       .text(width / 2, cursorY, `編成中  ( 最大 ${PARTY_LIMIT} 体 )`, {
-        fontSize: "12px",
+        fontSize: "14px",
         color: hex2css(theme.accent.primary),
         fontStyle: "bold",
       })
@@ -378,7 +378,7 @@ export class PartyFormationScene extends Phaser.Scene {
     // 編成中数
     this.partyCountText = this.add
       .text(width / 2, cursorY + 6, "", {
-        fontSize: "11px",
+        fontSize: "13px",
         color: hex2css(theme.ink.secondary),
       })
       .setOrigin(0.5);
@@ -387,7 +387,7 @@ export class PartyFormationScene extends Phaser.Scene {
     // 保有ヒーロー
     this.add
       .text(width / 2, cursorY, "保有ヒーロー", {
-        fontSize: "12px",
+        fontSize: "14px",
         color: hex2css(theme.accent.primary),
         fontStyle: "bold",
       })
@@ -410,9 +410,9 @@ export class PartyFormationScene extends Phaser.Scene {
     const rosterTopY = cursorY + 6;
     const btnH = 40;
     const btnY = height - btnH / 2 - 10;
-    // SPEC-021 fix: MCH 本家 passive desc は 60〜90 字あり 2〜3 行 wrap するため
-    // 詳細パネル領域を ~230px 確保。roster は scroll で補う。
-    const detailReserve = 230;
+    // SPEC-023: MCH 本家 passive desc + 拡大した日本語フォント (12-14px) で
+    // 4 行 wrap することがあるため、詳細パネル領域を ~280px 確保。roster は scroll で補う。
+    const detailReserve = 280;
     const rosterBottomY = btnY - btnH / 2 - detailReserve;
     const rosterViewH = Math.max(rosterSlotH + 8, rosterBottomY - rosterTopY);
 
@@ -513,7 +513,7 @@ export class PartyFormationScene extends Phaser.Scene {
     track(
       this.add
         .text(cx - w / 2 + 4, cy - h / 2 + 4, RARITY[hero.rarity].label, {
-          fontSize: "10px",
+          fontSize: "14px",
           color: hex2css(RARITY[hero.rarity].hex),
           fontStyle: "bold",
         })
@@ -523,7 +523,7 @@ export class PartyFormationScene extends Phaser.Scene {
     track(
       this.add
         .text(cx + w / 2 - 4, cy - h / 2 + 4, `${hero.cost}`, {
-          fontSize: "10px",
+          fontSize: "14px",
           color: hex2css(theme.ink.primary),
           fontStyle: "bold",
         })
@@ -538,7 +538,7 @@ export class PartyFormationScene extends Phaser.Scene {
           cy + h / 2 - (compact ? 4 : 22),
           CLASS_LABEL[hero.class],
           {
-            fontSize: "10px",
+            fontSize: "14px",
             color: hex2css(theme.accent.primary),
           },
         )
@@ -550,7 +550,7 @@ export class PartyFormationScene extends Phaser.Scene {
       track(
         this.add
           .text(cx, cy + h / 2 - 4, hero.name, {
-            fontSize: "9px",
+            fontSize: "13px",
             color: hex2css(theme.ink.primary),
             align: "center",
             wordWrap: { width: w - 6, useAdvancedWrap: true },
@@ -562,7 +562,7 @@ export class PartyFormationScene extends Phaser.Scene {
     const selectedMark = track(
       this.add
         .text(cx + w / 2 - 4, cy + h / 2 - 4, "✓", {
-          fontSize: "12px",
+          fontSize: "14px",
           color: hex2css(theme.accent.success),
           fontStyle: "bold",
         })
@@ -660,7 +660,7 @@ export class PartyFormationScene extends Phaser.Scene {
     if (heroes.length === 0) {
       this.add
         .text(startX + gridW / 2, topY + viewH / 2, "該当するヒーローがいません", {
-          fontSize: "12px",
+          fontSize: "14px",
           color: hex2css(theme.ink.muted),
         })
         .setOrigin(0.5);
@@ -775,7 +775,7 @@ export class PartyFormationScene extends Phaser.Scene {
     void bg;
     this.add
       .text(cardCX, top + 14, "ヒーロー詳細", {
-        fontSize: "12px",
+        fontSize: "14px",
         color: hex2css(theme.accent.primary),
         fontStyle: "bold",
       })
@@ -802,7 +802,7 @@ export class PartyFormationScene extends Phaser.Scene {
           cardCY,
           "ヒーローをタップすると\nここに詳細が表示されます",
           {
-            fontSize: "12px",
+            fontSize: "14px",
             color: hex2css(theme.ink.muted),
             align: "center",
             wordWrap: { width: width - 32, useAdvancedWrap: true },
@@ -875,7 +875,7 @@ export class PartyFormationScene extends Phaser.Scene {
           cardCX,
           y,
           `[${RARITY_LABEL[hero.rarity]}]  ${CLASS_LABEL[hero.class]}  /  ${hero.attackType}`,
-          { fontSize: "11px", color: rarityColor },
+          { fontSize: "13px", color: rarityColor },
         )
         .setOrigin(0.5),
     );
@@ -884,7 +884,7 @@ export class PartyFormationScene extends Phaser.Scene {
     this.detailDynamic.push(
       this.add
         .text(cardCX, y, `配置コスト: ${hero.cost} CE`, {
-          fontSize: "11px",
+          fontSize: "13px",
           color: hex2css(theme.ink.primary),
         })
         .setOrigin(0.5),
@@ -908,13 +908,13 @@ export class PartyFormationScene extends Phaser.Scene {
       const ry = y + r * 22 + 6;
       this.detailDynamic.push(
         this.add
-          .text(statL, ry, k1, { fontSize: "11px", color: hex2css(theme.ink.tertiary) })
+          .text(statL, ry, k1, { fontSize: "13px", color: hex2css(theme.ink.tertiary) })
           .setOrigin(0, 0.5),
       );
       this.detailDynamic.push(
         this.add
           .text(statL + 78, ry, v1, {
-            fontSize: "12px",
+            fontSize: "14px",
             color: hex2css(theme.ink.primary),
             fontStyle: "bold",
           })
@@ -922,13 +922,13 @@ export class PartyFormationScene extends Phaser.Scene {
       );
       this.detailDynamic.push(
         this.add
-          .text(statR, ry, k2, { fontSize: "11px", color: hex2css(theme.ink.tertiary) })
+          .text(statR, ry, k2, { fontSize: "13px", color: hex2css(theme.ink.tertiary) })
           .setOrigin(0, 0.5),
       );
       this.detailDynamic.push(
         this.add
           .text(statR + 78, ry, v2, {
-            fontSize: "12px",
+            fontSize: "14px",
             color: hex2css(theme.ink.primary),
             fontStyle: "bold",
           })
@@ -945,7 +945,7 @@ export class PartyFormationScene extends Phaser.Scene {
     this.detailDynamic.push(
       this.add
         .text(left + 16, y, "■ スキル", {
-          fontSize: "12px",
+          fontSize: "14px",
           color: hex2css(theme.accent.primary),
           fontStyle: "bold",
         })
@@ -968,7 +968,7 @@ export class PartyFormationScene extends Phaser.Scene {
       this.detailDynamic.push(
         this.add
           .text(left + 16, y, skill.description, {
-            fontSize: "11px",
+            fontSize: "13px",
             color: hex2css(theme.ink.primary),
             wordWrap: { width: width - 32, useAdvancedWrap: true },
           })
@@ -982,7 +982,7 @@ export class PartyFormationScene extends Phaser.Scene {
       this.detailDynamic.push(
         this.add
           .text(left + 16, y, meta, {
-            fontSize: "10px",
+            fontSize: "14px",
             color: hex2css(theme.ink.tertiary),
           })
           .setOrigin(0, 0),
@@ -991,7 +991,7 @@ export class PartyFormationScene extends Phaser.Scene {
       this.detailDynamic.push(
         this.add
           .text(left + 16, y, "(スキル未定義)", {
-            fontSize: "11px",
+            fontSize: "13px",
             color: hex2css(theme.ink.muted),
           })
           .setOrigin(0, 0.5),
@@ -1053,7 +1053,7 @@ export class PartyFormationScene extends Phaser.Scene {
           textLeft,
           top + 50,
           `[${RARITY_LABEL[hero.rarity]}] ${CLASS_LABEL[hero.class]} / ${hero.attackType}  ·  Cost ${hero.cost}`,
-          { fontSize: "10px", color: rarityColor },
+          { fontSize: "14px", color: rarityColor },
         )
         .setOrigin(0, 0),
     );
@@ -1063,7 +1063,7 @@ export class PartyFormationScene extends Phaser.Scene {
     const statsLine = `HP ${hero.hp} · AGI ${hero.agi} · PHY ${hero.phy} · INT ${hero.int} · DEF ${hero.phyDef}/${hero.intDef}`;
     const statsText = this.add
       .text(left + 12, cursorY, statsLine, {
-        fontSize: "10px",
+        fontSize: "14px",
         color: hex2css(theme.ink.secondary),
         wordWrap: { width: width - 24, useAdvancedWrap: true },
       })
@@ -1075,7 +1075,7 @@ export class PartyFormationScene extends Phaser.Scene {
     if (skill) {
       const skillName = this.add
         .text(left + 12, cursorY, `■ ${skill.name}`, {
-          fontSize: "11px",
+          fontSize: "13px",
           color: hex2css(theme.accent.primary),
           fontStyle: "bold",
           wordWrap: { width: width - 24, useAdvancedWrap: true },
@@ -1090,7 +1090,7 @@ export class PartyFormationScene extends Phaser.Scene {
       const descMaxH = Math.max(20, descMaxBottom - cursorY);
       const descText = this.add
         .text(left + 12, cursorY, skill.description, {
-          fontSize: "10px",
+          fontSize: "14px",
           color: hex2css(theme.ink.primary),
           wordWrap: { width: width - 24, useAdvancedWrap: true },
           // 行数制限の代わり: max height を超えそうなら fixedHeight + 切り捨て
@@ -1158,7 +1158,7 @@ export class PartyFormationScene extends Phaser.Scene {
     this.detailDynamic.push(
       this.add
         .text(cardCX, y, hint, {
-          fontSize: "10px",
+          fontSize: "14px",
           color: hex2css(theme.ink.muted),
           wordWrap: { width: width - 16, useAdvancedWrap: true },
           align: "center",
@@ -1274,7 +1274,7 @@ export class PartyFormationScene extends Phaser.Scene {
         slot.children.push(
           this.add
             .text(slot.cx, slot.cy, "（空）", {
-              fontSize: "11px",
+              fontSize: "13px",
               color: hex2css(theme.ink.muted),
             })
             .setOrigin(0.5),
@@ -1314,7 +1314,7 @@ export class PartyFormationScene extends Phaser.Scene {
             slot.cy - slot.h / 2 + 4,
             `${hero.cost}`,
             {
-              fontSize: "10px",
+              fontSize: "14px",
               color: hex2css(theme.ink.primary),
               fontStyle: "bold",
             },
@@ -1328,7 +1328,7 @@ export class PartyFormationScene extends Phaser.Scene {
             slot.cx,
             slot.cy + slot.h / 2 - (compact ? 4 : 22),
             CLASS_LABEL[hero.class],
-            { fontSize: "10px", color: hex2css(theme.accent.primary) },
+            { fontSize: "14px", color: hex2css(theme.accent.primary) },
           )
           .setOrigin(0.5, 1),
       );
@@ -1337,7 +1337,7 @@ export class PartyFormationScene extends Phaser.Scene {
         slot.children.push(
           this.add
             .text(slot.cx, slot.cy + slot.h / 2 - 4, hero.name, {
-              fontSize: "9px",
+              fontSize: "13px",
               color: hex2css(theme.ink.primary),
               align: "center",
               wordWrap: { width: slot.w - 6, useAdvancedWrap: true },
@@ -1350,7 +1350,7 @@ export class PartyFormationScene extends Phaser.Scene {
         slot.children.push(
           this.add
             .text(slot.cx, slot.cy - slot.h / 2 + 4, "外す", {
-              fontSize: "10px",
+              fontSize: "14px",
               color: hex2css(theme.accent.danger),
               fontStyle: "bold",
             })

@@ -481,14 +481,14 @@ export class StageScene extends Phaser.Scene {
       const color = ROUTE_COLOR[route.id] ?? 0xffffff;
       this.add
         .text(start.x, start.y - 22, `IN ${route.id}`, {
-          fontSize: "10px",
+          fontSize: "14px",
           color: hex2css(theme.accent.success),
           fontStyle: "bold",
         })
         .setOrigin(0.5);
       this.add
         .text(goal.x, goal.y - 22, `OUT ${route.id}`, {
-          fontSize: "10px",
+          fontSize: "14px",
           color: hex2css(theme.accent.warn),
           fontStyle: "bold",
         })
@@ -641,7 +641,7 @@ export class StageScene extends Phaser.Scene {
       const classIcon = makeClassIcon(this, cx - 18, palTop + 60, hero.class, 14, classColor);
       const labelClass = this.add
         .text(cx + 4, palTop + 60, CLASS_LABEL[hero.class], {
-          fontSize: "11px",
+          fontSize: "13px",
           color: hex2css(classColor),
           fontStyle: "bold",
         })
@@ -650,7 +650,7 @@ export class StageScene extends Phaser.Scene {
 
       const labelStatus = this.add
         .text(cx, palTop + 75, "", {
-          fontSize: "10px",
+          fontSize: "14px",
           color: hex2css(theme.accent.success),
           fontStyle: "bold",
         })
@@ -680,7 +680,7 @@ export class StageScene extends Phaser.Scene {
       10,
       hudY + 132,
       "ヒーローアイコンをタップ → タイルへドラッグして配置",
-      { fontSize: "11px", color: hex2css(theme.ink.tertiary) },
+      { fontSize: "13px", color: hex2css(theme.ink.tertiary) },
     );
   }
 
@@ -711,7 +711,7 @@ export class StageScene extends Phaser.Scene {
       .setOrigin(0.5);
     this.add
       .text(slotCx, slotCy, "ステージ上のヒーローを\nタップすると詳細が出ます", {
-        fontSize: "11px",
+        fontSize: "13px",
         color: hex2css(theme.line.base),
         align: "center",
         lineSpacing: 4,
@@ -1410,7 +1410,7 @@ export class StageScene extends Phaser.Scene {
 
     // 先に description テキストを作って実高さを測ってから背景サイズを決める
     const descTextStyle: Phaser.Types.GameObjects.Text.TextStyle = {
-      fontSize: "12px",
+      fontSize: "14px",
       color: hex2css(theme.ink.primary),
       align: "center",
       wordWrap: { width: wrapWidth, useAdvancedWrap: true },
@@ -1456,7 +1456,7 @@ export class StageScene extends Phaser.Scene {
           info.placeable.map((c) => CLASS_LABEL[c]).join(" / ");
     const placeable = this.add
       .text(helpX, helpY + helpH / 2 - 16, placeableLabel, {
-        fontSize: "10px",
+        fontSize: "14px",
         color: hex2css(theme.accent.success),
       })
       .setOrigin(0.5, 0);
@@ -1801,7 +1801,7 @@ export class StageScene extends Phaser.Scene {
     ];
     const stats = this.add
       .text(slotCx - 110, 268, statLines.join("\n"), {
-        fontSize: "12px",
+        fontSize: "14px",
         color: hex2css(theme.ink.primary),
         lineSpacing: 3,
       })
@@ -1810,7 +1810,7 @@ export class StageScene extends Phaser.Scene {
     // ── スキル情報セクション
     const skillTitle = this.add
       .text(slotCx, 388, "[ スキル ]", {
-        fontSize: "12px",
+        fontSize: "14px",
         color: hex2css(theme.accent.warn),
         fontStyle: "bold",
       })
@@ -1828,7 +1828,7 @@ export class StageScene extends Phaser.Scene {
           .setOrigin(0.5)
       : this.add
           .text(slotCx, 412, "（スキル無し）", {
-            fontSize: "12px",
+            fontSize: "14px",
             color: hex2css(theme.ink.tertiary),
           })
           .setOrigin(0.5);
@@ -1836,7 +1836,7 @@ export class StageScene extends Phaser.Scene {
     const skillDesc = hero.skill
       ? this.add
           .text(slotCx, 442, hero.skill.description, {
-            fontSize: "11px",
+            fontSize: "13px",
             color: hex2css(theme.ink.secondary),
             align: "center",
             wordWrap: { width: PANEL_SLOT_WIDTH - 24 },
@@ -1858,7 +1858,7 @@ export class StageScene extends Phaser.Scene {
       .setOrigin(0, 0.5);
     const gaugeLabel = this.add
       .text(slotCx, gaugeY + 14, `${Math.floor(hero.skillGauge)} / ${GAUGE_MAX}`, {
-        fontSize: "11px",
+        fontSize: "13px",
         color: hex2css(theme.accent.primary),
       })
       .setOrigin(0.5);
@@ -1895,7 +1895,7 @@ export class StageScene extends Phaser.Scene {
     // ── 売却ボタン（小さく）
     const sellBtn = this.add
       .text(slotCx - 60, btnY + 38, "[ 売却 ]", {
-        fontSize: "11px",
+        fontSize: "13px",
         color: hex2css(theme.accent.danger),
       })
       .setOrigin(0.5)
@@ -1908,7 +1908,7 @@ export class StageScene extends Phaser.Scene {
     // ── 閉じるボタン
     const closeBtn = this.add
       .text(slotCx + 60, btnY + 38, "[ 閉じる ]", {
-        fontSize: "11px",
+        fontSize: "13px",
         color: hex2css(theme.accent.primary),
       })
       .setOrigin(0.5)
