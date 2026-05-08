@@ -96,9 +96,10 @@ export function findRoute(map: MapDef, routeId: string): RouteDef | undefined {
 }
 
 /**
- * Stage1-1 v2 のマップ。SPEC-003 §5.3 → SPEC-006 で 10 マス幅に縮小。
- * 10 列 × 8 行。上下に 2 経路（A: row 1, B: row 6）、中段は壁帯と障害。
- * モバイル視認性を上げるため 12 マスから 10 マスに。
+ * Stage1-1 v4 のマップ。SPEC-003 §5.3 → SPEC-006 で 10 マス幅 → SPEC-010 で
+ * 特殊タイル（毒沼）を 1 マス追加。10 列 × 8 行。上下に 2 経路（A: row 1, B: row 6）、
+ * 中段は壁帯と障害。Route B の col 5 を `poison` に置き換えて、敵が歩くたびに
+ * 毎秒ダメージを受けるデモを設置。
  */
 const ROW_OBSTACLE: MapTileType[] = Array(10).fill("obstacle");
 const ROW_PATH: MapTileType[] = Array(10).fill("path");
@@ -109,9 +110,15 @@ const ROW_WALL: MapTileType[] = (() => {
   a[9] = "obstacle";
   return a;
 })();
+// Route B 用: 中央 1 マスを poison に置き換える（SPEC-010 デモ）
+const ROW_PATH_B: MapTileType[] = (() => {
+  const a: MapTileType[] = Array(10).fill("path");
+  a[5] = "poison";
+  return a;
+})();
 
 export const STAGE1_MAP: MapDef = {
-  id: "stage-1-1-v3",
+  id: "stage-1-1-v4",
   cols: 10,
   rows: 8,
   tiles: [
@@ -121,7 +128,7 @@ export const STAGE1_MAP: MapDef = {
     ROW_OBSTACLE.slice(),
     ROW_OBSTACLE.slice(),
     ROW_WALL.slice(),
-    ROW_PATH.slice(), // row 6: route B
+    ROW_PATH_B.slice(), // row 6: route B（毒沼 1 マス含む）
     ROW_OBSTACLE.slice(),
   ],
   routes: [

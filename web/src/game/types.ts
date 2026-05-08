@@ -87,12 +87,27 @@ export interface TilePos {
 }
 
 /**
- * SPEC-003 のマップタイル種別。
- * - `path`: 敵が通る。重装 / 前衛 / 先鋒 / 特殊（path 系職業）が配置可能。
- * - `wall`: 敵は通らない。狙撃 / 術師 / 医療 / 補助（wall 系職業）が配置可能。
- * - `obstacle`: 何も置けない、敵も通れない（飾り / 障害物）。
+ * SPEC-003 / SPEC-010 のマップタイル種別。
+ *
+ * 通常タイル:
+ * - `path` (床): 敵が通る。重装 / 前衛 / 先鋒 / 特殊（path 系職業）が配置可能。
+ * - `wall` (高台): 敵は通らない。狙撃 / 術師 / 医療 / 補助（wall 系職業）が配置可能。
+ * - `obstacle` (壁): 何も置けない、敵も通れない（飾り / 障害物）。
+ *
+ * 特殊タイル (SPEC-010):
+ * - `poison` (毒沼): 敵が通れる。歩いている敵に毎秒固定ダメージを与える。配置不可。
+ * - `path_blocked` (配置不可な床): 敵が通れる。ヒーロー設置は不可（地形上は通路なのに
+ *   足場が悪い等の状況を想定）。
+ *
+ * 後続 (SPEC-013 想定): block (プレイヤー設置式の壁), stealth_wall (ステルス敵に
+ * 反応しない高台) など。
  */
-export type MapTileType = "path" | "wall" | "obstacle";
+export type MapTileType =
+  | "path"
+  | "wall"
+  | "obstacle"
+  | "poison"
+  | "path_blocked";
 
 /** ルート定義（敵が辿るウェイポイント列）。最後の点がゴール。 */
 export interface RouteDef {
