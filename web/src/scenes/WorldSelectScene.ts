@@ -7,20 +7,6 @@ import { theme, textStyle, hex2css, GAP } from "../ui/tokens";
 import { ScreenHeader } from "../ui/components";
 
 /**
- * SPEC-018: ワールドカードの英字バッジ用ラベル。
- *
- * 暫定: WorldDef に `eraEn` / `years` を追加するまでは scene 側で対応表を持つ。
- * 移行先: WorldDef に romaji + 年代範囲を追加して直接参照する。
- */
-const WORLD_LATIN_LABEL: Record<string, { en: string; years: string }> = {
-  "world-1": { en: "SENGOKU JIDAI", years: "1467-1615" },
-};
-
-function worldLatinLabel(worldId: string): { en: string; years: string } {
-  return WORLD_LATIN_LABEL[worldId] ?? { en: worldId.toUpperCase(), years: "" };
-}
-
-/**
  * SPEC-011 / SPEC-016 / SPEC-018: ワールド選択シーン。
  * STEEL ONYX デザイントークンに沿ったビジュアルに刷新。
  */
@@ -112,7 +98,10 @@ export class WorldSelectScene extends Phaser.Scene {
     const padTop = compact ? 10 : 18;
     const padLeft = compact ? 12 : 22;
     const lx = x + padLeft;
-    const latin = worldLatinLabel(world.id);
+    const latin = {
+      en: world.eraEn ?? world.id.toUpperCase(),
+      years: world.years ?? "",
+    };
     const contentRight = bannerX - GAP.sm;
 
     // 英字見出し（Orbitron, ALL-CAPS, accent.primary）
