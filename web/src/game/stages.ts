@@ -28,8 +28,16 @@ export interface StageDef {
 
 export interface WorldDef {
   id: string;
+  /** 表示用 (jp) */
   name: string;
+  /** 時代略称 (jp, 旧フィールド。"戦国" 等) */
   era: string;
+  /** SPEC-019: ALL-CAPS romaji 表記 ("SENGOKU JIDAI" 等)。WorldSelect の英字バッジで使用 */
+  eraEn?: string;
+  /** SPEC-019: 年代範囲 ("1467-1615" 等)。WorldSelect の英字バッジで使用 */
+  years?: string;
+  /** SPEC-019: 戦国/三国志など、theme 切替に使う tag */
+  themeId?: "onyx" | "sengoku";
   description: string;
   stages: StageDef[];
 }
@@ -169,11 +177,176 @@ const WAVE_HEAVY_8: Wave = {
   ],
 };
 
+// ─── SPEC-019: 拡張ステージ用 Map / Wave ─────────────────────
+
+// ─── ステージ 1-4: 高速ラッシュ — Route 1 本、敵が多く速い
+const STAGE_1_4_MAP: MapDef = {
+  id: "stage-1-4",
+  cols,
+  rows: 8,
+  tiles: [
+    obstacle(),
+    wall(),
+    path(), // route A
+    obstacle(),
+    obstacle(),
+    path(), // route B
+    wall(),
+    obstacle(),
+  ],
+  routes: [
+    { id: "A", points: [{ col: 0, row: 2 }, { col: 9, row: 2 }] },
+    { id: "B", points: [{ col: 0, row: 5 }, { col: 9, row: 5 }] },
+  ],
+};
+
+// 敵 12 体ラッシュ。シャドウ ストライダー (高速) を多用
+const WAVE_RUSH_12: Wave = {
+  patterns: [
+    { time: 1.0, enemyId: 141, routeId: "A" },
+    { time: 2.0, enemyId: 141, routeId: "B" },
+    { time: 3.0, enemyId: 121, routeId: "A" },
+    { time: 4.0, enemyId: 121, routeId: "B" },
+    { time: 5.5, enemyId: 141, routeId: "A" },
+    { time: 6.5, enemyId: 141, routeId: "B" },
+    { time: 8.0, enemyId: 161, routeId: "A" }, // ヴォイド スペクター
+    { time: 9.0, enemyId: 122, routeId: "B" }, // ハートブリード ヴェンティ
+    { time: 10.5, enemyId: 141, routeId: "A" },
+    { time: 11.5, enemyId: 141, routeId: "B" },
+    { time: 13.0, enemyId: 132, routeId: "A" }, // メリッサ クイーン
+    { time: 14.0, enemyId: 122, routeId: "B" },
+  ],
+};
+
+// ─── ステージ 1-5: タンク × 物量、ラスト
+const STAGE_1_5_MAP: MapDef = {
+  id: "stage-1-5",
+  cols,
+  rows: 8,
+  tiles: [
+    obstacle(),
+    path(), // route A
+    wall(),
+    obstacle(),
+    path(), // route B (中央)
+    obstacle(),
+    wall(),
+    obstacle(),
+  ],
+  routes: [
+    { id: "A", points: [{ col: 0, row: 1 }, { col: 9, row: 1 }] },
+    { id: "B", points: [{ col: 0, row: 4 }, { col: 9, row: 4 }] },
+  ],
+};
+
+const WAVE_BOSS_10: Wave = {
+  patterns: [
+    { time: 1.0, enemyId: 101, routeId: "A" },
+    { time: 2.0, enemyId: 101, routeId: "B" },
+    { time: 4.0, enemyId: 151, routeId: "A" }, // アイアン ガーディアン
+    { time: 5.0, enemyId: 121, routeId: "B" },
+    { time: 7.0, enemyId: 105, routeId: "A" }, // クリーパー ロード (超大型)
+    { time: 8.0, enemyId: 161, routeId: "B" },
+    { time: 10.0, enemyId: 151, routeId: "B" },
+    { time: 11.0, enemyId: 132, routeId: "A" },
+    { time: 13.0, enemyId: 105, routeId: "B" }, // 終盤 boss 級
+    { time: 14.5, enemyId: 132, routeId: "A" },
+  ],
+};
+
+// ─── World 2 (三国志) のステージ用 Map / Wave ────────────────
+
+// 2-1: 三国志 序盤・3 経路。中央 Route C は奥に poison。
+const STAGE_2_1_MAP: MapDef = {
+  id: "stage-2-1",
+  cols,
+  rows: 8,
+  tiles: [
+    obstacle(),
+    path(), // A
+    wall(),
+    obstacle(),
+    (() => {
+      const a = path();
+      a[6] = "poison";
+      return a;
+    })(), // C 中央 + poison
+    obstacle(),
+    wall(),
+    path(), // B
+  ],
+  routes: [
+    { id: "A", points: [{ col: 0, row: 1 }, { col: 9, row: 1 }] },
+    { id: "C", points: [{ col: 0, row: 4 }, { col: 9, row: 4 }] },
+    { id: "B", points: [{ col: 0, row: 7 }, { col: 9, row: 7 }] },
+  ],
+};
+
+const WAVE_SANGOKU_INTRO_10: Wave = {
+  patterns: [
+    { time: 1.0, enemyId: 101, routeId: "A" },
+    { time: 2.0, enemyId: 101, routeId: "B" },
+    { time: 3.0, enemyId: 121, routeId: "C" },
+    { time: 5.0, enemyId: 104, routeId: "A" },
+    { time: 6.5, enemyId: 122, routeId: "B" },
+    { time: 8.0, enemyId: 131, routeId: "C" },
+    { time: 9.5, enemyId: 141, routeId: "A" },
+    { time: 11.0, enemyId: 161, routeId: "B" },
+    { time: 12.5, enemyId: 132, routeId: "C" },
+    { time: 14.0, enemyId: 105, routeId: "A" },
+  ],
+};
+
+// 2-2: 中盤 — Route が 4 本、混戦
+const STAGE_2_2_MAP: MapDef = {
+  id: "stage-2-2",
+  cols,
+  rows: 8,
+  tiles: [
+    obstacle(),
+    path(), // A 上
+    wall(),
+    path(), // C 上中
+    obstacle(),
+    path(), // D 下中
+    wall(),
+    path(), // B 下
+  ],
+  routes: [
+    { id: "A", points: [{ col: 0, row: 1 }, { col: 9, row: 1 }] },
+    { id: "C", points: [{ col: 0, row: 3 }, { col: 9, row: 3 }] },
+    { id: "D", points: [{ col: 0, row: 5 }, { col: 9, row: 5 }] },
+    { id: "B", points: [{ col: 0, row: 7 }, { col: 9, row: 7 }] },
+  ],
+};
+
+const WAVE_SANGOKU_MID_14: Wave = {
+  patterns: [
+    { time: 1.0, enemyId: 101, routeId: "A" },
+    { time: 1.5, enemyId: 101, routeId: "C" },
+    { time: 2.0, enemyId: 121, routeId: "D" },
+    { time: 2.5, enemyId: 121, routeId: "B" },
+    { time: 4.5, enemyId: 141, routeId: "A" },
+    { time: 5.0, enemyId: 141, routeId: "B" },
+    { time: 6.5, enemyId: 132, routeId: "C" },
+    { time: 7.0, enemyId: 132, routeId: "D" },
+    { time: 9.0, enemyId: 105, routeId: "A" },
+    { time: 9.5, enemyId: 161, routeId: "B" },
+    { time: 11.0, enemyId: 122, routeId: "C" },
+    { time: 11.5, enemyId: 122, routeId: "D" },
+    { time: 13.5, enemyId: 151, routeId: "A" },
+    { time: 14.0, enemyId: 151, routeId: "B" },
+  ],
+};
+
 // ─── World 1: 戦国時代 — 訓練ワールド
 export const WORLD_1: WorldDef = {
   id: "world-1",
   name: "戦国時代",
   era: "戦国",
+  eraEn: "SENGOKU JIDAI",
+  years: "1467-1615",
+  themeId: "sengoku",
   description: "戦国の各武将と戦いながら進む訓練ワールド。",
   stages: [
     {
@@ -202,10 +375,63 @@ export const WORLD_1: WorldDef = {
       wave: WAVE_HEAVY_8,
       startingCe: 35,
     },
+    {
+      id: "1-4",
+      worldId: "world-1",
+      name: "ステージ 1-4 高速ラッシュ",
+      description: "シャドウ ストライダーを含む高速敵 12 体が両ルートを駆け抜ける。",
+      map: STAGE_1_4_MAP,
+      wave: WAVE_RUSH_12,
+      startingCe: 30,
+      baseHp: 4,
+    },
+    {
+      id: "1-5",
+      worldId: "world-1",
+      name: "ステージ 1-5 鉄壁の鬼",
+      description: "アイアン ガーディアンとクリーパー ロードが押し寄せる総合戦。",
+      map: STAGE_1_5_MAP,
+      wave: WAVE_BOSS_10,
+      startingCe: 40,
+      baseHp: 5,
+    },
   ],
 };
 
-export const ALL_WORLDS: WorldDef[] = [WORLD_1];
+// ─── World 2: 三国志 — 中堅ワールド
+export const WORLD_2: WorldDef = {
+  id: "world-2",
+  name: "三国志",
+  era: "三国",
+  eraEn: "SAN GUO ZHI",
+  years: "184-280",
+  themeId: "onyx",
+  description: "三分天下、英傑の決戦。複数ルート同時侵入で連携が問われる。",
+  stages: [
+    {
+      id: "2-1",
+      worldId: "world-2",
+      name: "ステージ 2-1 三路の構え",
+      description: "上中下 3 経路。中央ルートに毒沼ありで難易度が選べる。",
+      map: STAGE_2_1_MAP,
+      wave: WAVE_SANGOKU_INTRO_10,
+      startingCe: 30,
+      baseHp: 5,
+    },
+    {
+      id: "2-2",
+      worldId: "world-2",
+      name: "ステージ 2-2 四面楚歌",
+      description: "4 経路同時に高速敵 + タンクが攻める混戦。前衛 / 後衛の配分が鍵。",
+      map: STAGE_2_2_MAP,
+      wave: WAVE_SANGOKU_MID_14,
+      startingCe: 40,
+      baseHp: 4,
+    },
+  ],
+};
+
+export const ALL_WORLDS: WorldDef[] = [WORLD_1, WORLD_2];
 
 export function findStage(stageId: string): StageDef | undefined {
   for (const w of ALL_WORLDS) {
