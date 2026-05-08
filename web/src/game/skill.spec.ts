@@ -15,16 +15,15 @@ import {
 } from "./skill";
 
 describe("SKILLS テーブル", () => {
-  it("Common 8 体 + Uncommon 10 体ぶんの skill が定義されている", () => {
-    // SPEC-015 で Uncommon を追加。
-    expect(SKILLS.length).toBe(18);
+  it("全 38 ヒーローぶんの skill が定義されている", () => {
+    // SPEC-015 で Uncommon、SPEC-019 で Rare/SR/Legendary を追加。
+    expect(SKILLS.length).toBe(38);
     const ids = SKILLS.map((s) => s.heroId).sort((a, b) => a - b);
-    // Common
-    expect(ids).toContain(1001);
-    expect(ids).toContain(1009);
-    // Uncommon
-    expect(ids).toContain(2002);
-    expect(ids).toContain(2010);
+    expect(ids).toContain(1001); // Common
+    expect(ids).toContain(2002); // Uncommon
+    expect(ids).toContain(3001); // Rare
+    expect(ids).toContain(4001); // SuperRare
+    expect(ids).toContain(5001); // Legendary
   });
 
   it("各 skill は heroId / name / cost が必須", () => {

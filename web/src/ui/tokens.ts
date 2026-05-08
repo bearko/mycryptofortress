@@ -196,9 +196,19 @@ export const CLASS_ORDER: HeroClass[] = [
 // ─────────────────────────────────────────────
 // Rarity / Attr
 // ─────────────────────────────────────────────
+/**
+ * SPEC-015 / SPEC-019: レアリティのチップ色 (左上 1 文字バッジ)。
+ *
+ * デザイントークン側では C / U の 2 色のみ定義されているため、Rare 以上は
+ * MCH 公式 UI の慣例 (黄 → 水 → 紫 → 橙 → 赤金) を踏襲した派生値。
+ * Phaser の `setFillStyle` で直接利用するための 0xRRGGBB 数値で保持。
+ */
 export const RARITY: Record<HeroRarity, { hex: ColorNum; label: string; name: string }> = {
   common: { hex: 0xfcd34d, label: "C", name: "Common" },
   uncommon: { hex: 0x60a5fa, label: "U", name: "Uncommon" },
+  rare: { hex: 0xc084fc, label: "R", name: "Rare" }, // purple
+  superRare: { hex: 0xfb923c, label: "SR", name: "SuperRare" }, // orange
+  legendary: { hex: 0xfacc15, label: "L", name: "Legendary" }, // gold
 };
 
 export const ATTR: Record<AttackType, { hex: ColorNum; label: string }> = {
