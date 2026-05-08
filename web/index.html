@@ -34,13 +34,14 @@
         width: 100vw;
         height: 100dvh;
       }
+      /* SPEC-023: image-rendering: pixelated はブラウザの canvas 全体 NEAREST
+         アップスケールを強制する。Retina 環境で日本語テキストを潰す原因なので
+         撤廃。ヒーロー/敵スプライトのドット感は Phaser の NEAREST フィルタで
+         保つので不要。 */
       #app canvas {
         display: block;
         width: 100% !important;
         height: 100% !important;
-        image-rendering: pixelated;
-        image-rendering: -moz-crisp-edges;
-        image-rendering: crisp-edges;
       }
       .loader {
         position: absolute;
