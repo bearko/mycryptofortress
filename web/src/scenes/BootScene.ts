@@ -122,9 +122,13 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
-    // SPEC-002 §5.8: NEAREST フィルタを全テクスチャに明示適用
+    // SPEC-022: ヒーロー / エネミーのピクセルアートだけ NEAREST フィルタで描く。
+    // テキスト / UI 等のテクスチャは LINEAR (デフォルト) のままにすることで
+    // Retina 環境での日本語フォントの粒状を解消する。
     this.textures.each((texture: Phaser.Textures.Texture) => {
-      texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      if (texture.key.startsWith("hero_") || texture.key.startsWith("enemy_")) {
+        texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      }
     }, this);
 
     // SPEC-011: アセット読み込み完了後はワールド選択画面へ
