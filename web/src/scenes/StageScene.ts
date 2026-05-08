@@ -57,8 +57,16 @@ import {
 } from "../game/skill";
 import { SE_KEYS, TEXTURE_KEYS } from "./BootScene";
 import { onResize } from "./layout";
-import { CLASS_COLORS, TILE_COLORS, hex2css, setTheme, theme } from "../ui/tokens";
+import {
+  CLASS_COLORS,
+  TILE_COLORS,
+  hex2css,
+  setTheme,
+  textStyle,
+  theme,
+} from "../ui/tokens";
 import { makeClassIcon } from "../ui/icons";
+import { Bar, Btn, KPI } from "../ui/components";
 
 const HUD_HEIGHT = 144;
 /** SPEC-006 §5.5: Arknights 風サイドパネル領域。ステージ右に常駐。 */
@@ -251,11 +259,15 @@ export class StageScene extends Phaser.Scene {
   /** SPEC-007 §5.1: ユーザーによる明示的な一時停止 */
   private paused = false;
 
-  private hpText!: Phaser.GameObjects.Text;
-  private pauseButtonText!: Phaser.GameObjects.Text;
-  private ceText!: Phaser.GameObjects.Text;
+  /** SPEC-020: HUD は KPI/Bar ヘルパで構成。下記は更新参照のために保持 */
+  private hpBar!: Bar;
+  private hpKPI!: KPI;
+  private ceKPI!: KPI;
+  private ceBar!: Bar;
+  private timeKPI!: KPI;
+  private pauseBtn!: Btn;
+  private speedBtn!: Btn;
   private statusText!: Phaser.GameObjects.Text;
-  private ceBar!: Phaser.GameObjects.Rectangle;
   private heroPaletteEntries: {
     hero: HeroDef;
     container: Phaser.GameObjects.Container;
@@ -265,7 +277,6 @@ export class StageScene extends Phaser.Scene {
 
   /** パネルスロット内の常駐 placeholder（ヒーロー未選択時に表示） */
   private panelPlaceholder: Phaser.GameObjects.Text | null = null;
-  private speedButtonText!: Phaser.GameObjects.Text;
 
   private statusPanel: Phaser.GameObjects.Container | null = null;
   private statusPanelHeroId: number | null = null;
@@ -491,85 +502,119 @@ export class StageScene extends Phaser.Scene {
   private drawHud(): void {
     const hudY = this.stageHeight;
 
-    // 背景（左側のステージ幅分のみ）
+    // 背景（左側のステージ幅分）
     this.add.rectangle(
       this.stageWidth / 2,
       hudY + HUD_HEIGHT / 2,
       this.stageWidth,
       HUD_HEIGHT,
-      theme.bg.base,
+      theme.bg.surface,
       1,
     );
     this.add
       .line(0, 0, 0, hudY, this.stageWidth, hudY, theme.line.base, 1)
       .setOrigin(0, 0);
 
-    // SPEC-006 §5.3 + SPEC-007 §5.2: 上段ステータス行 — BASE HP / CE 数値 / 1秒ゲージ / 一時停止 / 速度
-    this.hpText = this.add.text(10, hudY + 6, "", {
-      fontSize: "14px",
-      color: hex2css(theme.accent.danger),
-      fontStyle: "bold",
-    });
-    this.ceText = this.add.text(140, hudY + 6, "", {
-      fontSize: "18px",
-      color: hex2css(theme.ink.primary),
-      fontStyle: "bold",
-    });
-    // SPEC-007 §5.2: CE 数値 (3桁まで想定) を 80px 確保 → ゲージは x=240 から
-    this.add.rectangle(240, hudY + 16, 90, 6, theme.bg.overlay).setOrigin(0, 0.5);
-    this.ceBar = this.add
-      .rectangle(240, hudY + 16, 0, 6, theme.accent.primary)
-      .setOrigin(0, 0.5);
+    // SPEC-020 §HUD: KPI / Bar / Btn ヘルパ構成へ刷新。
+    // 上段 (32px): WORLD/STAGE | BASE HP bar | CE KPI+bar | TIME KPI | PAUSE | SPEED
+
+    // 左上: WORLD-XX / STAGE-YY ラベル
+    const worldStageLabel = this.currentStage
+      ? `${this.currentStage.worldId.toUpperCase()} / STAGE-${this.currentStage.id}`
+      : "STAGE";
     this.add
-      .text(335, hudY + 16, "/秒", {
-        fontSize: "10px",
-        color: hex2css(theme.accent.primary),
+      .text(10, hudY + 6, worldStageLabel, {
+        ...textStyle("badge", { colorNum: theme.ink.tertiary }),
       })
-      .setOrigin(0, 0.5);
+      .setOrigin(0, 0);
+    if (this.currentStage) {
+      this.add
+        .text(10, hudY + 18, this.currentStage.name, {
+          ...textStyle("small", { colorNum: theme.ink.primary }),
+          fontStyle: "bold",
+        })
+        .setOrigin(0, 0);
+    }
 
-    // SPEC-007 §5.1: 一時停止 / 再生 トグル（速度トグルの左隣）
-    const pBtnX = this.stageWidth - 124;
-    const pBtnY = hudY + 16;
-    const pBorder = this.add.rectangle(pBtnX, pBtnY, 56, 22, theme.bg.surface, 1);
-    pBorder.setStrokeStyle(1, theme.line.weak);
-    pBorder.setInteractive({ useHandCursor: true });
-    this.pauseButtonText = this.add
-      .text(pBtnX, pBtnY, "⏸ 停止", {
-        fontSize: "11px",
-        color: hex2css(theme.accent.danger),
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5);
-    this.add.container(0, 0, [pBorder, this.pauseButtonText]);
-    pBorder.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      if (pointer.rightButtonDown()) return;
-      this.togglePause();
+    // BASE HP — ラベル + Bar
+    const hpX = 170;
+    this.hpKPI = new KPI(this, {
+      x: hpX,
+      y: hudY + 4,
+      label: "BASE HP",
+      value: `${this.baseHp} / ${this.maxBaseHp}`,
+      colorNum: theme.accent.danger,
+    });
+    this.hpBar = new Bar(this, {
+      x: hpX,
+      y: hudY + 30,
+      width: 110,
+      height: 6,
+      value: this.baseHp,
+      max: this.maxBaseHp,
+      color: theme.accent.danger,
+      segments: this.maxBaseHp,
+      glow: true,
     });
 
-    // SPEC-006: 再生速度トグル（HUD 右上）
-    const sBtnX = this.stageWidth - 48;
-    const sBtnY = hudY + 16;
-    const sBorder = this.add.rectangle(sBtnX, sBtnY, 70, 22, theme.bg.surface, 1);
-    sBorder.setStrokeStyle(1, theme.line.weak);
-    sBorder.setInteractive({ useHandCursor: true });
-    this.speedButtonText = this.add
-      .text(sBtnX, sBtnY, "1.0×", {
-        fontSize: "11px",
-        color: hex2css(theme.accent.primary),
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5);
-    this.add.container(0, 0, [sBorder, this.speedButtonText]);
-    sBorder.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      if (pointer.rightButtonDown()) return;
-      this.togglePlaySpeed();
+    // CE — KPI + 1 秒ゲージ
+    const ceX = 300;
+    this.ceKPI = new KPI(this, {
+      x: ceX,
+      y: hudY + 4,
+      label: "CE",
+      value: `${Math.floor(this.ce)}`,
+      colorNum: theme.accent.warn,
+    });
+    this.ceBar = new Bar(this, {
+      x: ceX,
+      y: hudY + 30,
+      width: 90,
+      height: 6,
+      value: 0,
+      max: 1,
+      color: theme.accent.primary,
+    });
+
+    // TIME — KPI（毎フレーム更新）
+    const timeX = 420;
+    this.timeKPI = new KPI(this, {
+      x: timeX,
+      y: hudY + 4,
+      label: "TIME",
+      value: "00:00",
+      colorNum: theme.ink.primary,
+    });
+
+    // PAUSE / SPEED ボタン (右端)
+    const btnY = hudY + 18;
+    this.pauseBtn = new Btn(this, {
+      x: this.stageWidth - 124,
+      y: btnY,
+      width: 64,
+      height: 22,
+      size: "sm",
+      kind: "secondary",
+      label: "⏸ PAUSE",
+      onClick: () => this.togglePause(),
+    });
+    this.speedBtn = new Btn(this, {
+      x: this.stageWidth - 50,
+      y: btnY,
+      width: 56,
+      height: 22,
+      size: "sm",
+      kind: "primary",
+      label: "1.0×",
+      onClick: () => this.togglePlaySpeed(),
     });
 
     // SPEC-006 §5.3 / SPEC-015: パレットは現在の party から動的に作る。
     // パーティ枠は最大 10 体、stageWidth 640 / 10 = 64px。8 体なら 80px。
     const partyHeroes = this.partyHeroes;
     const slotW = this.stageWidth / Math.max(1, partyHeroes.length);
-    const palTop = hudY + 32;
+    // SPEC-020: 上段 KPI ストリップ (44px) を空けて palette を下げる
+    const palTop = hudY + 46;
     partyHeroes.forEach((hero, i) => {
       const cx = slotW * i + slotW / 2;
       const slotCenterY = palTop + 41; // 高さ ~82
@@ -630,10 +675,10 @@ export class StageScene extends Phaser.Scene {
       });
     });
 
-    // 下段ステータステキスト
+    // 下段ステータステキスト (palette 直下)
     this.statusText = this.add.text(
       10,
-      hudY + 124,
+      hudY + 132,
       "ヒーローアイコンをタップ → タイルへドラッグして配置",
       { fontSize: "11px", color: hex2css(theme.ink.tertiary) },
     );
@@ -1446,6 +1491,17 @@ export class StageScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * SPEC-020 §カットイン: design ハンドオフのモーション仕様に置換。
+   *
+   * - 上下スイープ: 700ms cubic-bezier(.2,.8,.2,1) で `translateY(-100%) → 0
+   *   → -100%`（下スイープは逆方向）。dark gradient の対角ポリゴン。
+   * - speed line: 700ms linear で alpha 0 → 0.6 → 0、職業色の細線が 105°
+   *   方向に流れる。
+   * - portrait + name: 560ms cubic-bezier(.16,.7,.2,1.05)、scale 0.85 →
+   *   1.04 → 1 + 100ms delay。
+   * - 全体は 1500ms で fade out。
+   */
   private playCutIn(hero: PlacedHero): void {
     if (!hero.skill) return;
     if (this.currentCutIn) {
@@ -1457,122 +1513,186 @@ export class StageScene extends Phaser.Scene {
     const stageH = this.stageHeight;
     const cx = stageW / 2;
     const cy = stageH / 2;
-    // バンドはステージ幅より広く、左右にはみ出るサイズで作る（スライド時の見切れ防止）
-    const bandW = stageW * 1.4;
-    const bandH = 120;
+    const classColor = CLASS_AURA_COLOR[hero.def.class];
 
-    // ── 背景バンド（2 色対角分割）
-    // ally 色: 青系 / opponent 色: 赤系。マイクリでは「自分のヒーロー＝ally」で青系。
-    // ここではプレイヤーのヒーロー＝ ally として固定。
-    const LIGHT = 0x609da8;
-    const DARK = 0x282b33;
-    const SHINE = 0x05599a; // shine animation の上塗り色
+    // 全体 root container (alpha フェードアウト用)
+    const root = this.add.container(0, 0);
+    root.setDepth(95);
 
-    const bg = this.add.graphics();
-    bg.fillStyle(DARK, 1);
-    bg.fillRect(-bandW / 2, -bandH / 2, bandW, bandH);
-    // 左下三角形（top-left → top-right → bottom-left の領域 = "to right bottom" の前半 50%）
-    bg.fillStyle(LIGHT, 1);
-    bg.fillTriangle(
-      -bandW / 2,
-      -bandH / 2,
-      bandW / 2,
-      -bandH / 2,
-      -bandW / 2,
-      bandH / 2,
+    // ── 上スイープ: 上半分を覆う dark ポリゴン (cutoff 80% 下端で斜めに切れる)
+    // path: (0,0) → (stageW, 0) → (stageW, 0.8 stageH) → (0, stageH)
+    const upper = this.add.graphics();
+    upper.fillStyle(theme.bg.base, 0.94);
+    upper.fillPoints(
+      [
+        { x: 0, y: 0 },
+        { x: stageW, y: 0 },
+        { x: stageW, y: stageH * 0.4 },
+        { x: 0, y: stageH * 0.5 },
+      ],
+      true,
     );
+    upper.y = -stageH; // off-screen 上から開始
+    root.add(upper);
 
-    // ── シャイン（薄いブルーが点滅して動感を出す）
-    const shine = this.add.graphics();
-    shine.fillStyle(SHINE, 0.5);
-    shine.fillRect(-bandW / 2, -bandH / 2, bandW, bandH);
-    shine.setAlpha(0.3);
+    // ── 下スイープ: 下半分を覆う dark ポリゴン (上端で斜めにえぐれる)
+    const lower = this.add.graphics();
+    lower.fillStyle(theme.bg.base, 0.94);
+    lower.fillPoints(
+      [
+        { x: 0, y: stageH * 0.5 },
+        { x: stageW, y: stageH * 0.4 },
+        { x: stageW, y: stageH },
+        { x: 0, y: stageH },
+      ],
+      true,
+    );
+    lower.y = stageH; // off-screen 下から
+    root.add(lower);
 
-    // ── 三角形の装飾片（mix-blend-mode:color-dodge の代わりに加算ぽい色で 2 個だけ置く）
-    const tri1 = this.add.graphics();
-    tri1.fillStyle(0x80c8d8, 0.8);
-    tri1.fillTriangle(-bandW * 0.25, 0, -bandW * 0.18, -bandH / 2, -bandW * 0.32, -bandH / 2);
-    const tri2 = this.add.graphics();
-    tri2.fillStyle(0x80c8d8, 0.6);
-    tri2.fillTriangle(bandW * 0.18, 0, bandW * 0.28, bandH / 2, bandW * 0.10, bandH / 2);
+    // ── speed line: 105° (rad ≒ 1.832) で職業色のストライプを敷く
+    const lines = this.add.graphics();
+    lines.lineStyle(1, classColor, 0.55);
+    const angleRad = Phaser.Math.DegToRad(105);
+    const dx = Math.cos(angleRad);
+    const dy = Math.sin(angleRad);
+    // 画面対角の長さ + マージン
+    const diag = Math.sqrt(stageW * stageW + stageH * stageH) * 1.2;
+    // 22px 間隔で平行線を引く
+    for (let t = -diag; t <= diag; t += 22) {
+      const x1 = cx + t * dy + dx * (-diag / 2);
+      const y1 = cy - t * dx + dy * (-diag / 2);
+      const x2 = cx + t * dy + dx * (diag / 2);
+      const y2 = cy - t * dx + dy * (diag / 2);
+      lines.lineBetween(x1, y1, x2, y2);
+    }
+    lines.setAlpha(0);
+    root.add(lines);
 
-    // ── ヒーロー portrait（image-rendering: pixelated を効かすため scale を整数で）
-    // CSS は max-width 128px / scale(2) なので実効 256px。Phaser 側では 96 にしておく。
-    // SPEC-008 §5.4: 旧 -0.32（左端寄り）→ -0.18（少し中央寄り）に調整。
-    // スキル名と被らないよう、テキスト側も右に寄せる。
-    const portraitX = -bandW * 0.18;
+    // ── ポートレート + テキスト (中央スタック)
+    const heroBlock = this.add.container(cx, cy);
+
+    // ポートレート枠 (140×140)
+    const frame = this.add.graphics();
+    frame.fillStyle(classColor, 0.18);
+    frame.fillRect(-70, -70, 140, 140);
+    frame.lineStyle(2, classColor, 1);
+    frame.strokeRect(-70, -70, 140, 140);
+    heroBlock.add(frame);
+
     const portrait = this.add
-      .sprite(portraitX, 0, TEXTURE_KEYS.hero(hero.def.id))
-      .setDisplaySize(96, 96);
+      .sprite(0, 0, TEXTURE_KEYS.hero(hero.def.id))
+      .setDisplaySize(120, 120);
+    heroBlock.add(portrait);
 
-    // ── スキル名 + ヒーロー名（portrait の右側に十分余白を取って配置）
-    const textX = bandW * 0.12;
-    const skillName = this.add
-      .text(textX, -14, hero.skill.name, {
-        fontSize: "30px",
+    // 右側のテキストブロック (heroBlock 内座標)
+    const textBlock = this.add.container(110, 0);
+    const skillActivate = this.add
+      .text(0, -42, "SKILL ACTIVATE", {
+        ...textStyle("badge", { colorNum: classColor }),
+      })
+      .setOrigin(0, 0.5);
+    const heroName = this.add
+      .text(0, -14, hero.def.name, {
+        fontFamily: "'Zen Kaku Gothic New', 'Noto Sans JP', system-ui, sans-serif",
+        fontSize: "26px",
         color: hex2css(theme.ink.primary),
         fontStyle: "bold",
       })
-      .setOrigin(0.5);
-    const heroName = this.add
-      .text(textX, 22, `${CLASS_LABEL[hero.def.class]}・${hero.def.name}`, {
-        fontSize: "14px",
-        color: hex2css(theme.ink.primary),
+      .setOrigin(0, 0.5);
+    const skillName = this.add
+      .text(0, 22, `『${hero.skill.name}』`, {
+        fontFamily: "'Zen Kaku Gothic New', 'Noto Sans JP', system-ui, sans-serif",
+        fontSize: "18px",
+        color: hex2css(classColor),
+        fontStyle: "bold",
       })
-      .setOrigin(0.5);
+      .setOrigin(0, 0.5);
+    textBlock.add([skillActivate, heroName, skillName]);
+    heroBlock.add(textBlock);
 
-    // ── コンテナにまとめて、中心へ配置 + 10° 回転（skewY 代用）
-    const container = this.add.container(cx, cy, [
-      bg,
-      shine,
-      tri1,
-      tri2,
-      portrait,
-      skillName,
-      heroName,
-    ]);
-    container.setAngle(-10);
-    container.setDepth(95);
+    heroBlock.setScale(0.85);
+    heroBlock.setAlpha(0);
+    root.add(heroBlock);
 
-    // 初期位置: 右側からスライドイン
-    container.x = cx + stageW;
-    this.currentCutIn = container;
+    this.currentCutIn = root;
 
-    // シャイン点滅（持続中ずっと動かす）
-    const shineTween = this.tweens.add({
-      targets: shine,
-      alpha: { from: 0.3, to: 0.85 },
-      duration: 500,
+    // ── アニメーション: 上下 sweep
+    this.tweens.add({
+      targets: upper,
+      y: 0,
+      duration: 350,
+      ease: "Cubic.easeOut",
+      hold: 350,
       yoyo: true,
-      repeat: -1,
-      ease: "Sine.easeInOut",
+      onYoyo: () => {
+        // 折返し時に画面外（上）方向へ
+        this.tweens.add({
+          targets: upper,
+          y: -stageH,
+          duration: 350,
+          ease: "Cubic.easeIn",
+        });
+      },
+    });
+    this.tweens.add({
+      targets: lower,
+      y: 0,
+      duration: 350,
+      ease: "Cubic.easeOut",
+      hold: 350,
+      yoyo: true,
+      onYoyo: () => {
+        this.tweens.add({
+          targets: lower,
+          y: stageH,
+          duration: 350,
+          ease: "Cubic.easeIn",
+        });
+      },
     });
 
-    // スライドイン → ホールド → スライドアウト の 3 段
+    // speed line: 0 → 0.6 → 0 over 700ms
     this.tweens.add({
-      targets: container,
-      x: cx,
-      duration: 220,
-      ease: "Sine.easeOut",
+      targets: lines,
+      alpha: 0.6,
+      duration: 200,
+      yoyo: true,
+      hold: 300,
+    });
+
+    // portrait + text: scale 0.85 → 1.04 → 1, alpha 0 → 1, delay 100ms
+    this.tweens.add({
+      targets: heroBlock,
+      alpha: 1,
+      duration: 200,
+      delay: 100,
+    });
+    this.tweens.add({
+      targets: heroBlock,
+      scale: 1.04,
+      duration: 360,
+      delay: 100,
+      ease: "Cubic.easeOut",
       onComplete: () => {
         this.tweens.add({
-          targets: container,
-          x: cx,
-          duration: 600,
-          onComplete: () => {
-            this.tweens.add({
-              targets: container,
-              x: cx - stageW,
-              duration: 220,
-              ease: "Sine.easeIn",
-              onComplete: () => {
-                shineTween.stop();
-                if (this.currentCutIn === container) this.currentCutIn = null;
-                container.destroy(true);
-              },
-            });
-          },
+          targets: heroBlock,
+          scale: 1.0,
+          duration: 200,
+          ease: "Sine.easeOut",
         });
+      },
+    });
+
+    // 全体 1500ms 後にフェードアウト → destroy
+    this.tweens.add({
+      targets: root,
+      alpha: 0,
+      duration: 250,
+      delay: 1250,
+      onComplete: () => {
+        if (this.currentCutIn === root) this.currentCutIn = null;
+        root.destroy(true);
       },
     });
   }
@@ -1891,11 +2011,8 @@ export class StageScene extends Phaser.Scene {
   }
 
   private refreshSpeedButton(): void {
-    this.speedButtonText.setText(`${this.playSpeed.toFixed(1)}×`);
-    if (this.pauseButtonText) {
-      this.pauseButtonText.setText(this.paused ? "▶ 再生" : "⏸ 停止");
-      this.pauseButtonText.setColor(this.paused ? hex2css(theme.accent.success) : hex2css(theme.accent.danger));
-    }
+    this.speedBtn?.setLabel(`${this.playSpeed.toFixed(1)}×`);
+    this.pauseBtn?.setLabel(this.paused ? "▶ RESUME" : "⏸ PAUSE");
   }
 
   // ========== ループ ==========
@@ -2448,11 +2565,16 @@ export class StageScene extends Phaser.Scene {
   }
 
   private refreshHud(): void {
-    this.hpText.setText(`BASE HP  ${this.baseHp} / ${this.maxBaseHp}`);
-    // SPEC-006 §5.4: CE は数値のみ。最大値は表示しない（増えなくなったら最大）
-    this.ceText.setText(`CE  ${Math.floor(this.ce)}`);
+    this.hpKPI.setValue(`${this.baseHp} / ${this.maxBaseHp}`);
+    this.hpBar.setValue(this.baseHp, this.maxBaseHp);
+    this.ceKPI.setValue(`${Math.floor(this.ce)}`);
     // 1 秒ゲージ: ceProgress (0..1)
-    this.ceBar.width = 90 * Math.min(1, this.ceProgress);
+    this.ceBar.setValue(Math.min(1, this.ceProgress), 1);
+    // 経過秒を mm:ss 形式で
+    const total = Math.floor(this.elapsed);
+    const mm = Math.floor(total / 60).toString().padStart(2, "0");
+    const ss = (total % 60).toString().padStart(2, "0");
+    this.timeKPI.setValue(`${mm}:${ss}`);
     this.refreshPaletteHighlight();
   }
 
