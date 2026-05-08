@@ -25,7 +25,7 @@ import type {
   SpawnPattern,
   TilePos,
 } from "../game/types";
-import { calculateDamage } from "../game/damage";
+import { calculateDamage, calculateHeal } from "../game/damage";
 import {
   applyPatternToTile,
   directionFromDelta,
@@ -1127,7 +1127,7 @@ export class StageScene extends Phaser.Scene {
     const skill = hero.skill;
 
     // オーラ表示（持続効果のみ）
-    if (skill.effectType !== "singleStrike") {
+    if (skill.effectType !== "singleStrike" && skill.effectType !== "heal") {
       hero.aura?.destroy();
       const aura = this.add.circle(
         hero.sprite.x,
@@ -1163,6 +1163,41 @@ export class StageScene extends Phaser.Scene {
         const target = this.findTargetByRouteProgress(hero);
         if (target) {
           this.fireBullet(hero, target, skill.value);
+        }
+        break;
+      }
+      case "heal": {
+        // SPEC-009 §5.5: 攻撃範囲内の味方ヒーロー（自分含む）を回復
+        const allies = this.findAlliesInPattern(hero);
+        for (const ally of allies) {
+          const heal = calculateHeal({
+            attackType: hero.def.attackType,
+            casterPhy: hero.def.phy,
+            casterInt: hero.def.int,
+            targetPhyDef: ally.def.phyDef,
+            targetIntDef: ally.def.intDef,
+            healRate: skill.value,
+          });
+          ally.currentHp = Math.min(ally.maxHp, ally.currentHp + heal);
+          // ヒーラー演出: 緑のフラッシュ
+          const heart = this.add
+            .text(ally.sprite.x, ally.sprite.y - 16, `+${Math.floor(heal)}`, {
+              fontSize: "13px",
+              color: "#86efac",
+              fontStyle: "bold",
+              stroke: "#0b0d12",
+              strokeThickness: 3,
+            })
+            .setOrigin(0.5)
+            .setDepth(60);
+          this.tweens.add({
+            targets: heart,
+            y: heart.y - 26,
+            alpha: 0,
+            duration: 900,
+            ease: "Cubic.easeOut",
+            onComplete: () => heart.destroy(),
+          });
         }
         break;
       }
@@ -1344,6 +1379,19 @@ export class StageScene extends Phaser.Scene {
       if (!eTile) return false;
       return tiles.some((t) => tileEquals(t, eTile));
     });
+  }
+
+  /** SPEC-009 §5.5: 攻撃範囲内の味方ヒーロー（自分含む）を返す */
+  private findAlliesInPattern(hero: PlacedHero): PlacedHero[] {
+    const tiles = this.effectiveAttackTiles(hero);
+    const result: PlacedHero[] = [hero];
+    for (const ally of this.placedHeroes) {
+      if (ally === hero) continue;
+      if (tiles.some((t) => tileEquals(t, ally.tile))) {
+        result.push(ally);
+      }
+    }
+    return result;
   }
 
   // ========== ヒーロー詳細パネル ==========
@@ -2046,12 +2094,12 @@ export class StageScene extends Phaser.Scene {
    * そのブロック元ヒーローを melee 攻撃する。攻撃間隔 1 秒（Unity 版準拠）。
    */
   private tickEnemyAttacks(): void {
-    const ENEMY_ATTACK_INTERVAL = 1.0;
     for (const enemy of this.enemies) {
       if (!enemy.blockedBy) continue;
       const target = enemy.blockedBy;
       if (target.currentHp <= 0) continue;
-      if (this.elapsed - enemy.lastAttackAt < ENEMY_ATTACK_INTERVAL) continue;
+      // SPEC-009 §5.6: 攻撃間隔は EnemyDef から取得
+      if (this.elapsed - enemy.lastAttackAt < enemy.def.attackInterval) continue;
       enemy.lastAttackAt = this.elapsed;
       this.fireEnemyBullet(enemy, target);
     }

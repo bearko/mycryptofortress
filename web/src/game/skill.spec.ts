@@ -29,10 +29,13 @@ describe("SKILLS テーブル", () => {
     }
   });
 
-  it("singleStrike は durationSec=0、それ以外は >0", () => {
+  it("singleStrike / heal は durationSec=0、それ以外は >0", () => {
     for (const s of SKILLS) {
-      if (s.effectType === "singleStrike") expect(s.durationSec).toBe(0);
-      else expect(s.durationSec).toBeGreaterThan(0);
+      if (s.effectType === "singleStrike" || s.effectType === "heal") {
+        expect(s.durationSec).toBe(0);
+      } else {
+        expect(s.durationSec).toBeGreaterThan(0);
+      }
     }
   });
 
