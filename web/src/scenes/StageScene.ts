@@ -66,7 +66,7 @@ import {
   theme,
 } from "../ui/tokens";
 import { makeClassIcon } from "../ui/icons";
-import { Bar, Btn, KPI } from "../ui/components";
+import { Bar, Btn, Card, KPI, StatGrid } from "../ui/components";
 
 // SPEC-024 / SPEC-026: KPI 値 (20px) と Bar (6px) が縦衝突しないよう HUD_HEIGHT
 // を 144 → 156 に拡張。bar / palette / status text もこれに合わせて下げる。
@@ -2155,12 +2155,45 @@ export class StageScene extends Phaser.Scene {
   }
 
   /**
-   * SPEC-029: 縦画面用 — アークナイツ風の右側スライドパネル。
-   *
-   * - ステージ (worldRoot) を左にずらして横方向に縮小し、空いた右領域に
-   *   詳細パネルを表示する。背景はグレーアウトしないので、パネル表示中も
-   *   ステージの様子を確認できる。
-   * - パネル幅は viewport の 50% （min 180 / max 240）。
+   * SPEC-030 / F3a: ヒーロー詳細のステータス行を生成。
+   * portrait / landscape 両方で同じデータを使う（ラベル冗長度だけ切替）。
+   */
+  private buildStatRows(
+    hero: PlacedHero,
+    compact: boolean,
+  ): Array<[string, string]> {
+    const interval = (1 / Math.max(0.1, hero.def.agi / 100)).toFixed(2);
+    const tilesCount = hero.def.attackPattern.length;
+    if (compact) {
+      return [
+        ["属性", `${hero.def.attackType}`],
+        ["HP", `${hero.def.hp}`],
+        ["PHY", `${hero.def.phy}`],
+        ["INT", `${hero.def.int}`],
+        ["AGI", `${hero.def.agi}`],
+        ["間隔", `${interval}s`],
+        ["範囲", `${tilesCount}マス(${hero.direction})`],
+        ["block", `${hero.blockNum}/${blockMaxFor(hero.def.class)}`],
+        ["cost", `${hero.def.cost} CE`],
+      ];
+    }
+    return [
+      ["属性", hero.def.attackType],
+      ["HP", `${hero.def.hp}`],
+      ["PHY", `${hero.def.phy}`],
+      ["INT", `${hero.def.int}`],
+      ["AGI", `${hero.def.agi}`],
+      ["攻撃間隔", `${interval}s`],
+      ["攻撃範囲", `${tilesCount} マス（${hero.direction} 向き）`],
+      ["ブロック", `${hero.blockNum} / ${blockMaxFor(hero.def.class)}`],
+      ["コスト", `${hero.def.cost} CE`],
+    ];
+  }
+
+  /**
+   * SPEC-029 / SPEC-030 F3a: 縦画面用ヒーロー詳細パネル。
+   * Card + StatGrid + Bar + Btn のプリミティブを組み合わせて構築する
+   * (アークナイツ風サイドパネル + ステージ縮小)。
    */
   private openStatusPanelPortrait(hero: PlacedHero): void {
     const vpW = this.scale.width;
@@ -2169,234 +2202,171 @@ export class StageScene extends Phaser.Scene {
     const layout = this.computePortraitLayout();
     const panelW = Math.min(240, Math.max(180, Math.floor(vpW * 0.5)));
     const PAD = 12;
+    const innerW = panelW - PAD * 2;
 
     // ステージを左寄せ + 縮小して、右側に panel 領域を空ける
     const newAvailW = vpW - panelW - PAD * 2;
     const newScale = Math.max(0.1, newAvailW / this.stageWidth);
     const newMapX = PAD;
 
-    // ── パネル本体 (右側) ──
-    // パネル左端 = vpW - panelW、上端 = layout.hudH（HUD はそのまま全幅）
     const panelX = vpW - panelW;
     const panelTop = layout.hudH;
     const panelH = vpH - panelTop;
 
-    const interval = (1 / Math.max(0.1, hero.def.agi / 100)).toFixed(2);
-    const tilesCount = hero.def.attackPattern.length;
     const ready = canActivate(hero.skillGauge) && hero.skill !== null;
 
-    const items: Phaser.GameObjects.GameObject[] = [];
-    const innerW = panelW - PAD * 2;
-    const cursor = { y: PAD };
-
-    // 背景 (内容の前面に置くので最初に作る)
-    const panelBg = this.add
-      .rectangle(0, 0, panelW, panelH, theme.bg.surface, 0.98)
-      .setOrigin(0, 0)
-      .setStrokeStyle(1, theme.line.weak);
-    items.push(panelBg);
-
-    // タイトル
-    const title = this.add
-      .text(panelW / 2, cursor.y, hero.def.name, {
-        fontSize: "16px",
-        color: hex2css(theme.ink.primary),
-        fontStyle: "bold",
-        align: "center",
-        wordWrap: { width: innerW, useAdvancedWrap: true },
-      })
-      .setOrigin(0.5, 0);
-    items.push(title);
-    cursor.y += title.height + 2;
-
-    const subTitle = this.add
-      .text(panelW / 2, cursor.y, `[${CLASS_LABEL[hero.def.class]}]`, {
-        fontSize: "12px",
-        color: hex2css(theme.accent.primary),
-      })
-      .setOrigin(0.5, 0);
-    items.push(subTitle);
-    cursor.y += subTitle.height + 8;
-
-    // ポートレート (中央に大きく)
-    const PORTRAIT_SIZE = Math.min(120, innerW - 8);
-    const portrait = this.add
-      .sprite(panelW / 2, cursor.y + PORTRAIT_SIZE / 2, TEXTURE_KEYS.hero(hero.def.id))
-      .setDisplaySize(PORTRAIT_SIZE, PORTRAIT_SIZE);
-    items.push(portrait);
-    cursor.y += PORTRAIT_SIZE + 10;
-
-    // ステータス (2 列レイアウト)
-    const statPairs: Array<[string, string]> = [
-      ["属性", `${hero.def.attackType}`],
-      ["HP", `${hero.def.hp}`],
-      ["PHY", `${hero.def.phy}`],
-      ["INT", `${hero.def.int}`],
-      ["AGI", `${hero.def.agi}`],
-      ["間隔", `${interval}s`],
-      ["範囲", `${tilesCount}マス(${hero.direction})`],
-      ["block", `${hero.blockNum}/${blockMaxFor(hero.def.class)}`],
-      ["cost", `${hero.def.cost} CE`],
-    ];
-    const statLineH = 16;
-    statPairs.forEach((pair, i) => {
-      const labelText = this.add
-        .text(PAD, cursor.y + i * statLineH, pair[0], {
-          fontSize: "12px",
-          color: hex2css(theme.ink.tertiary),
-        })
-        .setOrigin(0, 0);
-      const valueText = this.add
-        .text(panelW - PAD, cursor.y + i * statLineH, pair[1], {
-          fontSize: "12px",
-          color: hex2css(theme.ink.primary),
-          fontStyle: "bold",
-        })
-        .setOrigin(1, 0);
-      items.push(labelText, valueText);
+    // Card がパネル surface (bg + border) と title/subtitle を担当
+    const card = new Card(this, {
+      x: 0,
+      y: 0,
+      width: panelW,
+      height: panelH,
+      title: hero.def.name,
+      subtitle: `[${CLASS_LABEL[hero.def.class]}]`,
+      alpha: 0.98,
     });
-    cursor.y += statPairs.length * statLineH + 10;
+
+    let cursor = card.contentTop + 4;
+
+    // ポートレート
+    const PORTRAIT_SIZE = Math.min(120, innerW - 8);
+    const portraitSprite = this.add
+      .sprite(panelW / 2, cursor + PORTRAIT_SIZE / 2, TEXTURE_KEYS.hero(hero.def.id))
+      .setDisplaySize(PORTRAIT_SIZE, PORTRAIT_SIZE);
+    card.add(portraitSprite);
+    cursor += PORTRAIT_SIZE + 10;
+
+    // ステータスグリッド
+    const statGrid = new StatGrid(this, {
+      x: PAD,
+      y: cursor,
+      width: innerW,
+      rows: this.buildStatRows(hero, true),
+      rowHeight: 16,
+      step: "caption",
+    });
+    card.add(statGrid);
+    cursor += statGrid.height + 10;
 
     // 区切り線
     const sepLine = this.add
-      .line(0, cursor.y, PAD, 0, panelW - PAD, 0, theme.line.weak, 1)
+      .line(0, cursor, PAD, 0, panelW - PAD, 0, theme.line.weak, 1)
       .setOrigin(0, 0.5);
-    items.push(sepLine);
-    cursor.y += 8;
+    card.add(sepLine);
+    cursor += 8;
 
     // スキル
     const skillTitle = this.add
-      .text(panelW / 2, cursor.y, "スキル", {
-        fontSize: "12px",
-        color: hex2css(theme.accent.warn),
+      .text(panelW / 2, cursor, "スキル", {
+        ...textStyle("caption", { colorNum: theme.accent.warn }),
         fontStyle: "bold",
       })
       .setOrigin(0.5, 0);
-    items.push(skillTitle);
-    cursor.y += skillTitle.height + 4;
+    card.add(skillTitle);
+    cursor += skillTitle.height + 4;
 
     if (hero.skill) {
       const skillName = this.add
-        .text(panelW / 2, cursor.y, hero.skill.name, {
-          fontSize: "14px",
-          color: hex2css(theme.ink.primary),
+        .text(panelW / 2, cursor, hero.skill.name, {
+          ...textStyle("body", { colorNum: theme.ink.primary }),
           fontStyle: "bold",
           align: "center",
           wordWrap: { width: innerW, useAdvancedWrap: true },
         })
         .setOrigin(0.5, 0);
-      items.push(skillName);
-      cursor.y += skillName.height + 4;
+      card.add(skillName);
+      cursor += skillName.height + 4;
 
       const skillDesc = this.add
-        .text(panelW / 2, cursor.y, hero.skill.description, {
-          fontSize: "11px",
-          color: hex2css(theme.ink.secondary),
+        .text(panelW / 2, cursor, hero.skill.description, {
+          ...textStyle("caption", { colorNum: theme.ink.secondary }),
           align: "center",
           wordWrap: { width: innerW, useAdvancedWrap: true },
           lineSpacing: 2,
         })
         .setOrigin(0.5, 0);
-      items.push(skillDesc);
-      cursor.y += skillDesc.height + 8;
+      card.add(skillDesc);
+      cursor += skillDesc.height + 8;
     } else {
       const noSkill = this.add
-        .text(panelW / 2, cursor.y, "（スキル無し）", {
-          fontSize: "11px",
-          color: hex2css(theme.ink.tertiary),
+        .text(panelW / 2, cursor, "（スキル無し）", {
+          ...textStyle("caption", { colorNum: theme.ink.tertiary }),
         })
         .setOrigin(0.5, 0);
-      items.push(noSkill);
-      cursor.y += noSkill.height + 8;
+      card.add(noSkill);
+      cursor += noSkill.height + 8;
     }
 
-    // ゲージ
-    const gaugeW = innerW;
-    const gaugeH = 8;
-    const gaugeBg = this.add
-      .rectangle(PAD, cursor.y + gaugeH / 2, gaugeW, gaugeH, theme.bg.overlay, 1)
-      .setOrigin(0, 0.5);
-    const fillW = gaugeW * (hero.skillGauge / GAUGE_MAX);
-    const gaugeFill = this.add
-      .rectangle(PAD, cursor.y + gaugeH / 2, fillW, gaugeH, theme.accent.warn)
-      .setOrigin(0, 0.5);
-    items.push(gaugeBg, gaugeFill);
-    cursor.y += gaugeH + 4;
+    // ゲージ (Bar primitive を使用)
+    const gauge = new Bar(this, {
+      x: PAD,
+      y: cursor + 4,
+      width: innerW,
+      height: 8,
+      value: hero.skillGauge,
+      max: GAUGE_MAX,
+      color: theme.accent.warn,
+    });
+    card.add(gauge);
+    cursor += 12;
 
     const gaugeLabel = this.add
-      .text(panelW / 2, cursor.y, `${Math.floor(hero.skillGauge)} / ${GAUGE_MAX}`, {
-        fontSize: "11px",
-        color: hex2css(theme.accent.primary),
+      .text(panelW / 2, cursor, `${Math.floor(hero.skillGauge)} / ${GAUGE_MAX}`, {
+        ...textStyle("caption", { colorNum: theme.accent.primary }),
       })
       .setOrigin(0.5, 0);
-    items.push(gaugeLabel);
-    cursor.y += gaugeLabel.height + 8;
+    card.add(gaugeLabel);
+    cursor += gaugeLabel.height + 8;
 
     // 発動ボタン
     const btnH = 38;
-    const btnY = cursor.y + btnH / 2;
-    const activateBg = this.add.rectangle(
-      panelW / 2,
-      btnY,
-      innerW,
-      btnH,
-      ready ? theme.accent.warn : theme.line.base,
-      0.95,
-    );
-    activateBg.setStrokeStyle(2, ready ? theme.accent.primary : theme.line.bright);
-    if (ready) activateBg.setInteractive({ useHandCursor: true });
-    const activateText = this.add
-      .text(panelW / 2, btnY, ready ? "▶ スキル発動" : "ゲージ不足", {
-        fontSize: "14px",
-        color: ready ? hex2css(theme.ink.inverse) : hex2css(theme.ink.tertiary),
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5);
-    if (ready) {
-      activateBg.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-        if (pointer.rightButtonDown()) return;
-        this.activateSkillFromPanel(hero);
-      });
-    }
-    items.push(activateBg, activateText);
-    cursor.y += btnH + 8;
+    const activateBtn = new Btn(this, {
+      x: panelW / 2,
+      y: cursor + btnH / 2,
+      width: innerW,
+      height: btnH,
+      kind: ready ? "solid" : "secondary",
+      label: ready ? "▶ スキル発動" : "ゲージ不足",
+      onClick: ready ? () => this.activateSkillFromPanel(hero) : undefined,
+      disabled: !ready,
+    });
+    card.add(activateBtn);
+    cursor += btnH + 8;
 
-    // 売却 / 閉じる
+    // 売却 + 閉じる (横並び)
     const subBtnW = (innerW - 6) / 2;
     const subBtnH = 32;
-    const subY = cursor.y + subBtnH / 2;
-    const sellBg = this.add
-      .rectangle(PAD + subBtnW / 2, subY, subBtnW, subBtnH, theme.bg.overlay, 1)
-      .setStrokeStyle(1, theme.accent.danger)
-      .setInteractive({ useHandCursor: true });
-    const sellText = this.add
-      .text(PAD + subBtnW / 2, subY, "売却", {
-        fontSize: "12px",
-        color: hex2css(theme.accent.danger),
-      })
-      .setOrigin(0.5);
-    sellBg.on("pointerdown", () => {
-      this.closeStatusPanel();
-      this.tryReleaseHeroAt(hero.tile);
+    const subY = cursor + subBtnH / 2;
+    const sellBtn = new Btn(this, {
+      x: PAD + subBtnW / 2,
+      y: subY,
+      width: subBtnW,
+      height: subBtnH,
+      size: "sm",
+      kind: "destructive",
+      label: "売却",
+      onClick: () => {
+        this.closeStatusPanel();
+        this.tryReleaseHeroAt(hero.tile);
+      },
     });
+    card.add(sellBtn);
 
-    const closeBg = this.add
-      .rectangle(panelW - PAD - subBtnW / 2, subY, subBtnW, subBtnH, theme.bg.overlay, 1)
-      .setStrokeStyle(1, theme.accent.primary)
-      .setInteractive({ useHandCursor: true });
-    const closeText = this.add
-      .text(panelW - PAD - subBtnW / 2, subY, "閉じる", {
-        fontSize: "12px",
-        color: hex2css(theme.accent.primary),
-      })
-      .setOrigin(0.5);
-    closeBg.on("pointerdown", () => this.closeStatusPanel());
-
-    items.push(sellBg, sellText, closeBg, closeText);
+    const closeBtn = new Btn(this, {
+      x: panelW - PAD - subBtnW / 2,
+      y: subY,
+      width: subBtnW,
+      height: subBtnH,
+      size: "sm",
+      kind: "primary",
+      label: "閉じる",
+      onClick: () => this.closeStatusPanel(),
+    });
+    card.add(closeBtn);
 
     // ── パネルコンテナ (右側) ──
     // 開始位置: 画面右端の外 (vpW)、終了位置: panelX
-    const panel = this.add.container(vpW, panelTop, items);
+    const panel = this.add.container(vpW, panelTop, [card]);
 
     // ── ステージ縮小トランジション保存 ──
     this.statusPanelOriginalMapX = this.worldRoot.x;
@@ -2424,194 +2394,171 @@ export class StageScene extends Phaser.Scene {
     this.panelPlaceholder?.setVisible(false);
   }
 
-  /** SPEC-006 §5.5: 横画面用 — 右サイドスロットにスライドイン */
+  /**
+   * SPEC-006 / SPEC-030 F3a: 横画面用ヒーロー詳細パネル。
+   * 右側サイドスロットに Card + StatGrid + Bar + Btn で構築してスライドイン。
+   */
   private openStatusPanelLandscape(hero: PlacedHero): void {
-    // SPEC-006: パネルスロット内の中心。x はパネルスロットの中心、y はキャンバス中央。
-    const slotCx = this.panelSlotX + PANEL_SLOT_WIDTH / 2;
     const fullH = this.stageHeight + HUD_HEIGHT;
-    const slotCy = fullH / 2;
-
-    // 背景パネル（PANEL_SLOT_WIDTH × fullH を覆う）
-    const panel = this.add.rectangle(
-      slotCx,
-      slotCy,
-      PANEL_SLOT_WIDTH,
-      fullH,
-      theme.bg.surface,
-      0.96,
-    );
-    panel.setStrokeStyle(2, theme.line.weak);
-
-    // タイトル（職業 + 名前）
-    const title = this.add
-      .text(slotCx, 28, `[${CLASS_LABEL[hero.def.class]}] ${hero.def.name}`, {
-        fontSize: "16px",
-        color: hex2css(theme.ink.primary),
-        fontStyle: "bold",
-        align: "center",
-        wordWrap: { width: PANEL_SLOT_WIDTH - 24 },
-      })
-      .setOrigin(0.5, 0);
-
-    // ── ヒーロー portrait（2× = 192×192）
-    const portrait = this.add
-      .sprite(slotCx, 162, TEXTURE_KEYS.hero(hero.def.id))
-      .setDisplaySize(192, 192);
-
-    // ── ステータス
-    const interval = (1 / Math.max(0.1, hero.def.agi / 100)).toFixed(2);
-    const tilesCount = hero.def.attackPattern.length;
-    const statLines = [
-      `属性  ${hero.def.attackType}`,
-      `HP    ${hero.def.hp}`,
-      `PHY   ${hero.def.phy}`,
-      `INT   ${hero.def.int}`,
-      `AGI   ${hero.def.agi}`,
-      `攻撃間隔  ${interval}s`,
-      `攻撃範囲  ${tilesCount} マス（${hero.direction} 向き）`,
-      `ブロック  ${hero.blockNum} / ${blockMaxFor(hero.def.class)}`,
-      `コスト  ${hero.def.cost} CE`,
-    ];
-    const stats = this.add
-      .text(slotCx - 110, 268, statLines.join("\n"), {
-        fontSize: "14px",
-        color: hex2css(theme.ink.primary),
-        lineSpacing: 3,
-      })
-      .setOrigin(0, 0);
-
-    // ── スキル情報セクション
-    const skillTitle = this.add
-      .text(slotCx, 388, "[ スキル ]", {
-        fontSize: "14px",
-        color: hex2css(theme.accent.warn),
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5);
-
-    const skillName = hero.skill
-      ? this.add
-          .text(slotCx, 412, hero.skill.name, {
-            fontSize: "16px",
-            color: hex2css(theme.ink.primary),
-            fontStyle: "bold",
-            align: "center",
-            wordWrap: { width: PANEL_SLOT_WIDTH - 32 },
-          })
-          .setOrigin(0.5)
-      : this.add
-          .text(slotCx, 412, "（スキル無し）", {
-            fontSize: "14px",
-            color: hex2css(theme.ink.tertiary),
-          })
-          .setOrigin(0.5);
-
-    const skillDesc = hero.skill
-      ? this.add
-          .text(slotCx, 442, hero.skill.description, {
-            fontSize: "13px",
-            color: hex2css(theme.ink.secondary),
-            align: "center",
-            wordWrap: { width: PANEL_SLOT_WIDTH - 24 },
-          })
-          .setOrigin(0.5, 0)
-      : null;
-
-    // ── ゲージ表示
-    const gaugeY = 498;
-    const gaugeW = PANEL_SLOT_WIDTH - 60;
-    const gaugeH = 10;
-    const gaugeBgX = slotCx - gaugeW / 2;
-    const panelGaugeBg = this.add
-      .rectangle(gaugeBgX, gaugeY, gaugeW, gaugeH, theme.bg.overlay, 1)
-      .setOrigin(0, 0.5);
-    const fillW = gaugeW * (hero.skillGauge / GAUGE_MAX);
-    const panelGaugeFill = this.add
-      .rectangle(gaugeBgX, gaugeY, fillW, gaugeH, theme.accent.warn)
-      .setOrigin(0, 0.5);
-    const gaugeLabel = this.add
-      .text(slotCx, gaugeY + 14, `${Math.floor(hero.skillGauge)} / ${GAUGE_MAX}`, {
-        fontSize: "13px",
-        color: hex2css(theme.accent.primary),
-      })
-      .setOrigin(0.5);
-
-    // ── スキル発動ボタン（パネル幅いっぱい）
+    const PAD = 12;
+    const innerW = PANEL_SLOT_WIDTH - PAD * 2;
     const ready = canActivate(hero.skillGauge) && hero.skill !== null;
-    const btnW = PANEL_SLOT_WIDTH - 48;
-    const btnY = 552;
-    const activateBtnBg = this.add.rectangle(
-      slotCx,
-      btnY,
-      btnW,
-      40,
-      ready ? theme.accent.warn : theme.line.base,
-      0.95,
-    );
-    activateBtnBg.setStrokeStyle(2, ready ? theme.accent.primary : theme.line.bright);
-    if (ready) activateBtnBg.setInteractive({ useHandCursor: true });
-    const activateBtnText = this.add
-      .text(slotCx, btnY, ready ? "▶ スキル発動" : "ゲージ不足", {
-        fontSize: "15px",
-        color: ready ? hex2css(theme.ink.inverse) : hex2css(theme.ink.tertiary),
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5);
 
-    if (ready) {
-      activateBtnBg.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-        if (pointer.rightButtonDown()) return;
-        this.activateSkillFromPanel(hero);
-      });
-    }
-
-    // ── 売却ボタン（小さく）
-    const sellBtn = this.add
-      .text(slotCx - 60, btnY + 38, "[ 売却 ]", {
-        fontSize: "13px",
-        color: hex2css(theme.accent.danger),
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-    sellBtn.on("pointerdown", () => {
-      this.closeStatusPanel();
-      this.tryReleaseHeroAt(hero.tile);
+    // Card がパネル surface + title/subtitle を担当
+    const card = new Card(this, {
+      x: 0,
+      y: 0,
+      width: PANEL_SLOT_WIDTH,
+      height: fullH,
+      title: hero.def.name,
+      subtitle: `[${CLASS_LABEL[hero.def.class]}]`,
+      alpha: 0.96,
     });
 
-    // ── 閉じるボタン
-    const closeBtn = this.add
-      .text(slotCx + 60, btnY + 38, "[ 閉じる ]", {
-        fontSize: "13px",
-        color: hex2css(theme.accent.primary),
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-    closeBtn.on("pointerdown", () => this.closeStatusPanel());
+    let cursor = card.contentTop + 8;
 
-    const items: Phaser.GameObjects.GameObject[] = [
-      panel,
-      title,
-      portrait,
-      stats,
-      skillTitle,
-      skillName,
-      panelGaugeBg,
-      panelGaugeFill,
-      gaugeLabel,
-      activateBtnBg,
-      activateBtnText,
-      sellBtn,
-      closeBtn,
-    ];
-    if (skillDesc) items.splice(6, 0, skillDesc);
-    this.statusPanel = this.add.container(0, 0, items);
+    // ポートレート (192px)
+    const PORTRAIT_SIZE = 192;
+    const portraitSprite = this.add
+      .sprite(PANEL_SLOT_WIDTH / 2, cursor + PORTRAIT_SIZE / 2, TEXTURE_KEYS.hero(hero.def.id))
+      .setDisplaySize(PORTRAIT_SIZE, PORTRAIT_SIZE);
+    card.add(portraitSprite);
+    cursor += PORTRAIT_SIZE + 12;
+
+    // ステータスグリッド (full ラベル)
+    const statGrid = new StatGrid(this, {
+      x: PAD,
+      y: cursor,
+      width: innerW,
+      rows: this.buildStatRows(hero, false),
+      rowHeight: 18,
+      step: "small",
+    });
+    card.add(statGrid);
+    cursor += statGrid.height + 12;
+
+    // 区切り線
+    const sepLine = this.add
+      .line(0, cursor, PAD, 0, PANEL_SLOT_WIDTH - PAD, 0, theme.line.weak, 1)
+      .setOrigin(0, 0.5);
+    card.add(sepLine);
+    cursor += 8;
+
+    // スキル
+    const skillTitle = this.add
+      .text(PANEL_SLOT_WIDTH / 2, cursor, "[ スキル ]", {
+        ...textStyle("small", { colorNum: theme.accent.warn }),
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5, 0);
+    card.add(skillTitle);
+    cursor += skillTitle.height + 6;
+
+    if (hero.skill) {
+      const skillName = this.add
+        .text(PANEL_SLOT_WIDTH / 2, cursor, hero.skill.name, {
+          ...textStyle("h3", { colorNum: theme.ink.primary }),
+          align: "center",
+          wordWrap: { width: innerW, useAdvancedWrap: true },
+        })
+        .setOrigin(0.5, 0);
+      card.add(skillName);
+      cursor += skillName.height + 4;
+
+      const skillDesc = this.add
+        .text(PANEL_SLOT_WIDTH / 2, cursor, hero.skill.description, {
+          ...textStyle("small", { colorNum: theme.ink.secondary }),
+          align: "center",
+          wordWrap: { width: innerW, useAdvancedWrap: true },
+          lineSpacing: 2,
+        })
+        .setOrigin(0.5, 0);
+      card.add(skillDesc);
+      cursor += skillDesc.height + 12;
+    } else {
+      const noSkill = this.add
+        .text(PANEL_SLOT_WIDTH / 2, cursor, "（スキル無し）", {
+          ...textStyle("small", { colorNum: theme.ink.tertiary }),
+        })
+        .setOrigin(0.5, 0);
+      card.add(noSkill);
+      cursor += noSkill.height + 12;
+    }
+
+    // ゲージ
+    const gauge = new Bar(this, {
+      x: PAD,
+      y: cursor + 5,
+      width: innerW,
+      height: 10,
+      value: hero.skillGauge,
+      max: GAUGE_MAX,
+      color: theme.accent.warn,
+    });
+    card.add(gauge);
+    cursor += 14;
+
+    const gaugeLabel = this.add
+      .text(PANEL_SLOT_WIDTH / 2, cursor, `${Math.floor(hero.skillGauge)} / ${GAUGE_MAX}`, {
+        ...textStyle("small", { colorNum: theme.accent.primary }),
+      })
+      .setOrigin(0.5, 0);
+    card.add(gaugeLabel);
+    cursor += gaugeLabel.height + 12;
+
+    // 発動ボタン (パネル幅いっぱい)
+    const btnH = 40;
+    const activateBtn = new Btn(this, {
+      x: PANEL_SLOT_WIDTH / 2,
+      y: cursor + btnH / 2,
+      width: innerW,
+      height: btnH,
+      kind: ready ? "solid" : "secondary",
+      label: ready ? "▶ スキル発動" : "ゲージ不足",
+      onClick: ready ? () => this.activateSkillFromPanel(hero) : undefined,
+      disabled: !ready,
+    });
+    card.add(activateBtn);
+    cursor += btnH + 10;
+
+    // 売却 + 閉じる (横並び)
+    const subBtnW = (innerW - 8) / 2;
+    const subBtnH = 32;
+    const subY = cursor + subBtnH / 2;
+    const sellBtn = new Btn(this, {
+      x: PAD + subBtnW / 2,
+      y: subY,
+      width: subBtnW,
+      height: subBtnH,
+      size: "sm",
+      kind: "destructive",
+      label: "売却",
+      onClick: () => {
+        this.closeStatusPanel();
+        this.tryReleaseHeroAt(hero.tile);
+      },
+    });
+    card.add(sellBtn);
+
+    const closeBtn = new Btn(this, {
+      x: PANEL_SLOT_WIDTH - PAD - subBtnW / 2,
+      y: subY,
+      width: subBtnW,
+      height: subBtnH,
+      size: "sm",
+      kind: "primary",
+      label: "閉じる",
+      onClick: () => this.closeStatusPanel(),
+    });
+    card.add(closeBtn);
+
+    // ── パネル全体: panelSlotX に配置、PANEL_SLOT_WIDTH 分右からスライドイン ──
+    this.statusPanel = this.add.container(this.panelSlotX + PANEL_SLOT_WIDTH, 0, [card]);
     this.statusPanel.setDepth(100);
 
-    // SPEC-006 §5.5: 右からスライドイン
-    this.statusPanel.x = PANEL_SLOT_WIDTH;
     this.tweens.add({
       targets: this.statusPanel,
-      x: 0,
+      x: this.panelSlotX,
       duration: 220,
       ease: "Sine.easeOut",
     });
@@ -2667,10 +2614,10 @@ export class StageScene extends Phaser.Scene {
       this.statusPanelOriginalMapX = null;
       this.statusPanelOriginalScale = null;
     } else {
-      // SPEC-006 §5.5: 右へスライドアウト → 完了で破棄
+      // SPEC-006 / SPEC-030: 右へスライドアウト → 完了で破棄
       this.tweens.add({
         targets: panel,
-        x: PANEL_SLOT_WIDTH,
+        x: this.panelSlotX + PANEL_SLOT_WIDTH,
         duration: 200,
         ease: "Sine.easeIn",
         onComplete: () => panel.destroy(true),
