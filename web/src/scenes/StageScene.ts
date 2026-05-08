@@ -16,6 +16,7 @@ import {
   tileTypeAt,
 } from "../game/map";
 import { DEFAULT_STAGE_ID, findStage, type StageDef } from "../game/stages";
+import { getPartyHeroIds, markStageCleared } from "../game/progress";
 import type {
   EnemyDef,
   HeroClass,
@@ -191,6 +192,8 @@ export class StageScene extends Phaser.Scene {
   /** SPEC-011: 現在実行中のステージ（init で設定） */
   private currentStage: StageDef | null = null;
   private currentStageId = DEFAULT_STAGE_ID;
+  /** SPEC-015: パレットに表示するヒーロー（progress.ts のパーティ） */
+  private partyHeroes: HeroDef[] = [];
   /** プレイ領域（タイル群）の幅。サイドパネルは含まない */
   private stageWidth = 0;
   private stageHeight = 0;
@@ -278,6 +281,14 @@ export class StageScene extends Phaser.Scene {
     this.currentStage = findStage(this.currentStageId) ?? null;
     this.map = this.currentStage?.map ?? STAGE1_MAP;
     const wave = this.currentStage?.wave ?? { patterns: [] };
+
+    // SPEC-015: パーティを progress.ts からロード
+    this.partyHeroes = getPartyHeroIds()
+      .map((id) => findHero(id))
+      .filter((h): h is HeroDef => !!h);
+    if (this.partyHeroes.length === 0) {
+      this.partyHeroes = HEROES.slice(0, 8);
+    }
 
     this.stageWidth = this.map.cols * TILE_SIZE;
     this.stageHeight = this.map.rows * TILE_SIZE;
@@ -512,10 +523,12 @@ export class StageScene extends Phaser.Scene {
       this.togglePlaySpeed();
     });
 
-    // SPEC-006 §5.3: パレット — 1 列 × 8 ヒーロー、アイコン大型化
-    const slotW = this.stageWidth / HEROES.length; // 80px ぴったり
+    // SPEC-006 §5.3 / SPEC-015: パレットは現在の party から動的に作る。
+    // パーティ枠は最大 10 体、stageWidth 640 / 10 = 64px。8 体なら 80px。
+    const partyHeroes = this.partyHeroes;
+    const slotW = this.stageWidth / Math.max(1, partyHeroes.length);
     const palTop = hudY + 32;
-    HEROES.forEach((hero, i) => {
+    partyHeroes.forEach((hero, i) => {
       const cx = slotW * i + slotW / 2;
       const slotCenterY = palTop + 41; // 高さ ~82
       const border = this.add.rectangle(cx, slotCenterY, slotW - 4, 82, 0x111827, 1);
@@ -2411,6 +2424,11 @@ export class StageScene extends Phaser.Scene {
     this.cancelPlacement();
     if (this.statusPanel) this.closeStatusPanel();
 
+    // SPEC-014: 勝利時のみクリア記録を localStorage に保存
+    if (victory) {
+      markStageCleared(this.currentStageId);
+    }
+
     const overlay = this.add.rectangle(
       this.stageWidth / 2,
       this.stageHeight / 2,
@@ -2441,10 +2459,10 @@ export class StageScene extends Phaser.Scene {
         { fontSize: "16px", color: "#e5e7eb" },
       )
       .setOrigin(0.5);
-    // SPEC-011: もう一度 / ステージ選択へ の 2 ボタン
+    // SPEC-011 / SPEC-015: もう一度 / 編成変更 / ステージ選択へ の 3 ボタン
     const retryBtn = this.add
-      .text(this.stageWidth / 2 - 70, this.stageHeight / 2 + 70, "[ もう一度 ]", {
-        fontSize: "16px",
+      .text(this.stageWidth / 2 - 130, this.stageHeight / 2 + 70, "[ もう一度 ]", {
+        fontSize: "14px",
         color: "#93c5fd",
       })
       .setOrigin(0.5)
@@ -2453,9 +2471,20 @@ export class StageScene extends Phaser.Scene {
       this.scene.restart({ stageId: this.currentStageId }),
     );
 
+    const partyBtn = this.add
+      .text(this.stageWidth / 2, this.stageHeight / 2 + 70, "[ 編成を変える ]", {
+        fontSize: "14px",
+        color: "#a7f3d0",
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    partyBtn.on("pointerdown", () => {
+      this.scene.start("PartyFormationScene", { stageId: this.currentStageId });
+    });
+
     const selectBtn = this.add
-      .text(this.stageWidth / 2 + 70, this.stageHeight / 2 + 70, "[ ステージ選択へ ]", {
-        fontSize: "16px",
+      .text(this.stageWidth / 2 + 130, this.stageHeight / 2 + 70, "[ ステージ選択 ]", {
+        fontSize: "14px",
         color: "#fde68a",
       })
       .setOrigin(0.5)
@@ -2465,7 +2494,7 @@ export class StageScene extends Phaser.Scene {
       this.scene.start("StageSelectScene", { worldId });
     });
 
-    this.endOverlay = this.add.container(0, 0, [overlay, title, sub, retryBtn, selectBtn]);
+    this.endOverlay = this.add.container(0, 0, [overlay, title, sub, retryBtn, partyBtn, selectBtn]);
     this.endOverlay.setDepth(100);
   }
 }

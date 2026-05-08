@@ -1,5 +1,8 @@
 import Phaser from "phaser";
 import { findWorld } from "../game/stages";
+import { getClearedStageIds } from "../game/progress";
+import { SE_KEYS } from "./BootScene";
+import { playSe } from "./seUtil";
 
 /**
  * SPEC-011: ステージ選択シーン。
@@ -58,8 +61,12 @@ export class StageSelectScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     backBtn.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (pointer.rightButtonDown()) return;
+      playSe(this, SE_KEYS.uiMenu());
       this.scene.start("WorldSelectScene");
     });
+
+    // SPEC-014: クリア済みステージを取得
+    const cleared = getClearedStageIds();
 
     // ステージ一覧を縦並び
     const cardW = 460;
@@ -70,19 +77,20 @@ export class StageSelectScene extends Phaser.Scene {
     world.stages.forEach((stage, i) => {
       const cy = baseY + (cardH + gap) * i + cardH / 2;
       const cx = width / 2;
+      const isCleared = cleared.has(stage.id);
 
       const bg = this.add.rectangle(cx, cy, cardW, cardH, 0x111827, 0.95);
-      bg.setStrokeStyle(2, 0x4b5563);
+      bg.setStrokeStyle(2, isCleared ? 0x4ade80 : 0x4b5563);
       bg.setInteractive({ useHandCursor: true });
 
       // ステージ番号バッジ
       this.add
         .rectangle(cx - cardW / 2 + 32, cy, 48, 48, 0x1e293b, 1)
-        .setStrokeStyle(2, 0xfde047);
+        .setStrokeStyle(2, isCleared ? 0x4ade80 : 0xfde047);
       this.add
         .text(cx - cardW / 2 + 32, cy, stage.id, {
           fontSize: "16px",
-          color: "#fde68a",
+          color: isCleared ? "#a7f3d0" : "#fde68a",
           fontStyle: "bold",
         })
         .setOrigin(0.5);
@@ -98,22 +106,35 @@ export class StageSelectScene extends Phaser.Scene {
         .text(cx - cardW / 2 + 64, cy + 12, stage.description, {
           fontSize: "11px",
           color: "#cbd5e1",
-          wordWrap: { width: cardW - 80, useAdvancedWrap: true },
+          wordWrap: { width: cardW - 100, useAdvancedWrap: true },
         })
         .setOrigin(0, 0.5);
 
+      // クリア済みバッジ または ▶
+      if (isCleared) {
+        this.add
+          .text(cx + cardW / 2 - 16, cy - 18, "✓ クリア", {
+            fontSize: "11px",
+            color: "#4ade80",
+            fontStyle: "bold",
+          })
+          .setOrigin(1, 0.5);
+      }
       this.add
-        .text(cx + cardW / 2 - 16, cy, "▶", {
+        .text(cx + cardW / 2 - 16, cy + 14, "▶", {
           fontSize: "20px",
           color: "#a7f3d0",
         })
         .setOrigin(1, 0.5);
 
+      const baseStroke = isCleared ? 0x4ade80 : 0x4b5563;
       bg.on("pointerover", () => bg.setStrokeStyle(2, 0xfde047));
-      bg.on("pointerout", () => bg.setStrokeStyle(2, 0x4b5563));
+      bg.on("pointerout", () => bg.setStrokeStyle(2, baseStroke));
       bg.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
         if (pointer.rightButtonDown()) return;
-        this.scene.start("StageScene", { stageId: stage.id });
+        playSe(this, SE_KEYS.uiMenu());
+        // SPEC-015: バトル画面に行く前にパーティ編成を挟む
+        this.scene.start("PartyFormationScene", { stageId: stage.id });
       });
     });
   }

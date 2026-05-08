@@ -3,6 +3,7 @@ import { BootScene } from "./scenes/BootScene";
 import { StageScene, STAGE_DIMENSIONS } from "./scenes/StageScene";
 import { WorldSelectScene } from "./scenes/WorldSelectScene";
 import { StageSelectScene } from "./scenes/StageSelectScene";
+import { PartyFormationScene } from "./scenes/PartyFormationScene";
 
 const appEl = document.getElementById("app");
 const loaderEl = appEl?.querySelector(".loader");
@@ -18,7 +19,13 @@ const game = new Phaser.Game({
   roundPixels: true,
   // 右クリックでブラウザのコンテキストメニューが出ないように
   disableContextMenu: true,
-  scene: [BootScene, WorldSelectScene, StageSelectScene, StageScene],
+  scene: [
+    BootScene,
+    WorldSelectScene,
+    StageSelectScene,
+    PartyFormationScene,
+    StageScene,
+  ],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
