@@ -15,7 +15,12 @@ import {
   tileToPixel,
   tileTypeAt,
 } from "../game/map";
-import { DEFAULT_STAGE_ID, findStage, type StageDef } from "../game/stages";
+import {
+  ALL_WORLDS,
+  DEFAULT_STAGE_ID,
+  findStage,
+  type StageDef,
+} from "../game/stages";
 import { getPartyHeroIds, markStageCleared } from "../game/progress";
 import type {
   EnemyDef,
@@ -52,7 +57,8 @@ import {
 } from "../game/skill";
 import { SE_KEYS, TEXTURE_KEYS } from "./BootScene";
 import { onResize } from "./layout";
-import { CLASS_COLORS, TILE_COLORS, hex2css, theme } from "../ui/tokens";
+import { CLASS_COLORS, TILE_COLORS, hex2css, setTheme, theme } from "../ui/tokens";
+import { makeClassIcon } from "../ui/icons";
 
 const HUD_HEIGHT = 144;
 /** SPEC-006 §5.5: Arknights 風サイドパネル領域。ステージ右に常駐。 */
@@ -293,6 +299,11 @@ export class StageScene extends Phaser.Scene {
       this.currentStageId = DEFAULT_STAGE_ID;
     }
     this.currentStage = findStage(this.currentStageId) ?? null;
+    // SPEC-019: 出撃先のワールドに紐づくテーマを適用
+    if (this.currentStage) {
+      const w = ALL_WORLDS.find((wd) => wd.id === this.currentStage!.worldId);
+      if (w?.themeId) setTheme(w.themeId);
+    }
     this.map = this.currentStage?.map ?? STAGE1_MAP;
     const wave = this.currentStage?.wave ?? { patterns: [] };
 
@@ -507,7 +518,7 @@ export class StageScene extends Phaser.Scene {
     // SPEC-007 §5.2: CE 数値 (3桁まで想定) を 80px 確保 → ゲージは x=240 から
     this.add.rectangle(240, hudY + 16, 90, 6, theme.bg.overlay).setOrigin(0, 0.5);
     this.ceBar = this.add
-      .rectangle(240, hudY + 16, 0, 6, 0x38bdf8)
+      .rectangle(240, hudY + 16, 0, 6, theme.accent.primary)
       .setOrigin(0, 0.5);
     this.add
       .text(335, hudY + 16, "/秒", {
@@ -580,12 +591,17 @@ export class StageScene extends Phaser.Scene {
         })
         .setOrigin(1, 0);
 
+      // 職業アイコン（左）+ ラベル（右）の並び
+      const classColor = CLASS_COLORS[hero.class].hex;
+      const classIcon = makeClassIcon(this, cx - 18, palTop + 60, hero.class, 14, classColor);
       const labelClass = this.add
-        .text(cx, palTop + 60, CLASS_LABEL[hero.class], {
+        .text(cx + 4, palTop + 60, CLASS_LABEL[hero.class], {
           fontSize: "11px",
-          color: hex2css(theme.accent.warn),
+          color: hex2css(classColor),
+          fontStyle: "bold",
         })
-        .setOrigin(0.5);
+        .setOrigin(0, 0.5);
+      void classIcon;
 
       const labelStatus = this.add
         .text(cx, palTop + 75, "", {
@@ -695,7 +711,7 @@ export class StageScene extends Phaser.Scene {
             tt &&
             canPlaceClassOnTile(this.placement.hero.class, tt) &&
             !occupied;
-          sr.setFillStyle(ok ? theme.accent.success : theme.accent.danger, 0.3);
+          // SPEC-019: 塗りは alpha 0 のままでアウトラインだけ強調する。
           sr.setStrokeStyle(3, ok ? theme.accent.primary : theme.accent.danger, 0.95);
         }
       } else if (this.placement?.kind === "orienting") {
@@ -831,8 +847,8 @@ export class StageScene extends Phaser.Scene {
       -100,
       TILE_SIZE - 4,
       TILE_SIZE - 4,
-      theme.accent.success,
-      0.3,
+      0x000000,
+      0,
     );
     snapRect.setStrokeStyle(3, theme.accent.primary, 0.95);
     snapRect.setDepth(45);
@@ -869,15 +885,16 @@ export class StageScene extends Phaser.Scene {
           continue;
         const cx = c * TILE_SIZE + TILE_SIZE / 2;
         const cy = r * TILE_SIZE + TILE_SIZE / 2;
+        // SPEC-019 §視覚刷新: 配置候補も outline のみ。塗りでパターンを潰さない。
         const rect = this.add.rectangle(
           cx,
           cy,
           TILE_SIZE - 6,
           TILE_SIZE - 6,
-          theme.accent.success,
-          0.18,
+          0x000000,
+          0,
         );
-        rect.setStrokeStyle(1, theme.accent.success, 0.7);
+        rect.setStrokeStyle(1.5, theme.accent.success, 0.85);
         rect.setDepth(8);
         rects.push(rect);
       }
@@ -1090,15 +1107,17 @@ export class StageScene extends Phaser.Scene {
   ): void {
     const rotated = rotatePattern(pattern, direction);
     while (rects.length < rotated.length) {
+      // SPEC-019 §視覚刷新: 攻撃範囲は塗りなしのアウトラインのみ。床/壁の
+      // パターンを潰さない。
       const r = this.add.rectangle(
         0,
         0,
         TILE_SIZE - 4,
         TILE_SIZE - 4,
-        theme.accent.primary,
-        0.25,
+        0x000000,
+        0,
       );
-      r.setStrokeStyle(1, theme.accent.primary, 0.6);
+      r.setStrokeStyle(2, theme.accent.primary, 0.7);
       r.setDepth(10);
       rects.push(r);
     }

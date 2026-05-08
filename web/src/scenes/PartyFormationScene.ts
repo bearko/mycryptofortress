@@ -5,7 +5,7 @@ import {
   getPartyHeroIds,
   setPartyHeroIds,
 } from "../game/progress";
-import { findStage } from "../game/stages";
+import { ALL_WORLDS, findStage } from "../game/stages";
 import { findSkill } from "../game/skill";
 import type { HeroClass, HeroDef, HeroRarity } from "../game/types";
 import { TEXTURE_KEYS, SE_KEYS } from "./BootScene";
@@ -15,10 +15,12 @@ import {
   CLASS_COLORS,
   RARITY,
   hex2css,
+  setTheme,
   textStyle,
   theme,
 } from "../ui/tokens";
 import { Btn, ScreenHeader } from "../ui/components";
+import { makeClassIcon } from "../ui/icons";
 
 /**
  * SPEC-015 / SPEC-016: パーティ編成シーン。
@@ -138,6 +140,15 @@ export class PartyFormationScene extends Phaser.Scene {
     const vp = getViewport(this);
     const stage = findStage(this.stageId);
     const stageLabel = stage ? `${stage.name}` : `ステージ ${this.stageId}`;
+
+    // SPEC-019: 出撃先のワールドに紐づくテーマを適用
+    if (stage) {
+      const w = ALL_WORLDS.find((w) => w.id === stage.worldId);
+      if (w?.themeId) {
+        setTheme(w.themeId);
+        this.cameras.main.setBackgroundColor(theme.bg.base);
+      }
+    }
 
     // ── ヘッダ（ScreenHeader + 出撃先サブ表示）
     new ScreenHeader(this, {
@@ -572,6 +583,18 @@ export class PartyFormationScene extends Phaser.Scene {
         .setDisplaySize(96, 96),
     );
 
+    // 職業アイコン（ポートレート右上に職業色で）
+    this.detailDynamic.push(
+      makeClassIcon(
+        this,
+        cardCX + 48,
+        portraitY - 36,
+        hero.class,
+        24,
+        CLASS_COLORS[hero.class].hex,
+      ),
+    );
+
     let y = portraitY + 60;
     this.detailDynamic.push(
       this.add
@@ -735,6 +758,17 @@ export class PartyFormationScene extends Phaser.Scene {
       this.add
         .sprite(portraitX, portraitY, TEXTURE_KEYS.hero(hero.id))
         .setDisplaySize(portraitSize, portraitSize),
+    );
+    // 職業アイコン（ポートレート右下隅に被せる）
+    this.detailDynamic.push(
+      makeClassIcon(
+        this,
+        portraitX + portraitSize / 2 - 10,
+        portraitY + portraitSize / 2 - 10,
+        hero.class,
+        20,
+        CLASS_COLORS[hero.class].hex,
+      ),
     );
 
     const textLeft = portraitX + portraitSize / 2 + 12;
