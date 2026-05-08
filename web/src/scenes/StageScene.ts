@@ -266,6 +266,15 @@ export class StageScene extends Phaser.Scene {
    */
   private worldRoot!: Phaser.GameObjects.Container;
 
+  /**
+   * SPEC-027: 配置 → 向き決め フローでの swipe 入力管理。
+   * - tryCommitPlacement で orienting に遷移するときに `pendingOrient = true` にする
+   *   (この pointerdown→pointerup のサイクルでは確定しない)
+   * - 次の pointerdown 開始時に swipe 検出を有効化する
+   */
+  private orientPointerStartScreen: { x: number; y: number } | null = null;
+  private orientPointerSuppressNextUp = false;
+
   /** SPEC-020: HUD は KPI/Bar ヘルパで構成。下記は更新参照のために保持 */
   private hpBar!: Bar;
   private hpKPI!: KPI;
@@ -350,6 +359,8 @@ export class StageScene extends Phaser.Scene {
     this.totalToDefeat = wave.patterns.length;
     this.waveQueue = [...wave.patterns];
     this.placement = null;
+    this.orientPointerStartScreen = null;
+    this.orientPointerSuppressNextUp = false;
     this.placedHeroes = [];
     this.enemies = [];
     this.bullets = [];
@@ -1146,7 +1157,8 @@ export class StageScene extends Phaser.Scene {
         return;
       }
       if (this.placement?.kind === "orienting") {
-        this.confirmOrientation();
+        // SPEC-027: pointerdown は swipe の起点を記録するだけ。確定は pointerup。
+        this.orientPointerStartScreen = { x: p.x, y: p.y };
         return;
       }
       const tile = pixelToTile(wp.x, wp.y, this.map.cols, this.map.rows);
@@ -1163,6 +1175,37 @@ export class StageScene extends Phaser.Scene {
 
     this.input.on("pointerup", (p: Phaser.Input.Pointer) => {
       if (this.gameOver || this.statusPanel) return;
+
+      // SPEC-027: orienting 中の pointerup は swipe 確定を担当する。
+      if (this.placement?.kind === "orienting") {
+        // tryCommitPlacement (drag-drop 配置の release) で発生したサイクルは
+        // 一度だけスキップして、ユーザーが次に swipe するまで待つ。
+        if (this.orientPointerSuppressNextUp) {
+          this.orientPointerSuppressNextUp = false;
+          this.orientPointerStartScreen = null;
+          return;
+        }
+        // swipe 距離を screen-space で評価 (8px 以上動いた場合のみ swipe 採用)
+        const start = this.orientPointerStartScreen;
+        if (start) {
+          const dx = p.x - start.x;
+          const dy = p.y - start.y;
+          if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+            this.placement.direction = directionFromDelta(dx, dy);
+            this.updateDirectionArrows(this.placement.direction);
+            this.repositionPatternRects(
+              this.placement.rangeRects,
+              this.visualPattern(this.placement.hero),
+              this.placement.tile,
+              this.placement.direction,
+            );
+          }
+        }
+        this.orientPointerStartScreen = null;
+        this.confirmOrientation();
+        return;
+      }
+
       if (this.placement?.kind !== "selecting") return;
       const wp = this.screenToWorld(p);
       if (
@@ -1312,7 +1355,7 @@ export class StageScene extends Phaser.Scene {
     // SPEC-006 §5.6: スナップタイル枠も役目終了
     this.placement.snapRect.destroy();
 
-    // SPEC-005 §5.6: 上下左右に向きチェブロンを表示
+    // SPEC-027: 矢印タップ廃止。視覚ヒントだけは残し、interactive=false に。
     const directionArrows = this.buildDirectionArrows(px.x, px.y, direction);
 
     this.placement = {
@@ -1325,8 +1368,11 @@ export class StageScene extends Phaser.Scene {
       highlightRects: [],
       directionArrows,
     };
+    // SPEC-027: tryCommitPlacement を呼び出した pointerdown→pointerup サイクル
+    // (drag-drop 配置の release) では確定させない。ユーザーが次に swipe するまで待つ。
+    this.orientPointerSuppressNextUp = true;
     this.statusText.setText(
-      "上下左右の矢印が向きを示しています。カーソルで方向を変え、クリックで確定（右クリックでキャンセル）",
+      "ヒーローを中心に上下左右へスワイプして向きを確定（右クリックでキャンセル）",
     );
   }
 
@@ -1346,16 +1392,21 @@ export class StageScene extends Phaser.Scene {
     for (const dir of DIRECTIONS) {
       const [glyph, ax, ay] = placement[dir];
       const isActive = dir === activeDir;
-      const arrow = this.add
-        .text(ax, ay, glyph, {
-          fontSize: "22px",
-          color: isActive ? hex2css(theme.accent.primary) : hex2css(theme.ink.tertiary),
-          fontStyle: "bold",
-          stroke: hex2css(theme.bg.base),
-          strokeThickness: 3,
-        })
-        .setOrigin(0.5)
-        .setDepth(60);
+      // SPEC-027: スワイプ確定方式に変更。矢印は視覚ヒントのみで interactive にしない。
+      const arrow = this.addWorld(
+        this.add
+          .text(ax, ay, glyph, {
+            fontSize: "22px",
+            color: isActive
+              ? hex2css(theme.accent.primary)
+              : hex2css(theme.ink.tertiary),
+            fontStyle: "bold",
+            stroke: hex2css(theme.bg.base),
+            strokeThickness: 3,
+          })
+          .setOrigin(0.5)
+          .setDepth(60),
+      ) as Phaser.GameObjects.Text;
       arrow.setScale(isActive ? 1.25 : 1.0);
       arrows.set(dir, arrow);
     }
@@ -1462,8 +1513,10 @@ export class StageScene extends Phaser.Scene {
       }
     }
     this.placement = null;
+    this.orientPointerStartScreen = null;
+    this.orientPointerSuppressNextUp = false;
     this.statusText.setText(
-      "ヒーローを選んで配置可能タイルをクリック → 向きを決めて再クリック",
+      "ヒーローを選んで配置可能タイルをクリック → 向きにスワイプして確定",
     );
     this.refreshPaletteHighlight();
     // SPEC-005 §5.6: 配置キャンセルで通常速度に戻す
@@ -2942,72 +2995,85 @@ export class StageScene extends Phaser.Scene {
       markStageCleared(this.currentStageId);
     }
 
-    const overlay = this.add.rectangle(
-      this.stageWidth / 2,
-      this.stageHeight / 2,
-      this.stageWidth,
-      this.stageHeight,
-      0x000000,
-      0.6,
-    );
+    // SPEC-027: viewport 全体を覆う overlay にして縦/横どちらでもボタンが画面内に収まるようにする
+    const vpW = this.scale.width;
+    const vpH = this.scale.height;
+    const cx = vpW / 2;
+    const cy = vpH / 2;
+    const compact = vpW < 540;
+
+    const overlay = this.add.rectangle(cx, cy, vpW, vpH, 0x000000, 0.65);
     const title = this.add
-      .text(
-        this.stageWidth / 2,
-        this.stageHeight / 2 - 20,
-        victory ? "STAGE CLEAR!" : "FAILED",
-        {
-          fontSize: "40px",
-          color: victory ? hex2css(theme.ink.primary) : hex2css(theme.accent.danger),
-          fontStyle: "bold",
-        },
-      )
+      .text(cx, cy - (compact ? 70 : 50), victory ? "STAGE CLEAR!" : "FAILED", {
+        fontSize: compact ? "32px" : "40px",
+        color: victory ? hex2css(theme.ink.primary) : hex2css(theme.accent.danger),
+        fontStyle: "bold",
+      })
       .setOrigin(0.5);
     const sub = this.add
       .text(
-        this.stageWidth / 2,
-        this.stageHeight / 2 + 28,
+        cx,
+        cy - (compact ? 30 : 0),
         victory
           ? `撃破 ${this.defeatedTotal} / ${this.totalToDefeat}`
           : "BASE HP が 0 になりました",
-        { fontSize: "16px", color: hex2css(theme.ink.primary) },
+        { fontSize: compact ? "14px" : "16px", color: hex2css(theme.ink.primary) },
       )
       .setOrigin(0.5);
-    // SPEC-011 / SPEC-015: もう一度 / 編成変更 / ステージ選択へ の 3 ボタン
-    const retryBtn = this.add
-      .text(this.stageWidth / 2 - 130, this.stageHeight / 2 + 70, "[ もう一度 ]", {
-        fontSize: "14px",
-        color: hex2css(theme.accent.primary),
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-    retryBtn.on("pointerdown", () =>
-      this.scene.restart({ stageId: this.currentStageId }),
-    );
 
-    const partyBtn = this.add
-      .text(this.stageWidth / 2, this.stageHeight / 2 + 70, "[ 編成を変える ]", {
-        fontSize: "14px",
-        color: hex2css(theme.accent.success),
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-    partyBtn.on("pointerdown", () => {
-      this.scene.start("PartyFormationScene", { stageId: this.currentStageId });
+    // ボタン: 縦画面では縦並び、横画面では横並び。
+    const btnLabels: Array<{
+      label: string;
+      color: number;
+      onClick: () => void;
+    }> = [
+      {
+        label: "[ もう一度 ]",
+        color: theme.accent.primary,
+        onClick: () => this.scene.restart({ stageId: this.currentStageId }),
+      },
+      {
+        label: "[ 編成を変える ]",
+        color: theme.accent.success,
+        onClick: () =>
+          this.scene.start("PartyFormationScene", {
+            stageId: this.currentStageId,
+          }),
+      },
+      {
+        label: "[ ステージ選択 ]",
+        color: theme.ink.primary,
+        onClick: () => {
+          const worldId = this.currentStage?.worldId ?? "world-1";
+          this.scene.start("StageSelectScene", { worldId });
+        },
+      },
+    ];
+
+    const buttons: Phaser.GameObjects.Text[] = [];
+    btnLabels.forEach((b, i) => {
+      let bx = cx;
+      let by = cy;
+      if (compact) {
+        // 縦並び
+        by = cy + 24 + i * 36;
+      } else {
+        // 横並び
+        bx = cx + (i - 1) * 130;
+        by = cy + 70;
+      }
+      const btn = this.add
+        .text(bx, by, b.label, {
+          fontSize: compact ? "15px" : "14px",
+          color: hex2css(b.color),
+        })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true });
+      btn.on("pointerdown", b.onClick);
+      buttons.push(btn);
     });
 
-    const selectBtn = this.add
-      .text(this.stageWidth / 2 + 130, this.stageHeight / 2 + 70, "[ ステージ選択 ]", {
-        fontSize: "14px",
-        color: hex2css(theme.ink.primary),
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-    selectBtn.on("pointerdown", () => {
-      const worldId = this.currentStage?.worldId ?? "world-1";
-      this.scene.start("StageSelectScene", { worldId });
-    });
-
-    this.endOverlay = this.add.container(0, 0, [overlay, title, sub, retryBtn, partyBtn, selectBtn]);
+    this.endOverlay = this.add.container(0, 0, [overlay, title, sub, ...buttons]);
     this.endOverlay.setDepth(100);
   }
 }
