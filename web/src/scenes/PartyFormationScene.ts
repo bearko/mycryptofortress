@@ -123,6 +123,17 @@ export class PartyFormationScene extends Phaser.Scene {
   private rosterContainer: Phaser.GameObjects.Container | null = null;
   private rosterScrollMin = 0;
   private rosterScrollMax = 0;
+  /**
+   * SPEC-022: roster の表示中 viewport (絶対座標)。Phaser の geometry mask は
+   * 描画だけクリップして input は通すので、各 slot の pointerdown 内で
+   * pointer 位置をこの矩形内に制限してヒット判定の漏れを防ぐ。
+   */
+  private rosterViewport: { x: number; y: number; w: number; h: number } = {
+    x: 0,
+    y: 0,
+    w: 0,
+    h: 0,
+  };
 
   /** 詳細パネル: focus に依存して再生成する子要素 */
   private detailDynamic: Phaser.GameObjects.GameObject[] = [];
@@ -166,6 +177,7 @@ export class PartyFormationScene extends Phaser.Scene {
     this.rosterContainer = null;
     this.rosterScrollMin = 0;
     this.rosterScrollMax = 0;
+    this.rosterViewport = { x: 0, y: 0, w: 0, h: 0 };
 
     const vp = getViewport(this);
     const stage = findStage(this.stageId);
@@ -560,10 +572,24 @@ export class PartyFormationScene extends Phaser.Scene {
 
     border.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (pointer.rightButtonDown()) return;
+      // SPEC-022: mask は描画だけクリップして input は通す。viewport 外の
+      // タップは無視（編成エリア / 詳細パネルへの通り抜けを防ぐ）。
+      if (!this.isPointerInRosterViewport(pointer)) return;
       this.onRosterTap(hero.id);
     });
 
     return { hero, cx, cy, w, h, border, sprite, selectedMark, members };
+  }
+
+  private isPointerInRosterViewport(pointer: Phaser.Input.Pointer): boolean {
+    const v = this.rosterViewport;
+    if (v.w <= 0 || v.h <= 0) return true;
+    return (
+      pointer.x >= v.x &&
+      pointer.x <= v.x + v.w &&
+      pointer.y >= v.y &&
+      pointer.y <= v.y + v.h
+    );
   }
 
   // ─── SPEC-021: rarity filter chips ─────────────────
@@ -628,6 +654,8 @@ export class PartyFormationScene extends Phaser.Scene {
     slotH: number,
     gap: number,
   ): void {
+    // SPEC-022: ヒット判定漏れ防止のため viewport 矩形を保持
+    this.rosterViewport = { x: startX, y: topY, w: gridW, h: viewH };
     const heroes = this.getFilteredHeroes();
     if (heroes.length === 0) {
       this.add
