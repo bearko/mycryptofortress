@@ -69,6 +69,88 @@ export const ENEMIES: EnemyDef[] = [
     attackInterval: 1.1,
     imageUrl: `${ENEMY_IMAGE_BASE}/131.png`,
   },
+
+  // ─── SPEC-019: 拡張エネミー 6 種 ─────────────────────────
+  // ステージ 1-4 以降 / World 2 で使う、より多彩な役割を持つ敵。
+  // 高速ラッシャー / タンク / 高 HP / レンジ攻撃などをカバー。
+  {
+    id: 105,
+    name: "クリーパー ロード",
+    attackType: "PHY",
+    hp: 220,
+    phy: 22,
+    int: 10,
+    phyDef: 24,
+    intDef: 12,
+    speed: 0.55, // 超大型は超低速
+    attackInterval: 1.4,
+    imageUrl: `${ENEMY_IMAGE_BASE}/105.png`,
+  },
+  {
+    id: 122,
+    name: "ハートブリード ヴェンティ",
+    attackType: "INT",
+    hp: 110,
+    phy: 8,
+    int: 22,
+    phyDef: 5,
+    intDef: 18,
+    speed: 0.9,
+    attackInterval: 1.0,
+    imageUrl: `${ENEMY_IMAGE_BASE}/122.png`,
+  },
+  {
+    id: 132,
+    name: "メリッサ クイーン",
+    attackType: "INT",
+    hp: 180,
+    phy: 9,
+    int: 28,
+    phyDef: 8,
+    intDef: 20,
+    speed: 0.7,
+    attackInterval: 1.3,
+    imageUrl: `${ENEMY_IMAGE_BASE}/132.png`,
+  },
+  {
+    id: 141,
+    name: "シャドウ ストライダー",
+    attackType: "PHY",
+    hp: 60,
+    phy: 18,
+    int: 6,
+    phyDef: 3,
+    intDef: 3,
+    speed: 1.45, // 高速ラッシャー
+    attackInterval: 0.85,
+    imageUrl: `${ENEMY_IMAGE_BASE}/141.png`,
+  },
+  {
+    id: 151,
+    name: "アイアン ガーディアン",
+    attackType: "PHY",
+    hp: 320,
+    phy: 16,
+    int: 6,
+    phyDef: 36,
+    intDef: 14,
+    speed: 0.5, // タンク
+    attackInterval: 1.5,
+    imageUrl: `${ENEMY_IMAGE_BASE}/151.png`,
+  },
+  {
+    id: 161,
+    name: "ヴォイド スペクター",
+    attackType: "INT",
+    hp: 95,
+    phy: 4,
+    int: 30,
+    phyDef: 6,
+    intDef: 28,
+    speed: 1.0,
+    attackInterval: 0.9,
+    imageUrl: `${ENEMY_IMAGE_BASE}/161.png`,
+  },
 ];
 
 export function findEnemy(id: number): EnemyDef | undefined {
