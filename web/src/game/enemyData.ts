@@ -18,6 +18,7 @@ export const ENEMIES: EnemyDef[] = [
     phyDef: 4,
     intDef: 4,
     speed: 0.9,
+    attackInterval: 1.0,
     imageUrl: `${ENEMY_IMAGE_BASE}/101.png`,
   },
 ];
