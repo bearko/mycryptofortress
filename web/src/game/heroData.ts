@@ -4,9 +4,22 @@ import type { HeroDef, TilePos } from "./types";
  * SPEC-003 §5.2: Common レアリティのヒーロー 8 体（mycryptoheroes/Data/Heroes/heroes.json
  * から ID 1001-1010 のうち、職業 8 種を網羅できる組み合わせを採用）。
  *
- * ステータスは `max_level_stats` をそのまま採用。
+ * ステータスは `max_level_stats` をそのまま採用（HP / PHY / INT / AGI）。
  * `attackType` / `class` / `cost` / `attackPattern` はゲームバランス用の派生値で、
  * Passive スキル要約と Arknights 流の役割対応から決定している（SPEC-003 表参照）。
+ *
+ * SPEC-009 §5.4: phyDef / intDef を職業ベースで初期値設定。MCH 公式マスタは攻撃力
+ * のみ持つため、設計ドキュメントの想定（[1lRHoKJ5...](https://docs.google.com/spreadsheets/d/1lRHoKJ5AFGh6dCvKJ41dPwnKuJaVmD8Bm7hlSIXe3ow/edit)）を
+ * 参考に職業の役割で振り分けている暫定値:
+ *
+ *   重装 (defender):  phyDef 60 / intDef 30 — 物理タンク
+ *   前衛 (guard):     phyDef 35 / intDef 25 — バランス近接
+ *   先鋒 (vanguard):  phyDef 25 / intDef 20 — 軽装速攻
+ *   特殊 (specialist):phyDef 30 / intDef 30 — 万能
+ *   狙撃 (sniper):    phyDef 15 / intDef 10 — 紙装甲
+ *   術師 (caster):    phyDef 10 / intDef 35 — INT 寄り
+ *   医療 (medic):     phyDef 20 / intDef 30 — 中盤の支援
+ *   補助 (supporter): phyDef 15 / intDef 40 — INT に厚い
  */
 const HERO_IMAGE_BASE =
   "https://raw.githubusercontent.com/bearko/mycryptoheroes/main/Image/Heroes";
@@ -71,8 +84,8 @@ export const HEROES: HeroDef[] = [
     cost: 11,
     phy: 25,
     int: 69,
-    phyDef: 0,
-    intDef: 0,
+    phyDef: 15,
+    intDef: 40,
     hp: 192,
     agi: 138,
     attackPattern: PATTERN_AROUND,
@@ -86,8 +99,8 @@ export const HEROES: HeroDef[] = [
     cost: 9,
     phy: 79,
     int: 45,
-    phyDef: 0,
-    intDef: 0,
+    phyDef: 25,
+    intDef: 20,
     hp: 162,
     agi: 118,
     attackPattern: PATTERN_NEAR_3,
@@ -101,8 +114,8 @@ export const HEROES: HeroDef[] = [
     cost: 14,
     phy: 67,
     int: 62,
-    phyDef: 0,
-    intDef: 0,
+    phyDef: 15,
+    intDef: 10,
     hp: 222,
     agi: 93,
     attackPattern: PATTERN_LINE_4,
@@ -116,8 +129,8 @@ export const HEROES: HeroDef[] = [
     cost: 30,
     phy: 66,
     int: 69,
-    phyDef: 0,
-    intDef: 0,
+    phyDef: 10,
+    intDef: 35,
     hp: 345,
     agi: 46,
     attackPattern: PATTERN_PIERCE,
@@ -131,8 +144,8 @@ export const HEROES: HeroDef[] = [
     cost: 25,
     phy: 84,
     int: 84,
-    phyDef: 0,
-    intDef: 0,
+    phyDef: 35,
+    intDef: 25,
     hp: 216,
     agi: 56,
     attackPattern: PATTERN_NEAR_FAN,
@@ -146,8 +159,8 @@ export const HEROES: HeroDef[] = [
     cost: 24,
     phy: 40,
     int: 115,
-    phyDef: 0,
-    intDef: 0,
+    phyDef: 20,
+    intDef: 30,
     hp: 261,
     agi: 54,
     attackPattern: PATTERN_AROUND,
@@ -161,8 +174,8 @@ export const HEROES: HeroDef[] = [
     cost: 30,
     phy: 85,
     int: 35,
-    phyDef: 0,
-    intDef: 0,
+    phyDef: 60,
+    intDef: 30,
     hp: 264,
     agi: 88,
     attackPattern: PATTERN_NEAR_3,
@@ -176,8 +189,8 @@ export const HEROES: HeroDef[] = [
     cost: 26,
     phy: 72,
     int: 71,
-    phyDef: 0,
-    intDef: 0,
+    phyDef: 30,
+    intDef: 30,
     hp: 267,
     agi: 64,
     attackPattern: PATTERN_LINE_3,

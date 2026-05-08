@@ -17,7 +17,12 @@ export type SkillEffectType =
   | "damageMultiplier"
   | "agiBuff"
   | "enemyDefDebuff"
-  | "singleStrike";
+  | "singleStrike"
+  /**
+   * SPEC-009 §5.5: 範囲回復。発動時、攻撃範囲タイル内に居る味方ヒーロー全員の
+   * currentHp を `calculateHeal` の値だけ回復する（maxHp で頭打ち）。
+   */
+  | "heal";
 
 export interface SkillDef {
   /** ヒーロー ID（heroData.ts の id と一致） */
@@ -93,11 +98,11 @@ export const SKILLS: SkillDef[] = [
   {
     heroId: 1007,
     name: "李氏朝鮮、宮廷医女",
-    description: "支援の心得で与ダメージが 1.4 倍に（敵攻撃実装まで暫定）。",
+    description: "範囲内の味方ヒーローを INT 回復公式で大きく回復する。",
     seCategory: "heal_resurrection",
-    effectType: "damageMultiplier",
-    value: 1.4,
-    durationSec: 10,
+    effectType: "heal",
+    value: 1.5,
+    durationSec: 0,
     cost: 100,
   },
   {
@@ -170,7 +175,9 @@ export function startEffect(skill: SkillDef, elapsed: number): ActiveSkillState 
 
 export function isEffectActive(state: ActiveSkillState | null, elapsed: number): boolean {
   if (!state) return false;
+  // 即発系効果（singleStrike / heal）は持続なし
   if (state.skill.effectType === "singleStrike") return false;
+  if (state.skill.effectType === "heal") return false;
   return elapsed < state.endsAt;
 }
 

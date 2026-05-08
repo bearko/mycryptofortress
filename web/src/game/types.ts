@@ -59,6 +59,11 @@ export interface EnemyDef {
   intDef: number;
   /** 1 秒あたりの移動マス数 */
   speed: number;
+  /**
+   * SPEC-009 §5.6: 攻撃間隔（秒）。Unity 版 EnemyRange.ShotInterval = 1.0/PlaySpeed
+   * を踏襲し、デフォルト 1.0。種類ごとに早い/遅い敵を表現可能。
+   */
+  attackInterval: number;
   imageUrl: string;
 }
 
