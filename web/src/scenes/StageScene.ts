@@ -51,6 +51,7 @@ import {
   type SkillDef,
 } from "../game/skill";
 import { SE_KEYS, TEXTURE_KEYS } from "./BootScene";
+import { onResize } from "./layout";
 
 const HUD_HEIGHT = 144;
 /** SPEC-006 §5.5: Arknights 風サイドパネル領域。ステージ右に常駐。 */
@@ -331,6 +332,23 @@ export class StageScene extends Phaser.Scene {
     this.bindInput();
     this.refreshSpeedButton();
     this.startBgm();
+
+    // SPEC-016: ビューポートに対してカメラズームでフィット。
+    // 縦画面の専用レイアウトは別 SPEC で対応予定。現状は中央寄せ + 等倍縮小。
+    this.fitCameraToViewport();
+    onResize(this, () => this.fitCameraToViewport());
+  }
+
+  private fitCameraToViewport(): void {
+    const designW = this.canvasWidth || this.stageWidth + PANEL_SLOT_WIDTH;
+    const designH = this.stageHeight + HUD_HEIGHT;
+    const vpW = this.scale.width;
+    const vpH = this.scale.height;
+    if (designW <= 0 || designH <= 0 || vpW <= 0 || vpH <= 0) return;
+    const zoom = Math.min(vpW / designW, vpH / designH);
+    const cam = this.cameras.main;
+    cam.setZoom(zoom);
+    cam.centerOn(designW / 2, designH / 2);
   }
 
   /**
@@ -648,7 +666,11 @@ export class StageScene extends Phaser.Scene {
           this.map.rows,
         );
         const sr = this.placement.snapRect;
-        if (!tileUnder || p.x >= this.stageWidth || p.y >= this.stageHeight) {
+        if (
+          !tileUnder ||
+          p.worldX >= this.stageWidth ||
+          p.worldY >= this.stageHeight
+        ) {
           sr.setVisible(false);
         } else {
           const center = tileToPixel(tileUnder);
@@ -686,13 +708,13 @@ export class StageScene extends Phaser.Scene {
       if (this.gameOver) return;
       if (this.statusPanel) {
         // SPEC-007 §5.3: パネル外（パネルスロット x < panelSlotX）をタップで閉じる
-        if (p.x < this.panelSlotX) {
+        if (p.worldX < this.panelSlotX) {
           this.closeStatusPanel();
         }
         return; // パネル内クリックは個別ボタンが担当
       }
-      if (p.y >= this.stageHeight) return;
-      if (p.x >= this.stageWidth) return; // パネルスロット領域はステージ入力対象外
+      if (p.worldY >= this.stageHeight) return;
+      if (p.worldX >= this.stageWidth) return; // パネルスロット領域はステージ入力対象外
 
       if (p.rightButtonDown()) {
         if (this.placement) {
@@ -741,7 +763,7 @@ export class StageScene extends Phaser.Scene {
     this.input.on("pointerup", (p: Phaser.Input.Pointer) => {
       if (this.gameOver || this.statusPanel) return;
       if (this.placement?.kind !== "selecting") return;
-      if (p.x >= this.stageWidth || p.y >= this.stageHeight) return;
+      if (p.worldX >= this.stageWidth || p.worldY >= this.stageHeight) return;
       const tile = pixelToTile(
         p.worldX,
         p.worldY,
