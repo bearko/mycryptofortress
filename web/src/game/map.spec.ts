@@ -81,9 +81,12 @@ describe("Stage1-1 v2 MapDef", () => {
     expect(b.points[b.points.length - 1]).toEqual({ col: 9, row: 6 });
   });
 
-  it("ルート上は path、壁帯 (row 2, 5) は wall、その他は obstacle", () => {
+  it("ルート上は path、壁帯 (row 2, 5) は wall、その他は obstacle、Route B 中央は poison (SPEC-010)", () => {
     expect(tileTypeAt(STAGE1_MAP, { col: 5, row: 1 })).toBe("path");
-    expect(tileTypeAt(STAGE1_MAP, { col: 5, row: 6 })).toBe("path");
+    // SPEC-010: Route B (row 6) の col 5 は poison タイル、両隣は path
+    expect(tileTypeAt(STAGE1_MAP, { col: 5, row: 6 })).toBe("poison");
+    expect(tileTypeAt(STAGE1_MAP, { col: 4, row: 6 })).toBe("path");
+    expect(tileTypeAt(STAGE1_MAP, { col: 6, row: 6 })).toBe("path");
     expect(tileTypeAt(STAGE1_MAP, { col: 5, row: 2 })).toBe("wall");
     expect(tileTypeAt(STAGE1_MAP, { col: 5, row: 5 })).toBe("wall");
     expect(tileTypeAt(STAGE1_MAP, { col: 5, row: 3 })).toBe("obstacle");
