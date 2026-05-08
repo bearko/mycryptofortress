@@ -3,11 +3,14 @@ import { findWorld } from "../game/stages";
 import { getClearedStageIds } from "../game/progress";
 import { SE_KEYS } from "./BootScene";
 import { playSe } from "./seUtil";
+import { getViewport, onResize } from "./layout";
 
 /**
- * SPEC-011: ステージ選択シーン。
+ * SPEC-011 / SPEC-016: ステージ選択シーン。
  * `worldId` パラメータで受け取ったワールドのステージ一覧を表示し、
- * 選んだステージで StageScene を起動する。
+ * 選んだステージで PartyFormationScene を起動する。
+ *
+ * SPEC-016 でビューポートサイズに追従するレイアウトに変更。
  */
 export class StageSelectScene extends Phaser.Scene {
   private worldId = "world-1";
@@ -21,9 +24,14 @@ export class StageSelectScene extends Phaser.Scene {
   }
 
   create(): void {
-    const { width } = this.scale;
     this.cameras.main.setBackgroundColor(0x0e1117);
+    this.layout();
+    onResize(this, () => this.layout());
+  }
 
+  private layout(): void {
+    this.children.removeAll(true);
+    const { width } = getViewport(this);
     const world = findWorld(this.worldId);
     if (!world) {
       this.add
@@ -48,7 +56,7 @@ export class StageSelectScene extends Phaser.Scene {
         fontSize: "12px",
         color: "#cbd5e1",
         align: "center",
-        wordWrap: { width: 480, useAdvancedWrap: true },
+        wordWrap: { width: Math.min(480, width - 32), useAdvancedWrap: true },
       })
       .setOrigin(0.5);
 
@@ -65,11 +73,9 @@ export class StageSelectScene extends Phaser.Scene {
       this.scene.start("WorldSelectScene");
     });
 
-    // SPEC-014: クリア済みステージを取得
     const cleared = getClearedStageIds();
 
-    // ステージ一覧を縦並び
-    const cardW = 460;
+    const cardW = Math.min(480, width - 32);
     const cardH = 88;
     const gap = 14;
     const baseY = 140;
@@ -83,7 +89,6 @@ export class StageSelectScene extends Phaser.Scene {
       bg.setStrokeStyle(2, isCleared ? 0x4ade80 : 0x4b5563);
       bg.setInteractive({ useHandCursor: true });
 
-      // ステージ番号バッジ
       this.add
         .rectangle(cx - cardW / 2 + 32, cy, 48, 48, 0x1e293b, 1)
         .setStrokeStyle(2, isCleared ? 0x4ade80 : 0xfde047);
@@ -110,7 +115,6 @@ export class StageSelectScene extends Phaser.Scene {
         })
         .setOrigin(0, 0.5);
 
-      // クリア済みバッジ または ▶
       if (isCleared) {
         this.add
           .text(cx + cardW / 2 - 16, cy - 18, "✓ クリア", {
@@ -133,7 +137,6 @@ export class StageSelectScene extends Phaser.Scene {
       bg.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
         if (pointer.rightButtonDown()) return;
         playSe(this, SE_KEYS.uiMenu());
-        // SPEC-015: バトル画面に行く前にパーティ編成を挟む
         this.scene.start("PartyFormationScene", { stageId: stage.id });
       });
     });
