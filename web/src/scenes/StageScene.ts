@@ -3,7 +3,6 @@ import { HEROES, findHero } from "../game/heroData";
 import { findEnemy } from "../game/enemyData";
 import {
   STAGE1_MAP,
-  STAGE1_WAVE,
   TILE_SIZE,
   blockMaxFor,
   canPlaceClassOnTile,
@@ -16,6 +15,7 @@ import {
   tileToPixel,
   tileTypeAt,
 } from "../game/map";
+import { DEFAULT_STAGE_ID, findStage, type StageDef } from "../game/stages";
 import type {
   EnemyDef,
   HeroClass,
@@ -188,6 +188,9 @@ type PlacementPhase = SelectingPhase | OrientingPhase | null;
 
 export class StageScene extends Phaser.Scene {
   private map: MapDef = STAGE1_MAP;
+  /** SPEC-011: 現在実行中のステージ（init で設定） */
+  private currentStage: StageDef | null = null;
+  private currentStageId = DEFAULT_STAGE_ID;
   /** プレイ領域（タイル群）の幅。サイドパネルは含まない */
   private stageWidth = 0;
   private stageHeight = 0;
@@ -260,24 +263,38 @@ export class StageScene extends Phaser.Scene {
     super("StageScene");
   }
 
+  init(data: { stageId?: string }): void {
+    if (data?.stageId) this.currentStageId = data.stageId;
+  }
+
   create(): void {
-    this.map = STAGE1_MAP;
+    // SPEC-011: stages.ts から現在ステージを取得。見つからなければデフォルトに fallback
+    const stage = findStage(this.currentStageId);
+    if (!stage) {
+      // eslint-disable-next-line no-console
+      console.warn(`[StageScene] stage not found: ${this.currentStageId}, fall back to default`);
+      this.currentStageId = DEFAULT_STAGE_ID;
+    }
+    this.currentStage = findStage(this.currentStageId) ?? null;
+    this.map = this.currentStage?.map ?? STAGE1_MAP;
+    const wave = this.currentStage?.wave ?? { patterns: [] };
+
     this.stageWidth = this.map.cols * TILE_SIZE;
     this.stageHeight = this.map.rows * TILE_SIZE;
     this.canvasWidth = this.stageWidth + PANEL_SLOT_WIDTH;
     this.panelSlotX = this.stageWidth;
-    void this.canvasWidth; // 将来パネル位置計算で使用予定（暫定で参照だけ）
+    void this.canvasWidth;
 
-    this.baseHp = 5;
-    this.maxBaseHp = 5;
-    this.ce = 30;
+    this.baseHp = this.currentStage?.baseHp ?? 5;
+    this.maxBaseHp = this.baseHp;
+    this.ce = this.currentStage?.startingCe ?? 30;
     this.ceProgress = 0;
     this.elapsed = 0;
     this.spawnedTotal = 0;
     this.defeatedTotal = 0;
     this.escapedTotal = 0;
-    this.totalToDefeat = STAGE1_WAVE.patterns.length;
-    this.waveQueue = [...STAGE1_WAVE.patterns];
+    this.totalToDefeat = wave.patterns.length;
+    this.waveQueue = [...wave.patterns];
     this.placement = null;
     this.placedHeroes = [];
     this.enemies = [];
@@ -2424,16 +2441,31 @@ export class StageScene extends Phaser.Scene {
         { fontSize: "16px", color: "#e5e7eb" },
       )
       .setOrigin(0.5);
-    const btn = this.add
-      .text(this.stageWidth / 2, this.stageHeight / 2 + 70, "[ もう一度 ]", {
-        fontSize: "18px",
+    // SPEC-011: もう一度 / ステージ選択へ の 2 ボタン
+    const retryBtn = this.add
+      .text(this.stageWidth / 2 - 70, this.stageHeight / 2 + 70, "[ もう一度 ]", {
+        fontSize: "16px",
         color: "#93c5fd",
       })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
-    btn.on("pointerdown", () => this.scene.restart());
+    retryBtn.on("pointerdown", () =>
+      this.scene.restart({ stageId: this.currentStageId }),
+    );
 
-    this.endOverlay = this.add.container(0, 0, [overlay, title, sub, btn]);
+    const selectBtn = this.add
+      .text(this.stageWidth / 2 + 70, this.stageHeight / 2 + 70, "[ ステージ選択へ ]", {
+        fontSize: "16px",
+        color: "#fde68a",
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    selectBtn.on("pointerdown", () => {
+      const worldId = this.currentStage?.worldId ?? "world-1";
+      this.scene.start("StageSelectScene", { worldId });
+    });
+
+    this.endOverlay = this.add.container(0, 0, [overlay, title, sub, retryBtn, selectBtn]);
     this.endOverlay.setDepth(100);
   }
 }
