@@ -82,37 +82,53 @@ export interface Theme {
   hudTint: ColorNum;
 }
 
+/**
+ * SPEC-030: MCT (MyCryptoTactics) のビジュアル言語に揃えた "STEEL ONYX" 改訂版。
+ *
+ * MCT 由来の値:
+ *   --bg #121018   → bg.base
+ *   --panel #1e1a28 → bg.surface
+ *   --map-node #2a2438 → bg.raised
+ *   --border #3d3550 → line.base
+ *   --text #e6e0f0   → ink.primary
+ *   --muted #8a8199  → ink.tertiary
+ *   --accent #c4a35a → accent.primary  (gold)
+ *   --energy #5ab4c4 → hudTint
+ *   --danger #c45c6a → accent.danger
+ *   --gain #5ecf8a   → accent.success
+ *   --loss #ff6b6b   → 重大な error が必要なときのみ別途使用
+ */
 export const THEME_ONYX: Theme = {
   id: "onyx",
   name: "STEEL ONYX",
   bg: {
-    base: 0x0a0c10,
-    surface: 0x14181f,
-    raised: 0x1b202a,
-    overlay: 0x232a36,
-    inset: 0x080a0e,
+    base: 0x121018,
+    surface: 0x1e1a28,
+    raised: 0x2a2438,
+    overlay: 0x363050,
+    inset: 0x0a080f,
   },
   line: {
-    weak: 0x222934,
-    base: 0x2d3441,
-    strong: 0x3d4656,
-    bright: 0x5a6478,
+    weak: 0x2d2640,
+    base: 0x3d3550,
+    strong: 0x5a4f70,
+    bright: 0x7d6d96,
   },
   ink: {
-    primary: 0xe5e7eb,
-    secondary: 0x9ca3af,
-    tertiary: 0x6b7280,
-    muted: 0x4b5563,
-    inverse: 0x0a0c10,
+    primary: 0xe6e0f0,
+    secondary: 0xb3a8c4,
+    tertiary: 0x8a8199,
+    muted: 0x564f64,
+    inverse: 0x121018,
   },
   accent: {
-    primary: 0x38bdf8,
-    primaryDk: 0x0ea5e9,
-    warn: 0xf59e0b,
-    danger: 0xef4444,
-    success: 0x22c55e,
+    primary: 0xc4a35a,
+    primaryDk: 0x9a7f3e,
+    warn: 0xfdb931,
+    danger: 0xc45c6a,
+    success: 0x5ecf8a,
   },
-  hudTint: 0x38bdf8,
+  hudTint: 0x5ab4c4,
 };
 
 /**
@@ -385,11 +401,17 @@ export const GAP = {
   xxl: 32,
 } as const;
 
-/** Phaser tween で使う duration / ease */
+/**
+ * Phaser tween で使う duration / ease。
+ *
+ * SPEC-030: MCT は subtle (≤180ms) + 報酬モーメントだけ overshoot pop (380ms cubic-bezier)
+ * というメリハリのあるリズム。`pop` を追加してモーダル / 解放演出で使う。
+ */
 export const MOTION = {
   fast: { duration: 120, ease: "Cubic.easeOut" },
-  base: { duration: 200, ease: "Cubic.easeOut" },
+  base: { duration: 180, ease: "Sine.easeOut" },
   slow: { duration: 320, ease: "Cubic.easeOut" },
+  pop: { duration: 380, ease: "Back.easeOut" },
   cutin: { duration: 560, ease: "Back.easeOut" },
 } as const;
 
