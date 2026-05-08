@@ -16,6 +16,7 @@ import {
   tileTypeAt,
 } from "../game/map";
 import { DEFAULT_STAGE_ID, findStage, type StageDef } from "../game/stages";
+import { markStageCleared } from "../game/progress";
 import type {
   EnemyDef,
   HeroClass,
@@ -2410,6 +2411,11 @@ export class StageScene extends Phaser.Scene {
     this.gameOver = true;
     this.cancelPlacement();
     if (this.statusPanel) this.closeStatusPanel();
+
+    // SPEC-014: 勝利時のみクリア記録を localStorage に保存
+    if (victory) {
+      markStageCleared(this.currentStageId);
+    }
 
     const overlay = this.add.rectangle(
       this.stageWidth / 2,
