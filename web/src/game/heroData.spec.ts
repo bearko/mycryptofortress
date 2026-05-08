@@ -23,9 +23,9 @@ describe("HEROES (SPEC-015 / SPEC-019)", () => {
   it("findHero で id 検索ができる", () => {
     expect(findHero(1001)?.name).toBe("コナン・ドイル");
     expect(findHero(2002)?.name).toBe("スパルタクス");
-    expect(findHero(3001)?.name).toBe("真田幸村");
-    expect(findHero(4001)?.name).toBe("織田信長");
-    expect(findHero(5001)?.name).toBe("卑弥呼");
+    expect(findHero(3001)?.name).toBe("ETHEREMON-RED");
+    expect(findHero(4001)?.name).toBe("張飛");
+    expect(findHero(5001)?.name).toBe("織田信長");
     expect(findHero(9999)).toBeUndefined();
   });
 
