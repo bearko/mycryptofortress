@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>MyCryptoFortress · Visual Refresh Spec</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=Zen+Kaku+Gothic+New:wght@500;700&family=Orbitron:wght@500;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#0A0C10;color:#E5E7EB;
+    font-family:'Noto Sans JP',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  ::selection{background:#38BDF855;color:#fff}
+  a{color:inherit}
+  /* scrollbar */
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-track{background:#0A0C10}
+  ::-webkit-scrollbar-thumb{background:#2D3441;border:2px solid #0A0C10}
+  ::-webkit-scrollbar-thumb:hover{background:#3D4656}
+
+  /* cutin animations */
+  @keyframes cutinUpper{
+    0%{transform:translateY(-100%)}60%{transform:translateY(0)}
+    80%{transform:translateY(0)}100%{transform:translateY(-100%)}
+  }
+  @keyframes cutinLower{
+    0%{transform:translateY(100%)}60%{transform:translateY(0)}
+    80%{transform:translateY(0)}100%{transform:translateY(100%)}
+  }
+  @keyframes cutinLines{
+    0%{opacity:0;transform:translateX(-30%)}30%{opacity:.6}
+    100%{opacity:0;transform:translateX(30%)}
+  }
+  @keyframes cutinPop{
+    0%{opacity:0;transform:translate(-50%,-50%) scale(.85)}
+    70%{opacity:1;transform:translate(-50%,-50%) scale(1.04)}
+    100%{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  }
+  @keyframes cutinFade{
+    0%,80%{opacity:1}100%{opacity:0}
+  }
+  @keyframes pulseReady{
+    0%,100%{opacity:.4;transform:scale(1)}
+    50%{opacity:1;transform:scale(1.06)}
+  }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="tokens.jsx"></script>
+  <script type="text/babel" src="icons.jsx"></script>
+  <script type="text/babel" src="components.jsx"></script>
+  <script type="text/babel" src="battle.jsx"></script>
+  <script type="text/babel" src="screens.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+</body>
+</html>

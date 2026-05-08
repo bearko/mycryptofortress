@@ -1,0 +1,94 @@
+// === MyCryptoFortress · STEEL ONYX ===
+// Phaser: setFillStyle(0xRRGGBB) で直接利用可
+
+// BACKGROUND
+bg.base     = #0A0C10  // 0x0A0C10
+bg.surface  = #14181F  // 0x14181F
+bg.raised   = #1B202A  // 0x1B202A
+bg.overlay  = #232A36  // 0x232A36
+bg.inset    = #080A0E  // 0x080A0E
+
+// LINE
+line.weak   = #222934  // 0x222934
+line.base   = #2D3441  // 0x2D3441
+line.strong = #3D4656  // 0x3D4656
+line.bright = #5A6478  // 0x5A6478
+
+// INK
+ink.primary   = #E5E7EB  // 0xE5E7EB
+ink.secondary = #9CA3AF  // 0x9CA3AF
+ink.tertiary  = #6B7280  // 0x6B7280
+ink.muted     = #4B5563  // 0x4B5563
+ink.inverse   = #0A0C10  // 0x0A0C10
+
+// ACCENT
+accent.primary   = #38BDF8  // 0x38BDF8  選択/満タン
+accent.primaryDk = #0EA5E9  // 0x0EA5E9
+accent.warn      = #F59E0B  // 0xF59E0B  CE/警告
+accent.danger    = #EF4444  // 0xEF4444  HP/死亡
+accent.success   = #22C55E  // 0x22C55E  クリア/回復
+
+// CLASS COLORS (8職業)
+class.defender   = #4A8FE8  // 0x4A8FE8  (重装   DEFENDER)
+class.vanguard   = #E84A5F  // 0xE84A5F  (前衛   VANGUARD)
+class.pioneer    = #F59E0B  // 0xF59E0B  (先鋒   PIONEER)
+class.specialist = #C448E8  // 0xC448E8  (特殊   SPECIALIST)
+class.sniper     = #84CC16  // 0x84CC16  (狙撃   SNIPER)
+class.caster     = #06B6D4  // 0x06B6D4  (術師   CASTER)
+class.medic      = #10B981  // 0x10B981  (医療   MEDIC)
+class.supporter  = #EC4899  // 0xEC4899  (補助   SUPPORTER)
+
+// RARITY
+rarity.C = #FCD34D  // 0xFCD34D  (Common)
+rarity.U = #60A5FA  // 0x60A5FA  (Uncommon)
+
+// ATTR
+attr.PHY = #F87171  // 0xF87171
+attr.INT = #A78BFA  // 0xA78BFA
+
+// TILE
+tile.path        .fill = #1A2230  // 0x1A2230
+tile.path        .line = #2A3344  // 0x2A3344
+tile.path_blocked.fill = #241A1F  // 0x241A1F
+tile.path_blocked.line = #3A2A35  // 0x3A2A35
+tile.wall        .fill = #0E1118  // 0x0E1118
+tile.wall        .line = #1F2530  // 0x1F2530
+tile.obstacle    .fill = #181818  // 0x181818
+tile.obstacle    .line = #2A2A2A  // 0x2A2A2A
+tile.poison      .fill = #16231C  // 0x16231C
+tile.poison      .line = #2D5237  // 0x2D5237
+
+// FONTS (Google Fonts URL に対応)
+font.jpHead  = 'Zen Kaku Gothic New', 'Noto Sans JP', system-ui, sans-serif
+font.jpBody  = 'Noto Sans JP', system-ui, sans-serif
+font.display = 'Orbitron', 'Audiowide', ui-monospace, monospace
+font.mono    = 'JetBrains Mono', 'Major Mono Display', ui-monospace, monospace
+
+// TYPE SCALE
+type.h1      = 32px / 1.25 / w700   シーンタイトル（World/Stage 名）
+type.h2      = 24px / 1.30 / w700   セクション見出し
+type.h3      = 18px / 1.35 / w600   カードタイトル / ヒーロー名
+type.body    = 14px / 1.55 / w400   本文 / 説明
+type.small   = 12px / 1.45 / w500   メタ情報 / ステータス
+type.caption = 11px / 1.40 / w500   キャプション
+type.badge   = 10px / 1.0  / w700   バッジ / タグ (LATIN-only, ALL-CAPS, letter-spacing .15em)
+type.hud     = 20px / 1.0  / w600   HUD 数値 (HP/CE/秒) — display 書体
+type.hudL    = 28px / 1.0  / w700   HUD 大数値 — display 書体
+
+// MOTION
+motion.fast  = 120ms cubic-bezier(.2,0,.2,1)
+motion.base  = 200ms cubic-bezier(.2,0,.2,1)
+motion.slow  = 320ms cubic-bezier(.2,0,.2,1)
+motion.cutin = 560ms cubic-bezier(.16,.7,.2,1.05)
+
+// SHADOW / GLOW
+shadow.card  = 0 1px 0 rgba(255,255,255,.04) inset, 0 8px 24px rgba(0,0,0,.45)
+shadow.glow  = 0 0 0 1px {color}, 0 0 16px -2px {color}
+
+// === STEEL SENGOKU 差分 (B案・戦国ワールドのみで使うなら) ===
+// bg.base     = #0B0908
+// bg.surface  = #15110F
+// bg.raised   = #1D1815
+// accent.primary = #DC2626  (朱赤)
+// accent.warn    = #D4A24C  (落ち着いた金)
+// その他は構造同じ。詳細は tokens.jsx の THEME_SENGOKU を参照。
