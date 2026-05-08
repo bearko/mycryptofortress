@@ -75,6 +75,8 @@ interface RosterEntry {
   border: Phaser.GameObjects.Rectangle;
   sprite: Phaser.GameObjects.Sprite;
   selectedMark: Phaser.GameObjects.Text;
+  /** スロット内に作成された全 GameObjects（scroll container 等への reparent 用） */
+  members: Phaser.GameObjects.GameObject[];
 }
 
 interface DetailGeometry {
@@ -84,11 +86,31 @@ interface DetailGeometry {
   height: number;
 }
 
+type RarityFilter = HeroRarity | "all";
+const FILTER_ORDER: RarityFilter[] = [
+  "all",
+  "common",
+  "uncommon",
+  "rare",
+  "superRare",
+  "legendary",
+];
+const FILTER_LABEL: Record<RarityFilter, string> = {
+  all: "ALL",
+  common: "C",
+  uncommon: "U",
+  rare: "R",
+  superRare: "SR",
+  legendary: "L",
+};
+
 export class PartyFormationScene extends Phaser.Scene {
   private stageId = "1-1";
   private party: number[] = [];
   /** フォーカス対象の hero ID（左の編成スロット or 保有一覧、どちらでも共通） */
   private focusedHeroId: number | null = null;
+  /** SPEC-021: 保有ヒーローのレアリティフィルタ */
+  private rarityFilter: RarityFilter = "all";
 
   private slots: SlotEntry[] = [];
   private roster: RosterEntry[] = [];
@@ -96,6 +118,11 @@ export class PartyFormationScene extends Phaser.Scene {
   private partyCountText!: Phaser.GameObjects.Text;
   private startBtnBg!: Phaser.GameObjects.Rectangle;
   private startBtnText!: Phaser.GameObjects.Text;
+
+  /** SPEC-021: roster scroll 用 */
+  private rosterContainer: Phaser.GameObjects.Container | null = null;
+  private rosterScrollMin = 0;
+  private rosterScrollMax = 0;
 
   /** 詳細パネル: focus に依存して再生成する子要素 */
   private detailDynamic: Phaser.GameObjects.GameObject[] = [];
@@ -136,6 +163,9 @@ export class PartyFormationScene extends Phaser.Scene {
     this.slots = [];
     this.roster = [];
     this.detailDynamic = [];
+    this.rosterContainer = null;
+    this.rosterScrollMin = 0;
+    this.rosterScrollMax = 0;
 
     const vp = getViewport(this);
     const stage = findStage(this.stageId);
@@ -237,6 +267,11 @@ export class PartyFormationScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    // SPEC-021: rarity filter chips (rosterTopY 上)
+    const filterY = rosterHeadingY + 22;
+    this.buildFilterChips(leftCenter, filterY);
+
+    // SPEC-021: roster は scroll 可能なコンテナ + mask
     const rosterCols = 6;
     const rosterGap = 4;
     const rosterSlotW = Math.min(
@@ -247,25 +282,25 @@ export class PartyFormationScene extends Phaser.Scene {
     const rosterGridW =
       rosterSlotW * rosterCols + rosterGap * (rosterCols - 1);
     const rosterStartX = leftPaneX + (leftPaneW - rosterGridW) / 2;
-    const rosterTopY = rosterHeadingY + 22;
-
-    HEROES.forEach((hero, i) => {
-      const col = i % rosterCols;
-      const row = Math.floor(i / rosterCols);
-      const cx =
-        rosterStartX + col * (rosterSlotW + rosterGap) + rosterSlotW / 2;
-      const cy =
-        rosterTopY + row * (rosterSlotH + rosterGap) + rosterSlotH / 2;
-      this.roster.push(
-        this.buildRosterEntry(hero, cx, cy, rosterSlotW, rosterSlotH),
-      );
-    });
+    const rosterTopY = filterY + 28;
+    const btnY = height - 24;
+    const rosterBottomY = btnY - 32;
+    const rosterViewH = rosterBottomY - rosterTopY;
+    this.buildScrollableRoster(
+      rosterStartX,
+      rosterTopY,
+      rosterGridW,
+      rosterViewH,
+      rosterCols,
+      rosterSlotW,
+      rosterSlotH,
+      rosterGap,
+    );
 
     // 出撃ボタン (左ペイン下)
     const btnW = 220;
     const btnH = 36;
     const btnX = leftCenter;
-    const btnY = height - 24;
     this.startBtnBg = this.add.rectangle(btnX, btnY, btnW, btnH, theme.accent.primary, 1);
     this.startBtnBg.setStrokeStyle(2, theme.accent.primary);
     this.startBtnBg.setInteractive({ useHandCursor: true });
@@ -347,38 +382,38 @@ export class PartyFormationScene extends Phaser.Scene {
       .setOrigin(0.5);
     cursorY += 14;
 
+    // SPEC-021: rarity filter chips
+    this.buildFilterChips(width / 2, cursorY + 4);
+    cursorY += 28;
+
     const rosterCols = 6;
     const rosterGap = 4;
     const rosterSlotW = Math.floor(
       (innerW - rosterGap * (rosterCols - 1)) / rosterCols,
     );
     const rosterSlotH = Math.max(64, rosterSlotW + 8);
-    const rosterRows = Math.ceil(HEROES.length / rosterCols);
     const rosterGridW =
       rosterSlotW * rosterCols + rosterGap * (rosterCols - 1);
     const rosterStartX = sidePad + (innerW - rosterGridW) / 2;
     const rosterTopY = cursorY + 6;
-
-    HEROES.forEach((hero, i) => {
-      const col = i % rosterCols;
-      const row = Math.floor(i / rosterCols);
-      const cx =
-        rosterStartX + col * (rosterSlotW + rosterGap) + rosterSlotW / 2;
-      const cy =
-        rosterTopY + row * (rosterSlotH + rosterGap) + rosterSlotH / 2;
-      this.roster.push(
-        this.buildRosterEntry(hero, cx, cy, rosterSlotW, rosterSlotH),
-      );
-    });
-    cursorY =
-      rosterTopY +
-      rosterSlotH * rosterRows +
-      rosterGap * (rosterRows - 1) +
-      6;
-
-    // 出撃ボタン
     const btnH = 40;
     const btnY = height - btnH / 2 - 10;
+    // 詳細パネル予約分 (約 130px) を引いた領域を roster viewport として確保
+    const detailReserve = 140;
+    const rosterBottomY = btnY - btnH / 2 - detailReserve;
+    const rosterViewH = Math.max(rosterSlotH + 8, rosterBottomY - rosterTopY);
+
+    this.buildScrollableRoster(
+      rosterStartX,
+      rosterTopY,
+      rosterGridW,
+      rosterViewH,
+      rosterCols,
+      rosterSlotW,
+      rosterSlotH,
+      rosterGap,
+    );
+    cursorY = rosterTopY + rosterViewH + 6;
     const btnW = Math.min(280, innerW);
     this.startBtnBg = this.add.rectangle(
       width / 2,
@@ -438,7 +473,15 @@ export class PartyFormationScene extends Phaser.Scene {
     w: number,
     h: number,
   ): RosterEntry {
-    const border = this.add.rectangle(cx, cy, w, h, theme.bg.surface, 1);
+    const members: Phaser.GameObjects.GameObject[] = [];
+    const track = <T extends Phaser.GameObjects.GameObject>(o: T): T => {
+      members.push(o);
+      return o;
+    };
+
+    const border = track(
+      this.add.rectangle(cx, cy, w, h, theme.bg.surface, 1),
+    );
     border.setStrokeStyle(2, theme.line.base);
     border.setInteractive({ useHandCursor: true });
 
@@ -448,53 +491,70 @@ export class PartyFormationScene extends Phaser.Scene {
     const portraitSize = Math.min(48, Math.max(24, h - 14 - labelStripH));
     const portraitCY = cy - h / 2 + 14 + portraitSize / 2;
 
-    const sprite = this.add
-      .sprite(cx, portraitCY, TEXTURE_KEYS.hero(hero.id))
-      .setDisplaySize(portraitSize, portraitSize);
+    const sprite = track(
+      this.add
+        .sprite(cx, portraitCY, TEXTURE_KEYS.hero(hero.id))
+        .setDisplaySize(portraitSize, portraitSize),
+    );
 
-    this.add
-      .text(cx - w / 2 + 4, cy - h / 2 + 4, RARITY[hero.rarity].label, {
-        fontSize: "10px",
-        color: hex2css(RARITY[hero.rarity].hex),
-        fontStyle: "bold",
-      })
-      .setOrigin(0, 0);
+    track(
+      this.add
+        .text(cx - w / 2 + 4, cy - h / 2 + 4, RARITY[hero.rarity].label, {
+          fontSize: "10px",
+          color: hex2css(RARITY[hero.rarity].hex),
+          fontStyle: "bold",
+        })
+        .setOrigin(0, 0),
+    );
 
-    this.add
-      .text(cx + w / 2 - 4, cy - h / 2 + 4, `${hero.cost}`, {
-        fontSize: "10px",
-        color: hex2css(theme.ink.primary),
-        fontStyle: "bold",
-      })
-      .setOrigin(1, 0);
+    track(
+      this.add
+        .text(cx + w / 2 - 4, cy - h / 2 + 4, `${hero.cost}`, {
+          fontSize: "10px",
+          color: hex2css(theme.ink.primary),
+          fontStyle: "bold",
+        })
+        .setOrigin(1, 0),
+    );
 
     // 職業ラベル
-    this.add
-      .text(cx, cy + h / 2 - (compact ? 4 : 22), CLASS_LABEL[hero.class], {
-        fontSize: "10px",
-        color: hex2css(theme.accent.primary),
-      })
-      .setOrigin(0.5, 1);
+    track(
+      this.add
+        .text(
+          cx,
+          cy + h / 2 - (compact ? 4 : 22),
+          CLASS_LABEL[hero.class],
+          {
+            fontSize: "10px",
+            color: hex2css(theme.accent.primary),
+          },
+        )
+        .setOrigin(0.5, 1),
+    );
 
     // 名前（コンパクト時は省く: 詳細パネルで確認可能）
     if (!compact) {
-      this.add
-        .text(cx, cy + h / 2 - 4, hero.name, {
-          fontSize: "9px",
-          color: hex2css(theme.ink.primary),
-          align: "center",
-          wordWrap: { width: w - 6, useAdvancedWrap: true },
-        })
-        .setOrigin(0.5, 1);
+      track(
+        this.add
+          .text(cx, cy + h / 2 - 4, hero.name, {
+            fontSize: "9px",
+            color: hex2css(theme.ink.primary),
+            align: "center",
+            wordWrap: { width: w - 6, useAdvancedWrap: true },
+          })
+          .setOrigin(0.5, 1),
+      );
     }
 
-    const selectedMark = this.add
-      .text(cx + w / 2 - 4, cy + h / 2 - 4, "✓", {
-        fontSize: "12px",
-        color: hex2css(theme.accent.success),
-        fontStyle: "bold",
-      })
-      .setOrigin(1, 1);
+    const selectedMark = track(
+      this.add
+        .text(cx + w / 2 - 4, cy + h / 2 - 4, "✓", {
+          fontSize: "12px",
+          color: hex2css(theme.accent.success),
+          fontStyle: "bold",
+        })
+        .setOrigin(1, 1),
+    );
     selectedMark.setVisible(false);
 
     border.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
@@ -502,7 +562,177 @@ export class PartyFormationScene extends Phaser.Scene {
       this.onRosterTap(hero.id);
     });
 
-    return { hero, cx, cy, w, h, border, sprite, selectedMark };
+    return { hero, cx, cy, w, h, border, sprite, selectedMark, members };
+  }
+
+  // ─── SPEC-021: rarity filter chips ─────────────────
+  private buildFilterChips(centerX: number, y: number): void {
+    const chipH = 22;
+    const gap = 4;
+    // 各チップ幅は label 長による
+    const widths = FILTER_ORDER.map((r) => (r === "all" ? 36 : r === "superRare" ? 32 : 26));
+    const totalW = widths.reduce((a, b) => a + b, 0) + gap * (FILTER_ORDER.length - 1);
+    let cursorX = centerX - totalW / 2;
+    FILTER_ORDER.forEach((r, i) => {
+      const w = widths[i];
+      const isActive = this.rarityFilter === r;
+      const accent =
+        r === "all" ? theme.accent.primary : RARITY[r as HeroRarity].hex;
+      const fill = isActive ? accent : theme.bg.surface;
+      const border = isActive ? accent : theme.line.base;
+      const fg = isActive ? theme.ink.inverse : accent;
+      const bg = this.add
+        .rectangle(cursorX, y, w, chipH, fill, 1)
+        .setOrigin(0, 0.5)
+        .setStrokeStyle(1, border);
+      bg.setInteractive({ useHandCursor: true });
+      bg.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+        if (pointer.rightButtonDown()) return;
+        if (this.rarityFilter === r) return;
+        this.rarityFilter = r;
+        // フォーカスは現在表示外になるならクリア
+        if (this.focusedHeroId !== null) {
+          const h = findHero(this.focusedHeroId);
+          if (h && r !== "all" && h.rarity !== r && !this.party.includes(h.id)) {
+            this.focusedHeroId = null;
+          }
+        }
+        this.buildLayout();
+      });
+      this.add
+        .text(cursorX + w / 2, y, FILTER_LABEL[r], {
+          fontFamily: "'Orbitron', ui-monospace, monospace",
+          fontSize: r === "superRare" ? "9px" : "10px",
+          color: hex2css(fg),
+          fontStyle: "bold",
+        })
+        .setOrigin(0.5);
+      cursorX += w + gap;
+    });
+  }
+
+  private getFilteredHeroes(): HeroDef[] {
+    if (this.rarityFilter === "all") return HEROES;
+    return HEROES.filter((h) => h.rarity === this.rarityFilter);
+  }
+
+  // ─── SPEC-021: スクロール可能 roster ────────────────
+  private buildScrollableRoster(
+    startX: number,
+    topY: number,
+    gridW: number,
+    viewH: number,
+    cols: number,
+    slotW: number,
+    slotH: number,
+    gap: number,
+  ): void {
+    const heroes = this.getFilteredHeroes();
+    if (heroes.length === 0) {
+      this.add
+        .text(startX + gridW / 2, topY + viewH / 2, "該当するヒーローがいません", {
+          fontSize: "12px",
+          color: hex2css(theme.ink.muted),
+        })
+        .setOrigin(0.5);
+      return;
+    }
+
+    // スクロール可能なコンテナを viewport 位置に置く
+    const container = this.add.container(startX, topY);
+    this.rosterContainer = container;
+
+    // 各 slot を container 相対座標で作り、members を一括で container へ reparent
+    heroes.forEach((hero, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const cx = col * (slotW + gap) + slotW / 2;
+      const cy = row * (slotH + gap) + slotH / 2;
+      const entry = this.buildRosterEntry(hero, cx, cy, slotW, slotH);
+      for (const obj of entry.members) container.add(obj);
+      this.roster.push(entry);
+    });
+
+    const rows = Math.ceil(heroes.length / cols);
+    const totalH = slotH * rows + gap * Math.max(0, rows - 1);
+
+    // mask: viewport 外の slot は描画しない
+    const maskShape = this.make.graphics({ x: 0, y: 0 }, false);
+    maskShape.fillStyle(0xffffff, 1);
+    maskShape.fillRect(startX, topY, gridW, viewH);
+    container.setMask(maskShape.createGeometryMask());
+
+    // scroll 上限
+    this.rosterScrollMax = 0; // y=0 を最上端
+    this.rosterScrollMin = Math.min(0, viewH - totalH); // 負の値（上に押し上げる）
+
+    // wheel scroll
+    this.input.on(
+      "wheel",
+      (
+        pointer: Phaser.Input.Pointer,
+        _go: Phaser.GameObjects.GameObject[],
+        _dx: number,
+        dy: number,
+      ) => {
+        if (
+          pointer.x < startX ||
+          pointer.x > startX + gridW ||
+          pointer.y < topY ||
+          pointer.y > topY + viewH
+        )
+          return;
+        if (!this.rosterContainer) return;
+        const next = Phaser.Math.Clamp(
+          this.rosterContainer.y - dy * 0.5,
+          topY + this.rosterScrollMin,
+          topY + this.rosterScrollMax,
+        );
+        this.rosterContainer.y = next;
+      },
+    );
+
+    // touch / drag scroll
+    let dragStart = -1;
+    let scrollStart = 0;
+    let dragging = false;
+    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (
+        pointer.x < startX ||
+        pointer.x > startX + gridW ||
+        pointer.y < topY ||
+        pointer.y > topY + viewH
+      ) {
+        dragStart = -1;
+        return;
+      }
+      dragStart = pointer.y;
+      scrollStart = this.rosterContainer?.y ?? topY;
+      dragging = false;
+    });
+    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (dragStart < 0 || !this.rosterContainer) return;
+      const dy = pointer.y - dragStart;
+      if (Math.abs(dy) > 6) dragging = true;
+      if (dragging) {
+        this.rosterContainer.y = Phaser.Math.Clamp(
+          scrollStart + dy,
+          topY + this.rosterScrollMin,
+          topY + this.rosterScrollMax,
+        );
+      }
+    });
+    const endDrag = () => {
+      if (dragging) {
+        // 直後の click が roster slot に届かないように一度 disable する
+        // ※ 簡易対応: dragging フラグを残し、roster click 側では参照する
+        this.events.emit("rosterDragEnd");
+      }
+      dragStart = -1;
+      dragging = false;
+    };
+    this.input.on("pointerup", endDrag);
+    this.input.on("pointerupoutside", endDrag);
   }
 
   // ─── 詳細パネル ─────────────────────────────────
