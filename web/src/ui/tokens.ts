@@ -1,0 +1,340 @@
+/**
+ * SPEC-018: ビジュアル刷新（STEEL ONYX テーマ）の中央トークン。
+ *
+ * 元データ: `design/design_tokens.txt` / `design/tokens.jsx`
+ *
+ * - 数値 (`0xRRGGBB`) は `Phaser` の `setFillStyle` / `setStrokeStyle` 等で
+ *   そのまま使える形。
+ * - テキスト系の `color` プロパティ (`Phaser.GameObjects.Text` の style) は
+ *   CSS 風文字列 (`"#rrggbb"`) を要求するので、`hex2css(n)` で変換する。
+ *
+ * 命名規則のずれ（重要）:
+ *   現状コードの `HeroClass` は `defender / guard / vanguard / specialist /
+ *   sniper / caster / medic / supporter`。
+ *   一方デザインは `defender / vanguard / pioneer / ...` と命名し直している
+ *   （日本語ラベルは同じで英字 ID だけ変更）。
+ *
+ *   日本語ラベル軸でマッピング:
+ *     重装  defender   (code: defender)   #4A8FE8
+ *     前衛  guard     (code: guard)      #E84A5F  ← design.vanguard
+ *     先鋒  vanguard  (code: vanguard)   #F59E0B  ← design.pioneer
+ *     特殊  specialist                   #C448E8
+ *     狙撃  sniper                       #84CC16
+ *     術師  caster                       #06B6D4
+ *     医療  medic                        #10B981
+ *     補助  supporter                    #EC4899
+ *
+ *   つまり「英字 ID」は既存コード側を踏襲し、色だけデザイン値を反映する。
+ */
+
+import type { AttackType, HeroClass, HeroRarity, MapTileType } from "../game/types";
+
+/** Phaser の数値カラー（0xRRGGBB） */
+export type ColorNum = number;
+
+/** CSS 風文字列カラー（#rrggbb） */
+export type ColorCss = string;
+
+/** Phaser 数値カラーを CSS 文字列に変換 */
+export function hex2css(n: ColorNum): ColorCss {
+  return `#${n.toString(16).padStart(6, "0")}`;
+}
+
+/** 16 進文字列を Phaser の `0xRRGGBB` に変換（"#" 付きでも可） */
+export function css2hex(s: string): ColorNum {
+  return parseInt(s.replace(/^#/, ""), 16);
+}
+
+// ─────────────────────────────────────────────
+// Theme: STEEL ONYX
+// ─────────────────────────────────────────────
+export interface Theme {
+  id: "onyx" | "sengoku";
+  name: string;
+  bg: {
+    base: ColorNum;
+    surface: ColorNum;
+    raised: ColorNum;
+    overlay: ColorNum;
+    inset: ColorNum;
+  };
+  line: {
+    weak: ColorNum;
+    base: ColorNum;
+    strong: ColorNum;
+    bright: ColorNum;
+  };
+  ink: {
+    primary: ColorNum;
+    secondary: ColorNum;
+    tertiary: ColorNum;
+    muted: ColorNum;
+    inverse: ColorNum;
+  };
+  accent: {
+    primary: ColorNum;
+    primaryDk: ColorNum;
+    warn: ColorNum;
+    danger: ColorNum;
+    success: ColorNum;
+  };
+  /** HUD やカットインで使うアクセント色のショートカット */
+  hudTint: ColorNum;
+}
+
+export const THEME_ONYX: Theme = {
+  id: "onyx",
+  name: "STEEL ONYX",
+  bg: {
+    base: 0x0a0c10,
+    surface: 0x14181f,
+    raised: 0x1b202a,
+    overlay: 0x232a36,
+    inset: 0x080a0e,
+  },
+  line: {
+    weak: 0x222934,
+    base: 0x2d3441,
+    strong: 0x3d4656,
+    bright: 0x5a6478,
+  },
+  ink: {
+    primary: 0xe5e7eb,
+    secondary: 0x9ca3af,
+    tertiary: 0x6b7280,
+    muted: 0x4b5563,
+    inverse: 0x0a0c10,
+  },
+  accent: {
+    primary: 0x38bdf8,
+    primaryDk: 0x0ea5e9,
+    warn: 0xf59e0b,
+    danger: 0xef4444,
+    success: 0x22c55e,
+  },
+  hudTint: 0x38bdf8,
+};
+
+/**
+ * STEEL SENGOKU（B 案）。戦国ワールドのみで切り替える想定。今は値だけ保持。
+ */
+export const THEME_SENGOKU: Theme = {
+  id: "sengoku",
+  name: "STEEL SENGOKU",
+  bg: {
+    base: 0x0b0908,
+    surface: 0x15110f,
+    raised: 0x1d1815,
+    overlay: 0x26201c,
+    inset: 0x080605,
+  },
+  line: {
+    weak: 0x241d19,
+    base: 0x322822,
+    strong: 0x43352d,
+    bright: 0x6a5447,
+  },
+  ink: {
+    primary: 0xede7dd,
+    secondary: 0xa89a8a,
+    tertiary: 0x766b5e,
+    muted: 0x534a40,
+    inverse: 0x0b0908,
+  },
+  accent: {
+    primary: 0xdc2626,
+    primaryDk: 0x991b1b,
+    warn: 0xd4a24c,
+    danger: 0xef4444,
+    success: 0x7da84a,
+  },
+  hudTint: 0xdc2626,
+};
+
+export const THEMES = {
+  onyx: THEME_ONYX,
+  sengoku: THEME_SENGOKU,
+} as const;
+
+/** デフォルトテーマ。シーンはこれを参照する。 */
+export const theme: Theme = THEME_ONYX;
+
+// ─────────────────────────────────────────────
+// 8 職業カラー（コード上の HeroClass で索引）
+// ─────────────────────────────────────────────
+export interface ClassToken {
+  hex: ColorNum;
+  jp: string;
+  en: string;
+  /** デザイン時の英字 ID（参考。コードの ID とずれている場合あり） */
+  designId: string;
+}
+
+export const CLASS_COLORS: Record<HeroClass, ClassToken> = {
+  defender: { hex: 0x4a8fe8, jp: "重装", en: "DEFENDER", designId: "defender" },
+  guard: { hex: 0xe84a5f, jp: "前衛", en: "VANGUARD", designId: "vanguard" },
+  vanguard: { hex: 0xf59e0b, jp: "先鋒", en: "PIONEER", designId: "pioneer" },
+  specialist: { hex: 0xc448e8, jp: "特殊", en: "SPECIALIST", designId: "specialist" },
+  sniper: { hex: 0x84cc16, jp: "狙撃", en: "SNIPER", designId: "sniper" },
+  caster: { hex: 0x06b6d4, jp: "術師", en: "CASTER", designId: "caster" },
+  medic: { hex: 0x10b981, jp: "医療", en: "MEDIC", designId: "medic" },
+  supporter: { hex: 0xec4899, jp: "補助", en: "SUPPORTER", designId: "supporter" },
+};
+
+/** 表示順（パレット / フィルタチップなどで使う標準並び） */
+export const CLASS_ORDER: HeroClass[] = [
+  "defender",
+  "guard",
+  "vanguard",
+  "specialist",
+  "sniper",
+  "caster",
+  "medic",
+  "supporter",
+];
+
+// ─────────────────────────────────────────────
+// Rarity / Attr
+// ─────────────────────────────────────────────
+export const RARITY: Record<HeroRarity, { hex: ColorNum; label: string; name: string }> = {
+  common: { hex: 0xfcd34d, label: "C", name: "Common" },
+  uncommon: { hex: 0x60a5fa, label: "U", name: "Uncommon" },
+};
+
+export const ATTR: Record<AttackType, { hex: ColorNum; label: string }> = {
+  PHY: { hex: 0xf87171, label: "PHY" },
+  INT: { hex: 0xa78bfa, label: "INT" },
+};
+
+// ─────────────────────────────────────────────
+// Tile colors
+// ─────────────────────────────────────────────
+export interface TileToken {
+  fill: ColorNum;
+  line: ColorNum;
+  label: string;
+}
+
+export const TILE_COLORS: Record<MapTileType, TileToken> = {
+  path: { fill: 0x1a2230, line: 0x2a3344, label: "床" },
+  path_blocked: { fill: 0x241a1f, line: 0x3a2a35, label: "通行不可" },
+  wall: { fill: 0x0e1118, line: 0x1f2530, label: "壁" },
+  obstacle: { fill: 0x181818, line: 0x2a2a2a, label: "障害物" },
+  poison: { fill: 0x16231c, line: 0x2d5237, label: "毒沼" },
+};
+
+// ─────────────────────────────────────────────
+// Typography
+// ─────────────────────────────────────────────
+export const FONT_FAMILIES = {
+  jpHead: "'Zen Kaku Gothic New', 'Noto Sans JP', system-ui, sans-serif",
+  jpBody: "'Noto Sans JP', system-ui, sans-serif",
+  display: "'Orbitron', 'Audiowide', ui-monospace, monospace",
+  mono: "'JetBrains Mono', 'Major Mono Display', ui-monospace, monospace",
+} as const;
+
+/**
+ * Phaser.GameObjects.Text で使えるスタイルプリセット。
+ * 例: `this.add.text(x, y, "...", textStyle("h2"))`
+ */
+export interface TypeStep {
+  px: number;
+  /** line-height multiplier（CSS と同じ） */
+  lh: number;
+  /** font-weight */
+  w: 400 | 500 | 600 | 700;
+  /** 用途メモ（ログ用） */
+  use: string;
+  /** デフォルトのフォントファミリー */
+  family: string;
+}
+
+export const TYPE: Record<
+  | "h1"
+  | "h2"
+  | "h3"
+  | "body"
+  | "small"
+  | "caption"
+  | "badge"
+  | "hud"
+  | "hudL",
+  TypeStep
+> = {
+  h1: { px: 32, lh: 1.25, w: 700, use: "シーンタイトル", family: FONT_FAMILIES.jpHead },
+  h2: { px: 24, lh: 1.3, w: 700, use: "セクション見出し", family: FONT_FAMILIES.jpHead },
+  h3: { px: 18, lh: 1.35, w: 600, use: "カード/ヒーロー名", family: FONT_FAMILIES.jpHead },
+  body: { px: 14, lh: 1.55, w: 400, use: "本文", family: FONT_FAMILIES.jpBody },
+  small: { px: 12, lh: 1.45, w: 500, use: "メタ/ステータス", family: FONT_FAMILIES.jpBody },
+  caption: { px: 11, lh: 1.4, w: 500, use: "キャプション", family: FONT_FAMILIES.jpBody },
+  badge: { px: 10, lh: 1.0, w: 700, use: "英字バッジ ALL-CAPS", family: FONT_FAMILIES.display },
+  hud: { px: 20, lh: 1.0, w: 600, use: "HUD 数値", family: FONT_FAMILIES.display },
+  hudL: { px: 28, lh: 1.0, w: 700, use: "HUD 大数値", family: FONT_FAMILIES.display },
+};
+
+/**
+ * Phaser テキストスタイルを生成するヘルパ。
+ * `color` は Theme の ink.primary をデフォルトに、上書き可能。
+ */
+export function textStyle(
+  step: keyof typeof TYPE,
+  overrides: Partial<Phaser.Types.GameObjects.Text.TextStyle> & {
+    /** 色 (Phaser 数値) を渡せばこちらが優先される */
+    colorNum?: ColorNum;
+  } = {},
+): Phaser.Types.GameObjects.Text.TextStyle {
+  const t = TYPE[step];
+  const { colorNum, ...rest } = overrides;
+  return {
+    fontFamily: t.family,
+    fontSize: `${t.px}px`,
+    fontStyle: t.w >= 600 ? "bold" : "",
+    color: colorNum !== undefined ? hex2css(colorNum) : hex2css(theme.ink.primary),
+    ...rest,
+  };
+}
+
+// ─────────────────────────────────────────────
+// Shape / Motion
+// ─────────────────────────────────────────────
+export const RADIUS = {
+  xs: 2,
+  sm: 4,
+  md: 6,
+  lg: 10,
+  pill: 999,
+} as const;
+
+export const BORDER = {
+  hairline: 1,
+  base: 1,
+  strong: 2,
+} as const;
+
+/** 標準スペーシング */
+export const GAP = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  xxl: 32,
+} as const;
+
+/** Phaser tween で使う duration / ease */
+export const MOTION = {
+  fast: { duration: 120, ease: "Cubic.easeOut" },
+  base: { duration: 200, ease: "Cubic.easeOut" },
+  slow: { duration: 320, ease: "Cubic.easeOut" },
+  cutin: { duration: 560, ease: "Back.easeOut" },
+} as const;
+
+// ─────────────────────────────────────────────
+// 便利な派生値
+// ─────────────────────────────────────────────
+/** `theme.ink.primary` を CSS 文字列で取得 */
+export const cssInk = (key: keyof Theme["ink"]) => hex2css(theme.ink[key]);
+/** `theme.accent.*` を CSS 文字列で取得 */
+export const cssAccent = (key: keyof Theme["accent"]) => hex2css(theme.accent[key]);
+/** クラス色を CSS 文字列で取得 */
+export const cssClass = (cls: HeroClass) => hex2css(CLASS_COLORS[cls].hex);
