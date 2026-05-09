@@ -602,8 +602,7 @@ export class StageScene extends Phaser.Scene {
       this.addWorld(
         this.add
           .text(start.x, start.y - 22, `IN ${route.id}`, {
-            fontSize: "14px",
-            color: hex2css(theme.accent.success),
+            ...textStyle("small", { colorNum: theme.accent.success }),
             fontStyle: "bold",
           })
           .setOrigin(0.5),
@@ -611,8 +610,7 @@ export class StageScene extends Phaser.Scene {
       this.addWorld(
         this.add
           .text(goal.x, goal.y - 22, `OUT ${route.id}`, {
-            fontSize: "14px",
-            color: hex2css(theme.accent.warn),
+            ...textStyle("small", { colorNum: theme.accent.warn }),
             fontStyle: "bold",
           })
           .setOrigin(0.5),
@@ -757,8 +755,7 @@ export class StageScene extends Phaser.Scene {
 
       const labelCost = this.add
         .text(cx + 28, palTop + 8, `${hero.cost}`, {
-          fontSize: "13px",
-          color: hex2css(theme.ink.primary),
+          ...textStyle("small", { colorNum: theme.ink.primary }),
           fontStyle: "bold",
           stroke: hex2css(theme.bg.base),
           strokeThickness: 3,
@@ -770,8 +767,7 @@ export class StageScene extends Phaser.Scene {
       const classIcon = makeClassIcon(this, cx - 18, palTop + 60, hero.class, 14, classColor);
       const labelClass = this.add
         .text(cx + 4, palTop + 60, CLASS_LABEL[hero.class], {
-          fontSize: "13px",
-          color: hex2css(classColor),
+          ...textStyle("small", { colorNum: classColor }),
           fontStyle: "bold",
         })
         .setOrigin(0, 0.5);
@@ -779,8 +775,7 @@ export class StageScene extends Phaser.Scene {
 
       const labelStatus = this.add
         .text(cx, palTop + 75, "", {
-          fontSize: "14px",
-          color: hex2css(theme.accent.success),
+          ...textStyle("small", { colorNum: theme.accent.success }),
           fontStyle: "bold",
         })
         .setOrigin(0.5);
@@ -809,7 +804,7 @@ export class StageScene extends Phaser.Scene {
       10,
       hudY + 144,
       "ヒーローアイコンをタップ → タイルへドラッグして配置",
-      { fontSize: "13px", color: hex2css(theme.ink.tertiary) },
+      textStyle("small", { colorNum: theme.ink.tertiary }),
     );
   }
 
@@ -944,8 +939,7 @@ export class StageScene extends Phaser.Scene {
       layout.detailY + 8,
       "ヒーローアイコンをタップ → タイルへドラッグして配置",
       {
-        fontSize: "14px",
-        color: hex2css(theme.ink.secondary),
+        ...textStyle("body", { colorNum: theme.ink.secondary }),
         wordWrap: { width: vpW - 16, useAdvancedWrap: true },
       },
     );
@@ -979,8 +973,7 @@ export class StageScene extends Phaser.Scene {
         .setDisplaySize(36, 36);
       const labelCost = this.add
         .text(cx + palSlotW / 2 - 6, cy - palSlotH / 2 + 4, `${hero.cost}`, {
-          fontSize: "13px",
-          color: hex2css(theme.ink.primary),
+          ...textStyle("small", { colorNum: theme.ink.primary }),
           fontStyle: "bold",
           stroke: hex2css(theme.bg.base),
           strokeThickness: 3,
@@ -990,15 +983,13 @@ export class StageScene extends Phaser.Scene {
       const classIcon = makeClassIcon(this, cx - 12, cy + palSlotH / 2 - 12, hero.class, 11, classColor);
       const labelClass = this.add
         .text(cx + 2, cy + palSlotH / 2 - 12, CLASS_LABEL[hero.class], {
-          fontSize: "12px",
-          color: hex2css(classColor),
+          ...textStyle("caption", { colorNum: classColor }),
           fontStyle: "bold",
         })
         .setOrigin(0, 0.5);
       const labelStatus = this.add
         .text(cx, cy + palSlotH / 2 - 4, "", {
-          fontSize: "11px",
-          color: hex2css(theme.accent.success),
+          ...textStyle("badge", { colorNum: theme.accent.success }),
           fontStyle: "bold",
         })
         .setOrigin(0.5, 1);
@@ -1046,15 +1037,12 @@ export class StageScene extends Phaser.Scene {
     // 何も無いときの placeholder テキスト
     this.panelPlaceholder = this.add
       .text(slotCx, slotCy - 30, "ヒーロー詳細", {
-        fontSize: "16px",
-        color: hex2css(theme.line.base),
-        fontStyle: "bold",
+        ...textStyle("h3", { colorNum: theme.line.base }),
       })
       .setOrigin(0.5);
     this.add
       .text(slotCx, slotCy, "ステージ上のヒーローを\nタップすると詳細が出ます", {
-        fontSize: "13px",
-        color: hex2css(theme.line.base),
+        ...textStyle("small", { colorNum: theme.line.base }),
         align: "center",
         lineSpacing: 4,
       })
@@ -1722,8 +1710,7 @@ export class StageScene extends Phaser.Scene {
           // ヒーラー演出: 緑のフラッシュ
           const heart = this.add
             .text(ally.sprite.x, ally.sprite.y - 16, `+${Math.floor(heal)}`, {
-              fontSize: "13px",
-              color: hex2css(theme.accent.success),
+              ...textStyle("small", { colorNum: theme.accent.success }),
               fontStyle: "bold",
               stroke: hex2css(theme.bg.base),
               strokeThickness: 3,
@@ -1977,10 +1964,7 @@ export class StageScene extends Phaser.Scene {
       .setOrigin(0, 0.5);
     const skillName = this.add
       .text(0, 22, `『${hero.skill.name}』`, {
-        fontFamily: "'Zen Kaku Gothic New', 'Noto Sans JP', system-ui, sans-serif",
-        fontSize: "18px",
-        color: hex2css(classColor),
-        fontStyle: "bold",
+        ...textStyle("h3", { colorNum: classColor }),
       })
       .setOrigin(0, 0.5);
     textBlock.add([skillActivate, heroName, skillName]);
