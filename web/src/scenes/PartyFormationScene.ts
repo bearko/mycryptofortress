@@ -233,8 +233,7 @@ export class PartyFormationScene extends Phaser.Scene {
 
     this.add
       .text(leftCenter, 80, `編成中  ( 最大 ${PARTY_LIMIT} 体 )`, {
-        fontSize: "14px",
-        color: hex2css(theme.accent.primary),
+        ...textStyle("body", { colorNum: theme.accent.primary }),
         fontStyle: "bold",
       })
       .setOrigin(0.5);
@@ -264,7 +263,7 @@ export class PartyFormationScene extends Phaser.Scene {
         leftCenter,
         partyTopY + partySlotH * 2 + partyGap + 14,
         "",
-        { fontSize: "13px", color: hex2css(theme.ink.secondary) },
+        textStyle("small", { colorNum: theme.ink.secondary }),
       )
       .setOrigin(0.5);
 
@@ -273,8 +272,7 @@ export class PartyFormationScene extends Phaser.Scene {
       partyTopY + partySlotH * 2 + partyGap + 38;
     this.add
       .text(leftCenter, rosterHeadingY, "保有ヒーロー", {
-        fontSize: "14px",
-        color: hex2css(theme.accent.primary),
+        ...textStyle("body", { colorNum: theme.accent.primary }),
         fontStyle: "bold",
       })
       .setOrigin(0.5);
@@ -318,9 +316,7 @@ export class PartyFormationScene extends Phaser.Scene {
     this.startBtnBg.setInteractive({ useHandCursor: true });
     this.startBtnText = this.add
       .text(btnX, btnY, "出撃 ▶", {
-        fontSize: "16px",
-        color: hex2css(theme.ink.inverse),
-        fontStyle: "bold",
+        ...textStyle("h3", { colorNum: theme.ink.inverse }),
       })
       .setOrigin(0.5);
     this.startBtnBg.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
@@ -347,8 +343,7 @@ export class PartyFormationScene extends Phaser.Scene {
     let cursorY = 76;
     this.add
       .text(width / 2, cursorY, `編成中  ( 最大 ${PARTY_LIMIT} 体 )`, {
-        fontSize: "14px",
-        color: hex2css(theme.accent.primary),
+        ...textStyle("body", { colorNum: theme.accent.primary }),
         fontStyle: "bold",
       })
       .setOrigin(0.5);
@@ -378,8 +373,7 @@ export class PartyFormationScene extends Phaser.Scene {
     // 編成中数
     this.partyCountText = this.add
       .text(width / 2, cursorY + 6, "", {
-        fontSize: "13px",
-        color: hex2css(theme.ink.secondary),
+        ...textStyle("small", { colorNum: theme.ink.secondary }),
       })
       .setOrigin(0.5);
     cursorY += 22;
@@ -387,8 +381,7 @@ export class PartyFormationScene extends Phaser.Scene {
     // 保有ヒーロー
     this.add
       .text(width / 2, cursorY, "保有ヒーロー", {
-        fontSize: "14px",
-        color: hex2css(theme.accent.primary),
+        ...textStyle("body", { colorNum: theme.accent.primary }),
         fontStyle: "bold",
       })
       .setOrigin(0.5);
@@ -440,9 +433,7 @@ export class PartyFormationScene extends Phaser.Scene {
     this.startBtnBg.setInteractive({ useHandCursor: true });
     this.startBtnText = this.add
       .text(width / 2, btnY, "出撃 ▶", {
-        fontSize: "16px",
-        color: hex2css(theme.ink.inverse),
-        fontStyle: "bold",
+        ...textStyle("h3", { colorNum: theme.ink.inverse }),
       })
       .setOrigin(0.5);
     this.startBtnBg.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
@@ -513,8 +504,7 @@ export class PartyFormationScene extends Phaser.Scene {
     track(
       this.add
         .text(cx - w / 2 + 4, cy - h / 2 + 4, RARITY[hero.rarity].label, {
-          fontSize: "14px",
-          color: hex2css(RARITY[hero.rarity].hex),
+          ...textStyle("small", { colorNum: RARITY[hero.rarity].hex }),
           fontStyle: "bold",
         })
         .setOrigin(0, 0),
@@ -523,8 +513,7 @@ export class PartyFormationScene extends Phaser.Scene {
     track(
       this.add
         .text(cx + w / 2 - 4, cy - h / 2 + 4, `${hero.cost}`, {
-          fontSize: "14px",
-          color: hex2css(theme.ink.primary),
+          ...textStyle("small", { colorNum: theme.ink.primary }),
           fontStyle: "bold",
         })
         .setOrigin(1, 0),
@@ -537,10 +526,7 @@ export class PartyFormationScene extends Phaser.Scene {
           cx,
           cy + h / 2 - (compact ? 4 : 22),
           CLASS_LABEL[hero.class],
-          {
-            fontSize: "14px",
-            color: hex2css(theme.accent.primary),
-          },
+          textStyle("small", { colorNum: theme.accent.primary }),
         )
         .setOrigin(0.5, 1),
     );
@@ -550,8 +536,7 @@ export class PartyFormationScene extends Phaser.Scene {
       track(
         this.add
           .text(cx, cy + h / 2 - 4, hero.name, {
-            fontSize: "13px",
-            color: hex2css(theme.ink.primary),
+            ...textStyle("small", { colorNum: theme.ink.primary }),
             align: "center",
             wordWrap: { width: w - 6, useAdvancedWrap: true },
           })
@@ -562,8 +547,7 @@ export class PartyFormationScene extends Phaser.Scene {
     const selectedMark = track(
       this.add
         .text(cx + w / 2 - 4, cy + h / 2 - 4, "✓", {
-          fontSize: "14px",
-          color: hex2css(theme.accent.success),
+          ...textStyle("small", { colorNum: theme.accent.success }),
           fontStyle: "bold",
         })
         .setOrigin(1, 1),
@@ -658,8 +642,7 @@ export class PartyFormationScene extends Phaser.Scene {
     if (heroes.length === 0) {
       this.add
         .text(startX + gridW / 2, topY + viewH / 2, "該当するヒーローがいません", {
-          fontSize: "14px",
-          color: hex2css(theme.ink.muted),
+          ...textStyle("body", { colorNum: theme.ink.muted }),
         })
         .setOrigin(0.5);
       return;
@@ -797,8 +780,7 @@ export class PartyFormationScene extends Phaser.Scene {
           cardCY,
           "ヒーローをタップすると\nここに詳細が表示されます",
           {
-            fontSize: "14px",
-            color: hex2css(theme.ink.muted),
+            ...textStyle("body", { colorNum: theme.ink.muted }),
             align: "center",
             wordWrap: { width: width - 32, useAdvancedWrap: true },
           },
@@ -853,9 +835,7 @@ export class PartyFormationScene extends Phaser.Scene {
     this.detailDynamic.push(
       this.add
         .text(cardCX, y, hero.name, {
-          fontSize: "16px",
-          color: hex2css(theme.ink.primary),
-          fontStyle: "bold",
+          ...textStyle("h3", { colorNum: theme.ink.primary }),
           align: "center",
           wordWrap: { width: width - 24, useAdvancedWrap: true },
         })
@@ -863,14 +843,14 @@ export class PartyFormationScene extends Phaser.Scene {
     );
     y += 24;
 
-    const rarityColor = hex2css(RARITY[hero.rarity].hex);
+    const rarityColor = RARITY[hero.rarity].hex;
     this.detailDynamic.push(
       this.add
         .text(
           cardCX,
           y,
           `[${RARITY_LABEL[hero.rarity]}]  ${CLASS_LABEL[hero.class]}  /  ${hero.attackType}`,
-          { fontSize: "13px", color: rarityColor },
+          textStyle("small", { colorNum: rarityColor }),
         )
         .setOrigin(0.5),
     );
@@ -879,8 +859,7 @@ export class PartyFormationScene extends Phaser.Scene {
     this.detailDynamic.push(
       this.add
         .text(cardCX, y, `配置コスト: ${hero.cost} CE`, {
-          fontSize: "13px",
-          color: hex2css(theme.ink.primary),
+          ...textStyle("small", { colorNum: theme.ink.primary }),
         })
         .setOrigin(0.5),
     );
@@ -928,8 +907,7 @@ export class PartyFormationScene extends Phaser.Scene {
     this.detailDynamic.push(
       this.add
         .text(left + 16, y, "■ スキル", {
-          fontSize: "14px",
-          color: hex2css(theme.accent.primary),
+          ...textStyle("body", { colorNum: theme.accent.primary }),
           fontStyle: "bold",
         })
         .setOrigin(0, 0.5),
@@ -940,8 +918,7 @@ export class PartyFormationScene extends Phaser.Scene {
       this.detailDynamic.push(
         this.add
           .text(left + 16, y, skill.name, {
-            fontSize: "13px",
-            color: hex2css(theme.ink.primary),
+            ...textStyle("small", { colorNum: theme.ink.primary }),
             fontStyle: "bold",
             wordWrap: { width: width - 32, useAdvancedWrap: true },
           })
@@ -951,8 +928,7 @@ export class PartyFormationScene extends Phaser.Scene {
       this.detailDynamic.push(
         this.add
           .text(left + 16, y, skill.description, {
-            fontSize: "13px",
-            color: hex2css(theme.ink.primary),
+            ...textStyle("small", { colorNum: theme.ink.primary }),
             wordWrap: { width: width - 32, useAdvancedWrap: true },
           })
           .setOrigin(0, 0),
@@ -965,8 +941,7 @@ export class PartyFormationScene extends Phaser.Scene {
       this.detailDynamic.push(
         this.add
           .text(left + 16, y, meta, {
-            fontSize: "14px",
-            color: hex2css(theme.ink.tertiary),
+            ...textStyle("small", { colorNum: theme.ink.tertiary }),
           })
           .setOrigin(0, 0),
       );
@@ -974,8 +949,7 @@ export class PartyFormationScene extends Phaser.Scene {
       this.detailDynamic.push(
         this.add
           .text(left + 16, y, "(スキル未定義)", {
-            fontSize: "13px",
-            color: hex2css(theme.ink.muted),
+            ...textStyle("small", { colorNum: theme.ink.muted }),
           })
           .setOrigin(0, 0.5),
       );
@@ -1019,12 +993,11 @@ export class PartyFormationScene extends Phaser.Scene {
 
     const textLeft = portraitX + portraitSize / 2 + 12;
     const textW = Math.max(80, left + width - 12 - textLeft);
-    const rarityColor = hex2css(RARITY[hero.rarity].hex);
+    const rarityColor = RARITY[hero.rarity].hex;
     this.detailDynamic.push(
       this.add
         .text(textLeft, top + 32, hero.name, {
-          fontSize: "14px",
-          color: hex2css(theme.ink.primary),
+          ...textStyle("body", { colorNum: theme.ink.primary }),
           fontStyle: "bold",
           wordWrap: { width: textW, useAdvancedWrap: true },
         })
@@ -1036,7 +1009,7 @@ export class PartyFormationScene extends Phaser.Scene {
           textLeft,
           top + 50,
           `[${RARITY_LABEL[hero.rarity]}] ${CLASS_LABEL[hero.class]} / ${hero.attackType}  ·  Cost ${hero.cost}`,
-          { fontSize: "14px", color: rarityColor },
+          textStyle("body", { colorNum: rarityColor }),
         )
         .setOrigin(0, 0),
     );
@@ -1046,8 +1019,7 @@ export class PartyFormationScene extends Phaser.Scene {
     const statsLine = `HP ${hero.hp} · AGI ${hero.agi} · PHY ${hero.phy} · INT ${hero.int} · DEF ${hero.phyDef}/${hero.intDef}`;
     const statsText = this.add
       .text(left + 12, cursorY, statsLine, {
-        fontSize: "14px",
-        color: hex2css(theme.ink.secondary),
+        ...textStyle("body", { colorNum: theme.ink.secondary }),
         wordWrap: { width: width - 24, useAdvancedWrap: true },
       })
       .setOrigin(0, 0);
@@ -1058,8 +1030,7 @@ export class PartyFormationScene extends Phaser.Scene {
     if (skill) {
       const skillName = this.add
         .text(left + 12, cursorY, `■ ${skill.name}`, {
-          fontSize: "13px",
-          color: hex2css(theme.accent.primary),
+          ...textStyle("small", { colorNum: theme.accent.primary }),
           fontStyle: "bold",
           wordWrap: { width: width - 24, useAdvancedWrap: true },
         })
@@ -1073,8 +1044,7 @@ export class PartyFormationScene extends Phaser.Scene {
       const descMaxH = Math.max(20, descMaxBottom - cursorY);
       const descText = this.add
         .text(left + 12, cursorY, skill.description, {
-          fontSize: "14px",
-          color: hex2css(theme.ink.primary),
+          ...textStyle("body", { colorNum: theme.ink.primary }),
           wordWrap: { width: width - 24, useAdvancedWrap: true },
           // 行数制限の代わり: max height を超えそうなら fixedHeight + 切り捨て
           fixedHeight: descMaxH,
@@ -1141,8 +1111,7 @@ export class PartyFormationScene extends Phaser.Scene {
     this.detailDynamic.push(
       this.add
         .text(cardCX, y, hint, {
-          fontSize: "14px",
-          color: hex2css(theme.ink.muted),
+          ...textStyle("body", { colorNum: theme.ink.muted }),
           wordWrap: { width: width - 16, useAdvancedWrap: true },
           align: "center",
         })
@@ -1257,8 +1226,7 @@ export class PartyFormationScene extends Phaser.Scene {
         slot.children.push(
           this.add
             .text(slot.cx, slot.cy, "（空）", {
-              fontSize: "13px",
-              color: hex2css(theme.ink.muted),
+              ...textStyle("small", { colorNum: theme.ink.muted }),
             })
             .setOrigin(0.5),
         );
@@ -1297,8 +1265,7 @@ export class PartyFormationScene extends Phaser.Scene {
             slot.cy - slot.h / 2 + 4,
             `${hero.cost}`,
             {
-              fontSize: "14px",
-              color: hex2css(theme.ink.primary),
+              ...textStyle("small", { colorNum: theme.ink.primary }),
               fontStyle: "bold",
             },
           )
@@ -1311,7 +1278,7 @@ export class PartyFormationScene extends Phaser.Scene {
             slot.cx,
             slot.cy + slot.h / 2 - (compact ? 4 : 22),
             CLASS_LABEL[hero.class],
-            { fontSize: "14px", color: hex2css(theme.accent.primary) },
+            textStyle("small", { colorNum: theme.accent.primary }),
           )
           .setOrigin(0.5, 1),
       );
@@ -1320,8 +1287,7 @@ export class PartyFormationScene extends Phaser.Scene {
         slot.children.push(
           this.add
             .text(slot.cx, slot.cy + slot.h / 2 - 4, hero.name, {
-              fontSize: "13px",
-              color: hex2css(theme.ink.primary),
+              ...textStyle("small", { colorNum: theme.ink.primary }),
               align: "center",
               wordWrap: { width: slot.w - 6, useAdvancedWrap: true },
             })
@@ -1333,8 +1299,7 @@ export class PartyFormationScene extends Phaser.Scene {
         slot.children.push(
           this.add
             .text(slot.cx, slot.cy - slot.h / 2 + 4, "外す", {
-              fontSize: "14px",
-              color: hex2css(theme.accent.danger),
+              ...textStyle("small", { colorNum: theme.accent.danger }),
               fontStyle: "bold",
             })
             .setOrigin(0.5, 0),
