@@ -2385,34 +2385,55 @@ export class StageScene extends Phaser.Scene {
       alpha: 0.96,
     });
 
-    let cursor = card.contentTop + 8;
+    // SPEC-031: bottom-anchor 方式 — まず下端ボタン群の y を panel 下から逆算し、
+    // skill description は (gauge 上端 - skill block 開始) の残り高さに固定して
+    // クリップする。これで縦方向の content overflow が起きない。
+    const bottomPad = 12;
+    const subBtnH = 32;
+    const subBtnGap = 8;
+    const actBtnH = 38;
+    const actBtnGap = 8;
+    const gaugeBlockH = 14 + 4 + 14 + 8; // bar + spacing + label + spacing
+    const skillTitleBlock = 18 + 4; // "[ スキル ]" + spacing
+    const skillNameBlockMin = 22; // h3 1行
+    const skillDescGap = 6;
 
-    // ポートレート (192px)
-    const PORTRAIT_SIZE = 192;
+    // 下端から積み上げ: subBtns / actBtn / gauge
+    const subBtnY = fullH - bottomPad - subBtnH / 2;
+    const actBtnY = subBtnY - subBtnH / 2 - actBtnGap - actBtnH / 2;
+    const gaugeBottomY = actBtnY - actBtnH / 2 - actBtnGap;
+    const gaugeLabelY = gaugeBottomY - 14; // label height
+    const gaugeBarY = gaugeLabelY - 4 - 10 / 2; // gap + barH/2
+    const skillBlockBottomY = gaugeBarY - 10 / 2 - 8;
+
+    let cursor = card.contentTop + 6;
+
+    // ポートレート (140px に縮小して下端要素が画面内に収まるよう調整)
+    const PORTRAIT_SIZE = 140;
     const portraitSprite = this.add
       .sprite(PANEL_SLOT_WIDTH / 2, cursor + PORTRAIT_SIZE / 2, TEXTURE_KEYS.hero(hero.def.id))
       .setDisplaySize(PORTRAIT_SIZE, PORTRAIT_SIZE);
     card.add(portraitSprite);
-    cursor += PORTRAIT_SIZE + 12;
+    cursor += PORTRAIT_SIZE + 8;
 
-    // ステータスグリッド (full ラベル)
+    // ステータスグリッド (full ラベル) — rowHeight 18 → 16 に詰める
     const statGrid = new StatGrid(this, {
       x: PAD,
       y: cursor,
       width: innerW,
       rows: this.buildStatRows(hero, false),
-      rowHeight: 18,
+      rowHeight: 16,
       step: "small",
     });
     card.add(statGrid);
-    cursor += statGrid.height + 12;
+    cursor += statGrid.height + 6;
 
     // 区切り線
     const sepLine = this.add
       .line(0, cursor, PAD, 0, PANEL_SLOT_WIDTH - PAD, 0, theme.line.weak, 1)
       .setOrigin(0, 0.5);
     card.add(sepLine);
-    cursor += 8;
+    cursor += 6;
 
     // スキル
     const skillTitle = this.add
@@ -2422,7 +2443,7 @@ export class StageScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0);
     card.add(skillTitle);
-    cursor += skillTitle.height + 6;
+    cursor += skillTitle.height + 4;
 
     if (hero.skill) {
       const skillName = this.add
@@ -2433,18 +2454,20 @@ export class StageScene extends Phaser.Scene {
         })
         .setOrigin(0.5, 0);
       card.add(skillName);
-      cursor += skillName.height + 4;
+      cursor += skillName.height + skillDescGap;
 
+      // skill description: 残り高さに固定して overflow を防ぐ
+      const descMaxH = Math.max(20, skillBlockBottomY - cursor);
       const skillDesc = this.add
         .text(PANEL_SLOT_WIDTH / 2, cursor, hero.skill.description, {
           ...textStyle("small", { colorNum: theme.ink.secondary }),
           align: "center",
           wordWrap: { width: innerW, useAdvancedWrap: true },
           lineSpacing: 2,
+          fixedHeight: descMaxH,
         })
         .setOrigin(0.5, 0);
       card.add(skillDesc);
-      cursor += skillDesc.height + 12;
     } else {
       const noSkill = this.add
         .text(PANEL_SLOT_WIDTH / 2, cursor, "（スキル無し）", {
@@ -2452,13 +2475,16 @@ export class StageScene extends Phaser.Scene {
         })
         .setOrigin(0.5, 0);
       card.add(noSkill);
-      cursor += noSkill.height + 12;
     }
 
-    // ゲージ
+    void skillTitleBlock;
+    void skillNameBlockMin;
+    void gaugeBlockH;
+
+    // ゲージ (下端から逆算した位置に固定配置)
     const gauge = new Bar(this, {
       x: PAD,
-      y: cursor + 5,
+      y: gaugeBarY,
       width: innerW,
       height: 10,
       value: hero.skillGauge,
@@ -2466,35 +2492,30 @@ export class StageScene extends Phaser.Scene {
       color: theme.accent.warn,
     });
     card.add(gauge);
-    cursor += 14;
 
     const gaugeLabel = this.add
-      .text(PANEL_SLOT_WIDTH / 2, cursor, `${Math.floor(hero.skillGauge)} / ${GAUGE_MAX}`, {
+      .text(PANEL_SLOT_WIDTH / 2, gaugeLabelY, `${Math.floor(hero.skillGauge)} / ${GAUGE_MAX}`, {
         ...textStyle("small", { colorNum: theme.accent.primary }),
       })
       .setOrigin(0.5, 0);
     card.add(gaugeLabel);
-    cursor += gaugeLabel.height + 12;
 
-    // 発動ボタン (パネル幅いっぱい)
-    const btnH = 40;
+    // 発動ボタン (下端から逆算)
     const activateBtn = new Btn(this, {
       x: PANEL_SLOT_WIDTH / 2,
-      y: cursor + btnH / 2,
+      y: actBtnY,
       width: innerW,
-      height: btnH,
+      height: actBtnH,
       kind: ready ? "solid" : "secondary",
       label: ready ? "▶ スキル発動" : "ゲージ不足",
       onClick: ready ? () => this.activateSkillFromPanel(hero) : undefined,
       disabled: !ready,
     });
     card.add(activateBtn);
-    cursor += btnH + 10;
 
-    // 売却 + 閉じる (横並び)
-    const subBtnW = (innerW - 8) / 2;
-    const subBtnH = 32;
-    const subY = cursor + subBtnH / 2;
+    // 売却 + 閉じる (横並び、下端固定)
+    const subBtnW = (innerW - subBtnGap) / 2;
+    const subY = subBtnY;
     const sellBtn = new Btn(this, {
       x: PAD + subBtnW / 2,
       y: subY,
