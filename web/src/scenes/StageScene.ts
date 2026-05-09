@@ -66,7 +66,7 @@ import {
   theme,
 } from "../ui/tokens";
 import { makeClassIcon } from "../ui/icons";
-import { Bar, Btn, Card, KPI, StatGrid } from "../ui/components";
+import { Bar, Btn, Card, KPI, Modal, StatGrid } from "../ui/components";
 
 // SPEC-024 / SPEC-026: KPI 値 (20px) と Bar (6px) が縦衝突しないよう HUD_HEIGHT
 // を 144 → 156 に拡張。bar / palette / status text もこれに合わせて下げる。
@@ -141,16 +141,14 @@ interface PlacedHero {
   /** SPEC-008 §5.1: 現在 HP / 最大 HP（敵の攻撃で減る） */
   currentHp: number;
   maxHp: number;
-  /** HP バー（currentHp < maxHp で表示） */
-  hpBar: Phaser.GameObjects.Rectangle;
-  hpBarBg: Phaser.GameObjects.Rectangle;
+  /** SPEC-030 F3b: HP バー（currentHp < maxHp で表示）。Bar primitive */
+  hpBar: Bar;
   /** SPEC-004 §5.3 スキルゲージ（0..100） */
   skillGauge: number;
   /** ゲージ満タン時に頭上に出すリング（null=未表示） */
   readyRing: Phaser.GameObjects.Arc | null;
-  /** ゲージバー背景 / 進捗 */
-  gaugeBg: Phaser.GameObjects.Rectangle;
-  gaugeFill: Phaser.GameObjects.Rectangle;
+  /** SPEC-030 F3b: スキルゲージバー */
+  skillGaugeBar: Bar;
   /** 発動中の効果（null=非発動） */
   activeEffect: ActiveSkillState | null;
   /** 発動中に表示するオーラ */
@@ -163,8 +161,8 @@ interface ActiveEnemy {
   def: EnemyDef;
   routeId: string;
   sprite: Phaser.GameObjects.Sprite;
-  hpBar: Phaser.GameObjects.Rectangle;
-  hpBarBg: Phaser.GameObjects.Rectangle;
+  /** SPEC-030 F3b: HP バー (Bar primitive) */
+  hpBar: Bar;
   hp: number;
   nextIndex: number;
   goalReached: boolean;
@@ -302,7 +300,6 @@ export class StageScene extends Phaser.Scene {
   private statusPanelOriginalMapX: number | null = null;
   private statusPanelOriginalScale: number | null = null;
 
-  private endOverlay: Phaser.GameObjects.Container | null = null;
   private gameOver = false;
 
   /** 表示中のカットイン（同時 1 個だけ） */
@@ -378,7 +375,6 @@ export class StageScene extends Phaser.Scene {
     this.statusPanelHeroId = null;
     this.statusPanelOriginalMapX = null;
     this.statusPanelOriginalScale = null;
-    this.endOverlay = null;
     this.gameOver = false;
     this.currentCutIn = null;
     this.currentTileHelp = null;
@@ -1448,33 +1444,31 @@ export class StageScene extends Phaser.Scene {
     const px = tileToPixel(tile);
     const gaugeW = 40;
     const gaugeH = 4;
-    const gaugeY = px.y - 32;
-    const gaugeBg = this.addWorld(
-      this.add
-        .rectangle(px.x, gaugeY, gaugeW, gaugeH, theme.bg.surface, 0.9)
-        .setDepth(33),
-    );
-    const gaugeFill = this.addWorld(
-      this.add
-        .rectangle(px.x - gaugeW / 2, gaugeY, 0, gaugeH, theme.accent.warn)
-        .setOrigin(0, 0.5)
-        .setDepth(34),
-    );
+    // SPEC-030 F3b: Bar primitive を使ったゲージ。setPosition / setValue / setColor / setVisible で制御。
+    const skillGaugeBar = new Bar(this, {
+      x: px.x - gaugeW / 2,
+      y: px.y - 32,
+      width: gaugeW,
+      height: gaugeH,
+      value: 0,
+      max: GAUGE_MAX,
+      color: theme.accent.warn,
+    });
+    skillGaugeBar.setDepth(33);
+    this.addWorld(skillGaugeBar);
 
-    const hpBarY = px.y - 26;
-    const hpBarBg = this.addWorld(
-      this.add
-        .rectangle(px.x, hpBarY, gaugeW, gaugeH, theme.bg.surface, 0.9)
-        .setDepth(33)
-        .setVisible(false),
-    );
-    const hpBar = this.addWorld(
-      this.add
-        .rectangle(px.x - gaugeW / 2, hpBarY, gaugeW, gaugeH, theme.accent.success)
-        .setOrigin(0, 0.5)
-        .setDepth(34)
-        .setVisible(false),
-    );
+    const hpBar = new Bar(this, {
+      x: px.x - gaugeW / 2,
+      y: px.y - 26,
+      width: gaugeW,
+      height: gaugeH,
+      value: hero.hp,
+      max: hero.hp,
+      color: theme.accent.success,
+    });
+    hpBar.setDepth(33);
+    hpBar.setVisible(false);
+    this.addWorld(hpBar);
 
     this.placedHeroes.push({
       def: hero,
@@ -1488,11 +1482,9 @@ export class StageScene extends Phaser.Scene {
       currentHp: hero.hp,
       maxHp: hero.hp,
       hpBar,
-      hpBarBg,
       skillGauge: 0,
       readyRing: null,
-      gaugeBg,
-      gaugeFill,
+      skillGaugeBar,
       activeEffect: null,
       aura: null,
       debuffSnapshots: [],
@@ -1634,10 +1626,8 @@ export class StageScene extends Phaser.Scene {
     this.ce = Math.min(this.maxCe, this.ce + refund);
     hero.sprite.destroy();
     for (const r of hero.rangeRects) r.destroy();
-    hero.gaugeBg.destroy();
-    hero.gaugeFill.destroy();
+    hero.skillGaugeBar.destroy();
     hero.hpBar.destroy();
-    hero.hpBarBg.destroy();
     hero.readyRing?.destroy();
     hero.aura?.destroy();
     this.placedHeroes.splice(idx, 1);
@@ -1789,67 +1779,63 @@ export class StageScene extends Phaser.Scene {
       this.currentTileHelp = null;
     }
 
-    // SPEC-010 fix: ツールチップ幅を 220 → 300 に拡大、CJK 用 advancedWordWrap で
-    // どこでも改行できるように。実テキストの行数で動的に高さを伸ばす。
+    // SPEC-010 fix / SPEC-030 F3b: ツールチップ幅 300px。description の実高さを測って動的サイズ。
     const helpW = 300;
-    const wrapWidth = helpW - 24;
+    const PAD = 12;
+    const wrapWidth = helpW - PAD * 2;
     const accent = parseInt(info.accentColor.slice(1), 16);
 
-    // 先に description テキストを作って実高さを測ってから背景サイズを決める
-    const descTextStyle: Phaser.Types.GameObjects.Text.TextStyle = {
-      fontSize: "14px",
-      color: hex2css(theme.ink.primary),
-      align: "center",
-      wordWrap: { width: wrapWidth, useAdvancedWrap: true },
-    };
-    const descTemp = this.add
-      .text(0, 0, info.description, descTextStyle)
-      .setOrigin(0.5, 0);
-    const descHeight = descTemp.height;
-
-    // 全体のレイアウト: title (16) + descHeight + footer (14) + padding 上下 8
-    const helpH = Math.max(76, 16 + descHeight + 14 + 16);
-
-    const px = tileToPixel(tile);
-    const placedAbove = px.y > this.stageHeight / 2;
-    const helpY = placedAbove
-      ? px.y - TILE_SIZE * 0.6 - helpH / 2
-      : px.y + TILE_SIZE * 0.6 + helpH / 2;
-
-    // ステージ端で見切れないよう x をクランプ
-    const helpX = Math.max(
-      helpW / 2 + 6,
-      Math.min(this.stageWidth - helpW / 2 - 6, px.x),
-    );
-
-    const bg = this.add.rectangle(helpX, helpY, helpW, helpH, theme.bg.base, 0.95);
-    bg.setStrokeStyle(2, accent, 0.9);
-
-    const title = this.add
-      .text(helpX, helpY - helpH / 2 + 8, `［${info.label}］`, {
-        fontSize: "13px",
-        color: info.accentColor,
+    // タイトル
+    const titleText = this.add
+      .text(helpW / 2, 6, `［${info.label}］`, {
+        ...textStyle("small", { colorNum: accent }),
         fontStyle: "bold",
       })
       .setOrigin(0.5, 0);
 
-    descTemp.setPosition(helpX, helpY - helpH / 2 + 26);
-    const desc = descTemp;
+    const descText = this.add
+      .text(helpW / 2, 6 + titleText.height + 4, info.description, {
+        ...textStyle("body", { colorNum: theme.ink.primary }),
+        align: "center",
+        wordWrap: { width: wrapWidth, useAdvancedWrap: true },
+      })
+      .setOrigin(0.5, 0);
 
     const placeableLabel =
       info.placeable.length === 0
         ? "配置不可"
         : "配置可: " +
           info.placeable.map((c) => CLASS_LABEL[c]).join(" / ");
-    const placeable = this.add
-      .text(helpX, helpY + helpH / 2 - 16, placeableLabel, {
-        fontSize: "14px",
-        color: hex2css(theme.accent.success),
+    const placeableY = 6 + titleText.height + 4 + descText.height + 6;
+    const placeableText = this.add
+      .text(helpW / 2, placeableY, placeableLabel, {
+        ...textStyle("body", { colorNum: theme.accent.success }),
       })
       .setOrigin(0.5, 0);
 
+    const helpH = Math.max(76, placeableY + placeableText.height + 8);
+
+    const px = tileToPixel(tile);
+    const placedAbove = px.y > this.stageHeight / 2;
+    const helpCx = Math.max(
+      helpW / 2 + 6,
+      Math.min(this.stageWidth - helpW / 2 - 6, px.x),
+    );
+    const helpCy = placedAbove
+      ? px.y - TILE_SIZE * 0.6 - helpH / 2
+      : px.y + TILE_SIZE * 0.6 + helpH / 2;
+
+    // 背景: タイル種別 accent 色のボーダーを使うので Card より直接 rectangle が合う
+    const bg = this.add
+      .rectangle(0, 0, helpW, helpH, theme.bg.base, 0.95)
+      .setOrigin(0, 0)
+      .setStrokeStyle(2, accent, 0.9);
+
+    const inner = this.add.container(0, 0, [bg, titleText, descText, placeableText]);
+    inner.setSize(helpW, helpH);
+    // helpCx / helpCy は中心座標、container は origin (0,0) なので左上に位置補正
     const container = this.addWorld(
-      this.add.container(0, 0, [bg, title, desc, placeable]),
+      this.add.container(helpCx - helpW / 2, helpCy - helpH / 2, [inner]),
     );
     container.setDepth(80);
     container.setAlpha(0);
@@ -2741,12 +2727,9 @@ export class StageScene extends Phaser.Scene {
       // ゲージ蓄積
       hero.skillGauge = tickGauge(hero.skillGauge, dt);
 
-      // ゲージ UI 位置同期
-      hero.gaugeBg.x = hero.sprite.x;
-      hero.gaugeBg.y = hero.sprite.y - 32;
-      hero.gaugeFill.x = hero.sprite.x - 20;
-      hero.gaugeFill.y = hero.sprite.y - 32;
-      hero.gaugeFill.displayWidth = 40 * (hero.skillGauge / GAUGE_MAX);
+      // SPEC-030 F3b: Bar primitive で位置 + 値同期
+      hero.skillGaugeBar.setPosition(hero.sprite.x - 20, hero.sprite.y - 32);
+      hero.skillGaugeBar.setValue(hero.skillGauge, GAUGE_MAX);
 
       // 満タンリング
       const ready = canActivate(hero.skillGauge);
@@ -2821,25 +2804,25 @@ export class StageScene extends Phaser.Scene {
         .setDisplaySize(TILE_SIZE, TILE_SIZE)
         .setDepth(30),
     );
-    const hpBg = this.addWorld(
-      this.add
-        .rectangle(start.x, start.y - 28, 40, 5, theme.bg.surface, 0.9)
-        .setDepth(31),
-    );
-    const hp = this.addWorld(
-      this.add
-        .rectangle(start.x - 20, start.y - 28, 40, 5, theme.accent.danger)
-        .setOrigin(0, 0.5)
-        .setDepth(32),
-    );
+    // SPEC-030 F3b: 敵 HP も Bar primitive
+    const hpBar = new Bar(this, {
+      x: start.x - 20,
+      y: start.y - 28,
+      width: 40,
+      height: 5,
+      value: def.hp,
+      max: def.hp,
+      color: theme.accent.danger,
+    });
+    hpBar.setDepth(32);
+    this.addWorld(hpBar);
 
     this.enemies.push({
       def,
       routeId: route.id,
       sprite,
       hp: def.hp,
-      hpBar: hp,
-      hpBarBg: hpBg,
+      hpBar,
       nextIndex: 1,
       goalReached: false,
       blockedBy: null,
@@ -2917,18 +2900,15 @@ export class StageScene extends Phaser.Scene {
       // 同タイルにいる前衛系ヒーローによるブロック判定
       this.tryBlockEnemy(enemy);
 
-      enemy.hpBarBg.x = enemy.sprite.x;
-      enemy.hpBarBg.y = enemy.sprite.y - 28;
-      enemy.hpBar.x = enemy.sprite.x - 20;
-      enemy.hpBar.y = enemy.sprite.y - 28;
-      enemy.hpBar.displayWidth = Math.max(0, 40 * (enemy.hp / enemy.def.hp));
+      // SPEC-030 F3b: enemy HP bar を Bar primitive で位置 + 値同期
+      enemy.hpBar.setPosition(enemy.sprite.x - 20, enemy.sprite.y - 28);
+      enemy.hpBar.setValue(Math.max(0, enemy.hp), enemy.def.hp);
     }
 
     this.enemies = this.enemies.filter((e) => {
       if (e.goalReached) {
         e.sprite.destroy();
         e.hpBar.destroy();
-        e.hpBarBg.destroy();
         return false;
       }
       if (e.hp <= 0) {
@@ -2938,7 +2918,6 @@ export class StageScene extends Phaser.Scene {
         }
         e.sprite.destroy();
         e.hpBar.destroy();
-        e.hpBarBg.destroy();
         this.defeatedTotal++;
         return false;
       }
@@ -3191,15 +3170,20 @@ export class StageScene extends Phaser.Scene {
     for (const hero of this.placedHeroes) {
       const x = hero.sprite.x;
       const y = hero.sprite.y - 26;
-      hero.hpBarBg.setPosition(x, y);
+      // SPEC-030 F3b: hero HP bar を Bar primitive で同期
       hero.hpBar.setPosition(x - 20, y);
-      const ratio = Math.max(0, hero.currentHp / hero.maxHp);
-      hero.hpBar.displayWidth = 40 * ratio;
+      hero.hpBar.setValue(Math.max(0, hero.currentHp), hero.maxHp);
       const dmgd = hero.currentHp < hero.maxHp;
       hero.hpBar.setVisible(dmgd);
-      hero.hpBarBg.setVisible(dmgd);
       // HP 残量で色分け
-      hero.hpBar.fillColor = ratio > 0.5 ? theme.accent.success : ratio > 0.25 ? theme.accent.warn : theme.accent.danger;
+      const ratio = Math.max(0, hero.currentHp / hero.maxHp);
+      const color =
+        ratio > 0.5
+          ? theme.accent.success
+          : ratio > 0.25
+            ? theme.accent.warn
+            : theme.accent.danger;
+      hero.hpBar.setColor(color);
     }
   }
 
@@ -3218,10 +3202,8 @@ export class StageScene extends Phaser.Scene {
     // ゴースト・各種 UI 破棄
     hero.sprite.destroy();
     for (const r of hero.rangeRects) r.destroy();
-    hero.gaugeBg.destroy();
-    hero.gaugeFill.destroy();
+    hero.skillGaugeBar.destroy();
     hero.hpBar.destroy();
-    hero.hpBarBg.destroy();
     hero.readyRing?.destroy();
     hero.aura?.destroy();
     const idx = this.placedHeroes.indexOf(hero);
@@ -3260,6 +3242,11 @@ export class StageScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * SPEC-027 / SPEC-030 F3b: 勝敗オーバーレイ。
+   * `Modal('center')` をベースに、内側にタイトル / サブ / 3 つの `Btn` を配置。
+   * 縦画面 (compact) ではボタンを縦に積み、横画面では横並び。
+   */
   private endGame(victory: boolean): void {
     this.gameOver = true;
     this.cancelPlacement();
@@ -3270,86 +3257,102 @@ export class StageScene extends Phaser.Scene {
       markStageCleared(this.currentStageId);
     }
 
-    // SPEC-027: viewport 全体を覆う overlay にして縦/横どちらでもボタンが画面内に収まるようにする
     const vpW = this.scale.width;
-    const vpH = this.scale.height;
-    const cx = vpW / 2;
-    const cy = vpH / 2;
     const compact = vpW < 540;
+    const modalW = compact ? Math.min(vpW - 24, 320) : 460;
+    const modalH = compact ? 240 : 200;
 
-    const overlay = this.add.rectangle(cx, cy, vpW, vpH, 0x000000, 0.65);
-    const title = this.add
-      .text(cx, cy - (compact ? 70 : 50), victory ? "STAGE CLEAR!" : "FAILED", {
-        fontSize: compact ? "32px" : "40px",
-        color: victory ? hex2css(theme.ink.primary) : hex2css(theme.accent.danger),
-        fontStyle: "bold",
+    const modal = new Modal(this, {
+      variant: "center",
+      width: modalW,
+      height: modalH,
+      backdrop: true,
+      closeOnBackdrop: false,
+    });
+
+    const titleY = compact ? 28 : 32;
+    const subY = compact ? 76 : 76;
+    const titleText = this.add
+      .text(modalW / 2, titleY, victory ? "STAGE CLEAR!" : "FAILED", {
+        ...textStyle("h1", {
+          colorNum: victory ? theme.ink.primary : theme.accent.danger,
+        }),
+        fontSize: compact ? "30px" : "36px",
       })
-      .setOrigin(0.5);
-    const sub = this.add
+      .setOrigin(0.5, 0);
+    const subText = this.add
       .text(
-        cx,
-        cy - (compact ? 30 : 0),
+        modalW / 2,
+        subY,
         victory
           ? `撃破 ${this.defeatedTotal} / ${this.totalToDefeat}`
           : "BASE HP が 0 になりました",
-        { fontSize: compact ? "14px" : "16px", color: hex2css(theme.ink.primary) },
+        textStyle("small", { colorNum: theme.ink.secondary }),
       )
-      .setOrigin(0.5);
+      .setOrigin(0.5, 0);
+    modal.panel.add([titleText, subText]);
 
-    // ボタン: 縦画面では縦並び、横画面では横並び。
-    const btnLabels: Array<{
+    const btnSpecs: Array<{
       label: string;
-      color: number;
+      kind: "solid" | "primary" | "secondary";
       onClick: () => void;
     }> = [
       {
-        label: "[ もう一度 ]",
-        color: theme.accent.primary,
-        onClick: () => this.scene.restart({ stageId: this.currentStageId }),
+        label: "もう一度",
+        kind: "solid",
+        onClick: () => {
+          modal.close();
+          this.scene.restart({ stageId: this.currentStageId });
+        },
       },
       {
-        label: "[ 編成を変える ]",
-        color: theme.accent.success,
-        onClick: () =>
+        label: "編成を変える",
+        kind: "primary",
+        onClick: () => {
+          modal.close();
           this.scene.start("PartyFormationScene", {
             stageId: this.currentStageId,
-          }),
+          });
+        },
       },
       {
-        label: "[ ステージ選択 ]",
-        color: theme.ink.primary,
+        label: "ステージ選択",
+        kind: "secondary",
         onClick: () => {
+          modal.close();
           const worldId = this.currentStage?.worldId ?? "world-1";
           this.scene.start("StageSelectScene", { worldId });
         },
       },
     ];
 
-    const buttons: Phaser.GameObjects.Text[] = [];
-    btnLabels.forEach((b, i) => {
-      let bx = cx;
-      let by = cy;
+    btnSpecs.forEach((b, i) => {
+      let bx = modalW / 2;
+      let by = 0;
+      let bw = compact ? modalW - 32 : 130;
+      const bh = compact ? 36 : 38;
       if (compact) {
-        // 縦並び
-        by = cy + 24 + i * 36;
+        by = 120 + i * (bh + 6);
       } else {
-        // 横並び
-        bx = cx + (i - 1) * 130;
-        by = cy + 70;
+        bx = modalW / 2 + (i - 1) * 140;
+        by = 130;
+        bw = 124;
       }
-      const btn = this.add
-        .text(bx, by, b.label, {
-          fontSize: compact ? "15px" : "14px",
-          color: hex2css(b.color),
-        })
-        .setOrigin(0.5)
-        .setInteractive({ useHandCursor: true });
-      btn.on("pointerdown", b.onClick);
-      buttons.push(btn);
+      const btn = new Btn(this, {
+        x: bx,
+        y: by,
+        width: bw,
+        height: bh,
+        kind: b.kind,
+        size: "md",
+        label: b.label,
+        onClick: b.onClick,
+      });
+      modal.panel.add(btn);
     });
 
-    this.endOverlay = this.add.container(0, 0, [overlay, title, sub, ...buttons]);
-    this.endOverlay.setDepth(100);
+    modal.setDepth(100);
+    modal.open();
   }
 }
 
