@@ -19,7 +19,7 @@ import {
   textStyle,
   theme,
 } from "../ui/tokens";
-import { Btn, ScreenHeader } from "../ui/components";
+import { Btn, Card, ScreenHeader, StatGrid, Tag } from "../ui/components";
 import { makeClassIcon } from "../ui/icons";
 
 /**
@@ -592,49 +592,47 @@ export class PartyFormationScene extends Phaser.Scene {
     );
   }
 
-  // ─── SPEC-021: rarity filter chips ─────────────────
+  // ─── SPEC-021 / SPEC-030 F3c: rarity filter chips ──
+  // Tag primitive (`active` + `onClick`) で active/inactive をトグル。
   private buildFilterChips(centerX: number, y: number): void {
-    const chipH = 22;
-    const gap = 4;
-    // 各チップ幅は label 長による
-    const widths = FILTER_ORDER.map((r) => (r === "all" ? 36 : r === "superRare" ? 32 : 26));
-    const totalW = widths.reduce((a, b) => a + b, 0) + gap * (FILTER_ORDER.length - 1);
-    let cursorX = centerX - totalW / 2;
-    FILTER_ORDER.forEach((r, i) => {
-      const w = widths[i];
-      const isActive = this.rarityFilter === r;
+    const gap = 6;
+    // Tag は label 長から幅を自動計算するので、各 Tag 作成後に並べ替える
+    const tags: Tag[] = [];
+    FILTER_ORDER.forEach((r) => {
       const accent =
         r === "all" ? theme.accent.primary : RARITY[r as HeroRarity].hex;
-      const fill = isActive ? accent : theme.bg.surface;
-      const border = isActive ? accent : theme.line.base;
-      const fg = isActive ? theme.ink.inverse : accent;
-      const bg = this.add
-        .rectangle(cursorX, y, w, chipH, fill, 1)
-        .setOrigin(0, 0.5)
-        .setStrokeStyle(1, border);
-      bg.setInteractive({ useHandCursor: true });
-      bg.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-        if (pointer.rightButtonDown()) return;
-        if (this.rarityFilter === r) return;
-        this.rarityFilter = r;
-        // フォーカスは現在表示外になるならクリア
-        if (this.focusedHeroId !== null) {
-          const h = findHero(this.focusedHeroId);
-          if (h && r !== "all" && h.rarity !== r && !this.party.includes(h.id)) {
-            this.focusedHeroId = null;
+      const tag = new Tag(this, {
+        x: 0,
+        y,
+        label: FILTER_LABEL[r],
+        colorNum: accent,
+        mono: true,
+        active: this.rarityFilter === r,
+        onClick: () => {
+          if (this.rarityFilter === r) return;
+          this.rarityFilter = r;
+          if (this.focusedHeroId !== null) {
+            const h = findHero(this.focusedHeroId);
+            if (h && r !== "all" && h.rarity !== r && !this.party.includes(h.id)) {
+              this.focusedHeroId = null;
+            }
           }
-        }
-        this.buildLayout();
+          this.buildLayout();
+        },
       });
-      this.add
-        .text(cursorX + w / 2, y, FILTER_LABEL[r], {
-          fontFamily: "'Orbitron', ui-monospace, monospace",
-          fontSize: r === "superRare" ? "9px" : "10px",
-          color: hex2css(fg),
-          fontStyle: "bold",
-        })
-        .setOrigin(0.5);
-      cursorX += w + gap;
+      tags.push(tag);
+    });
+
+    // 中央寄せに位置を再計算 (Tag の bg は origin (0, 0.5) で 12 + label.width)
+    const widths = tags.map((t) => {
+      const bg = t.list[0] as Phaser.GameObjects.Rectangle;
+      return bg.width;
+    });
+    const totalW = widths.reduce((a, b) => a + b, 0) + gap * (FILTER_ORDER.length - 1);
+    let cursorX = centerX - totalW / 2;
+    tags.forEach((tag, i) => {
+      tag.setX(cursorX);
+      cursorX += widths[i] + gap;
     });
   }
 
@@ -765,21 +763,18 @@ export class PartyFormationScene extends Phaser.Scene {
   }
 
   // ─── 詳細パネル ─────────────────────────────────
+  // SPEC-030 F3c: Card primitive で frame + ヘッダを描画。
   private buildDetailPaneFrame(): void {
     const { left, width, top, height } = this.detailGeometry;
-    const cardCX = left + width / 2;
-    const cardCY = top + height / 2;
-
-    const bg = this.add.rectangle(cardCX, cardCY, width, height, theme.bg.surface, 0.95);
-    bg.setStrokeStyle(2, theme.line.weak);
-    void bg;
-    this.add
-      .text(cardCX, top + 14, "ヒーロー詳細", {
-        fontSize: "14px",
-        color: hex2css(theme.accent.primary),
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5);
+    new Card(this, {
+      x: left,
+      y: top,
+      width,
+      height,
+      title: "ヒーロー詳細",
+      titleColor: theme.accent.primary,
+      alpha: 0.95,
+    });
   }
 
   private clearDetailDynamic(): void {
@@ -896,46 +891,34 @@ export class PartyFormationScene extends Phaser.Scene {
     );
     y += 10;
 
-    const statL = left + 28;
-    const statR = left + width / 2 + 14;
-    const statRows: Array<[string, string, string, string]> = [
-      ["HP", `${hero.hp}`, "AGI", `${hero.agi}`],
-      ["PHY", `${hero.phy}`, "INT", `${hero.int}`],
-      ["PHY DEF", `${hero.phyDef}`, "INT DEF", `${hero.intDef}`],
-    ];
-    for (let r = 0; r < statRows.length; r++) {
-      const [k1, v1, k2, v2] = statRows[r];
-      const ry = y + r * 22 + 6;
-      this.detailDynamic.push(
-        this.add
-          .text(statL, ry, k1, { fontSize: "13px", color: hex2css(theme.ink.tertiary) })
-          .setOrigin(0, 0.5),
-      );
-      this.detailDynamic.push(
-        this.add
-          .text(statL + 78, ry, v1, {
-            fontSize: "14px",
-            color: hex2css(theme.ink.primary),
-            fontStyle: "bold",
-          })
-          .setOrigin(0, 0.5),
-      );
-      this.detailDynamic.push(
-        this.add
-          .text(statR, ry, k2, { fontSize: "13px", color: hex2css(theme.ink.tertiary) })
-          .setOrigin(0, 0.5),
-      );
-      this.detailDynamic.push(
-        this.add
-          .text(statR + 78, ry, v2, {
-            fontSize: "14px",
-            color: hex2css(theme.ink.primary),
-            fontStyle: "bold",
-          })
-          .setOrigin(0, 0.5),
-      );
-    }
-    y += statRows.length * 22 + 8;
+    // SPEC-030 F3c: 2 列レイアウトを 2 つの StatGrid (左 / 右) に分割。
+    const colW = (width - 56) / 2;
+    const leftGrid = new StatGrid(this, {
+      x: left + 28,
+      y: y + 6,
+      width: colW,
+      rows: [
+        ["HP", `${hero.hp}`],
+        ["PHY", `${hero.phy}`],
+        ["PHY DEF", `${hero.phyDef}`],
+      ],
+      rowHeight: 22,
+      step: "small",
+    });
+    const rightGrid = new StatGrid(this, {
+      x: left + width / 2 + 14,
+      y: y + 6,
+      width: colW,
+      rows: [
+        ["AGI", `${hero.agi}`],
+        ["INT", `${hero.int}`],
+        ["INT DEF", `${hero.intDef}`],
+      ],
+      rowHeight: 22,
+      step: "small",
+    });
+    this.detailDynamic.push(leftGrid, rightGrid);
+    y += 3 * 22 + 8;
 
     this.detailDynamic.push(
       this.add.rectangle(cardCX, y, width - 32, 1, theme.line.weak, 1),
