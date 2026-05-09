@@ -739,14 +739,23 @@ export class Modal extends Phaser.GameObjects.Container {
     super(scene, 0, 0);
     this.opts = opts;
     this.variant = opts.variant ?? "center";
-    const vpW = scene.scale.width;
-    const vpH = scene.scale.height;
+
+    // SPEC-031: カメラの worldView (zoom + scroll を反映した世界座標で見える矩形) を
+    // 使って位置とバックドロップサイズを計算する。Scale.RESIZE + camera.zoom が効いた
+    // landscape ではビューポートピクセル ≠ ワールド座標になるので、scene.scale を
+    // そのまま使うとモーダルが画面右下にずれて出る不具合が発生する。
+    const view = scene.cameras.main.worldView;
+    const visX = view.x;
+    const visY = view.y;
+    const visW = view.width;
+    const visH = view.height;
+
     this.modalW = opts.width;
-    this.modalH = opts.height ?? vpH;
+    this.modalH = opts.height ?? visH;
 
     if (opts.backdrop) {
       this.backdrop = scene.add
-        .rectangle(vpW / 2, vpH / 2, vpW, vpH, 0x000000, 0.7)
+        .rectangle(visX + visW / 2, visY + visH / 2, visW, visH, 0x000000, 0.7)
         .setInteractive({ useHandCursor: false });
       if (opts.closeOnBackdrop !== false) {
         this.backdrop.on("pointerdown", () => opts.onClose?.());
@@ -755,8 +764,8 @@ export class Modal extends Phaser.GameObjects.Container {
     }
 
     if (this.variant === "side-right") {
-      this.targetX = vpW - this.modalW;
-      this.targetY = 0;
+      this.targetX = visX + visW - this.modalW;
+      this.targetY = visY;
       // パネル側自体は origin (0, 0) で配置
       this.bg = scene.add
         .rectangle(0, 0, this.modalW, this.modalH, theme.bg.surface, 0.98)
@@ -764,8 +773,8 @@ export class Modal extends Phaser.GameObjects.Container {
         .setOrigin(0, 0);
     } else {
       // center
-      this.targetX = (vpW - this.modalW) / 2;
-      this.targetY = (vpH - this.modalH) / 2;
+      this.targetX = visX + (visW - this.modalW) / 2;
+      this.targetY = visY + (visH - this.modalH) / 2;
       this.bg = scene.add
         .rectangle(0, 0, this.modalW, this.modalH, theme.bg.surface, 1)
         .setStrokeStyle(1, theme.line.base)
@@ -780,9 +789,10 @@ export class Modal extends Phaser.GameObjects.Container {
   /** モーダルを開くアニメーション。`onComplete` で完了時に追加処理可能。 */
   open(onComplete?: () => void): this {
     if (this.variant === "side-right") {
-      // 右画面外から targetX へスライドイン
-      const vpW = this.scene.scale.width;
-      this.panel.x = vpW;
+      // SPEC-031: ワールド座標で画面右端の外からスライドイン
+      const view = this.scene.cameras.main.worldView;
+      const offX = view.x + view.width;
+      this.panel.x = offX;
       this.panel.y = this.targetY;
       this.scene.tweens.add({
         targets: this.panel,
@@ -827,10 +837,12 @@ export class Modal extends Phaser.GameObjects.Container {
   /** モーダルを閉じてGameObject を破棄。`onComplete` 後に this.destroy() */
   close(onComplete?: () => void): void {
     if (this.variant === "side-right") {
-      const vpW = this.scene.scale.width;
+      // SPEC-031: ワールド座標で画面右端の外へスライドアウト
+      const view = this.scene.cameras.main.worldView;
+      const offX = view.x + view.width;
       this.scene.tweens.add({
         targets: this.panel,
-        x: vpW,
+        x: offX,
         duration: 180,
         ease: "Sine.easeIn",
       });
