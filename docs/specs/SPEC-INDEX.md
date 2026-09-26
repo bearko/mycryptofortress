@@ -7,6 +7,7 @@
 | [SPEC-003](./SPEC-003-battle-systems.md) | Deprecated（→ SPEC-100） | バトル戦域システム（職業・多経路マップ・配置ルール・ブロック・ターゲティング） | 2026-05-07 |
 | [SPEC-004](./SPEC-004-skills.md) | Deprecated（→ SPEC-100） | スキルシステム（ゲージ・タップ発動・カットイン・SE・職業別エフェクト） | 2026-05-07 |
 | [SPEC-100](./SPEC-100-v2-game-design.md) | Draft | v2 ゲームデザイン（Outhold 型 TD × インクリメンタル / MCH アセット）v0.2 | 2026-09-26 |
+| [SPEC-101](./SPEC-101-phase0-foundation.md) | Accepted | Phase 0: v1 撤去と v2 基盤（アセット同期・縦画面・入力・セーブ・CI） | 2026-09-26 |
 
 ## v1 → v2 の切り替え
 

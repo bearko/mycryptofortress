@@ -1,0 +1,178 @@
+{
+  "$comment": "SPEC-101 §5.2: ゲームが使う MCH アセットの唯一の登録先。追加したら `npm run assets:sync` を実行してコミットする。",
+  "source": {
+    "repo": "bearko/mycryptoheroes",
+    "ref": "main"
+  },
+  "assets": [
+    {
+      "key": "cryptid.ocean",
+      "type": "image",
+      "path": "Image/Cryptids/01_Ocean.png"
+    },
+    {
+      "key": "cryptid.strawberry",
+      "type": "image",
+      "path": "Image/Cryptids/02_Strawberry.png"
+    },
+    {
+      "key": "cryptid.tangerine",
+      "type": "image",
+      "path": "Image/Cryptids/03_Tangerine.png"
+    },
+    {
+      "key": "cryptid.lime",
+      "type": "image",
+      "path": "Image/Cryptids/04_Lime.png"
+    },
+    {
+      "key": "cryptid.graphite",
+      "type": "image",
+      "path": "Image/Cryptids/05_Graphite.png"
+    },
+    {
+      "key": "cryptid.grape",
+      "type": "image",
+      "path": "Image/Cryptids/06_Grape.png"
+    },
+    {
+      "key": "cryptid.sage",
+      "type": "image",
+      "path": "Image/Cryptids/07_Sage.png"
+    },
+    {
+      "key": "cryptid.blueberry",
+      "type": "image",
+      "path": "Image/Cryptids/08_Blueberry.png"
+    },
+    {
+      "key": "cryptid.ruby",
+      "type": "image",
+      "path": "Image/Cryptids/09_ruby.png"
+    },
+    {
+      "key": "bg.land.ocean",
+      "type": "image",
+      "path": "Image/Backgrounds/2105.png",
+      "preload": false
+    },
+    {
+      "key": "bg.land.strawberry",
+      "type": "image",
+      "path": "Image/Backgrounds/2205.png",
+      "preload": false
+    },
+    {
+      "key": "bg.land.tangerine",
+      "type": "image",
+      "path": "Image/Backgrounds/2301.png",
+      "preload": false
+    },
+    {
+      "key": "bg.land.lime",
+      "type": "image",
+      "path": "Image/Backgrounds/2405.png",
+      "preload": false
+    },
+    {
+      "key": "bg.land.graphite",
+      "type": "image",
+      "path": "Image/Backgrounds/2505.png",
+      "preload": false
+    },
+    {
+      "key": "bg.land.grape",
+      "type": "image",
+      "path": "Image/Backgrounds/2605.png",
+      "preload": false
+    },
+    {
+      "key": "bg.land.sage",
+      "type": "image",
+      "path": "Image/Backgrounds/2705.png",
+      "preload": false
+    },
+    {
+      "key": "bg.land.blueberry",
+      "type": "image",
+      "path": "Image/Backgrounds/2805.png",
+      "preload": false
+    },
+    {
+      "key": "bg.land.ruby",
+      "type": "image",
+      "path": "Image/Backgrounds/2905.png",
+      "preload": false
+    },
+    {
+      "key": "logo.mch",
+      "type": "image",
+      "path": "Image/Icons/mch_logo_horizontal.png"
+    },
+    {
+      "key": "icon.gum",
+      "type": "image",
+      "path": "Image/Icons/gum.png"
+    },
+    {
+      "key": "icon.ce",
+      "type": "image",
+      "path": "Image/Icons/ce.png"
+    },
+    {
+      "key": "icon.cp",
+      "type": "image",
+      "path": "Image/Icons/cp.png"
+    },
+    {
+      "key": "icon.emblem",
+      "type": "image",
+      "path": "Image/Icons/emblem.webp"
+    },
+    {
+      "key": "icon.gold_dust",
+      "type": "image",
+      "path": "Image/Icons/gold_dust.webp"
+    },
+    {
+      "key": "chara.navi_ain_11_idle",
+      "type": "image",
+      "path": "Image/Characters/navi_ain_11_idle.png"
+    },
+    {
+      "key": "chara.navi_ain_12_blink",
+      "type": "image",
+      "path": "Image/Characters/navi_ain_12_blink.png"
+    },
+    {
+      "key": "chara.navi_ain_13_blink",
+      "type": "image",
+      "path": "Image/Characters/navi_ain_13_blink.png"
+    },
+    {
+      "key": "chara.navi_ain_greeting_00_greet_sparkle",
+      "type": "image",
+      "path": "Image/Characters/navi_ain_greeting_00_greet_sparkle.png"
+    },
+    {
+      "key": "chara.navi_ain_greeting_01_greet_sparkle",
+      "type": "image",
+      "path": "Image/Characters/navi_ain_greeting_01_greet_sparkle.png"
+    },
+    {
+      "key": "bgm.land",
+      "type": "audio",
+      "path": "Audio/BGM/land.mp3"
+    },
+    {
+      "key": "se.ui.tap",
+      "type": "audio",
+      "path": "Audio/SE/Battle/4_buff.mp3"
+    },
+    {
+      "key": "se.ui.select",
+      "type": "audio",
+      "path": "Audio/SE/Actions/open_treasure.mp3"
+    }
+  ]
+}
