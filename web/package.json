@@ -15,6 +15,7 @@
     "assets:check": "node scripts/sync-assets.mjs --check"
   },
   "dependencies": {
+    "@fontsource/orbitron": "^5.3.0",
     "phaser": "^3.80.1"
   },
   "devDependencies": {

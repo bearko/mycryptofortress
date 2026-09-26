@@ -100,6 +100,7 @@ web/
 - 論理解像度 **720×1280（9:16）**、`Phaser.Scale.FIT` + `CENTER_BOTH`。
 - ページ背景は暗色で、PC の横長画面では左右が余白になる。
 - ドット絵（ヒーロー / 幻獣 / 立ち絵）は NEAREST フィルタ、テキストは高解像度（devicePixelRatio 反映）。
+- **フォント**: 日本語は**日本語のシステムフォント**を明示したスタックで描く（`view/ui/theme.ts` の `FONT_JA`: Meiryo UI → Meiryo → Yu Gothic UI → Yu Gothic → Hiragino Sans → Hiragino Kaku Gothic ProN → BIZ UDPGothic → Noto Sans JP → Noto Sans CJK JP → Source Han Sans JP → IPA Pゴシック）。Phaser のテキストは DOM 外の canvas に描かれ `lang="ja"` を継承しないため、名前を明示しないと中国語フォント（字形が異なる）にフォールバックする。英数字の見出しは Orbitron を `@fontsource/orbitron` で同梱し、Google Fonts には依存しない。
 - `viewport-fit=cover` + `100dvh` + セーフエリア余白。レターボックス部分は、選択中のランド背景を暗くしたページ背景で埋める。
 
 ### 5.4 入力基盤
@@ -182,4 +183,5 @@ interface SaveData {
 | 日付 | 版 | 変更内容 |
 |------|-----|----------|
 | 2026-09-26 | 0.1 | 初版 |
+| 2026-09-26 | 1.1 | フォント方針を追記（日本語システムフォントの明示、Orbitron 同梱、Google Fonts 廃止） |
 | 2026-09-26 | 1.0 | 実装完了。タップ許容量を 24 論理 px に、背景の遅延読み込み・レターボックス埋め・MCHC アイコン除外を追記 |
