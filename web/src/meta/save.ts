@@ -7,7 +7,7 @@ import type { StorageLike } from "./storage";
  * SPEC-101 §5.5: セーブデータ。スキーマを変える時は SAVE_SCHEMA_VERSION を上げ、
  * MIGRATIONS[旧バージョン] に 1 段分の変換を追加する。
  */
-export const SAVE_SCHEMA_VERSION = 5;
+export const SAVE_SCHEMA_VERSION = 6;
 
 /** SPEC-116: ビルドセットの枠数 */
 export const BUILD_SET_SLOTS = 5;
@@ -19,7 +19,7 @@ export interface SaveData {
   settings: {
     bgmVolume: number;
     seVolume: number;
-    /** SPEC-116: オートレベル（マイルストーン解放後に有効） */
+    /** SPEC-116: オートレベル（丸パネル解放後に有効） */
     autoLevel: boolean;
     /** テストプレイ用の 5 倍速（省略時 OFF） */
     testSpeed?: boolean;
@@ -40,7 +40,7 @@ export interface LevelProgress {
 export interface MetaState {
   /** 所持トークン（SPEC-116a: CE とエンブレム） */
   tokens: { ce: number; emblem: number };
-  /** 累計獲得トークン（マイルストーンの判定にも使う） */
+  /** 累計獲得トークン（丸パネルの判定にも使う） */
   tokensEarned: { ce: number; emblem: number };
   /** スキルツリー: ノード ID → レベル */
   tree: Record<string, number>;
@@ -51,6 +51,25 @@ export interface MetaState {
   treeVersion: number;
   /** SPEC-116: ビルドセット（スキルツリーの配置の保存。空き枠は null） */
   buildSets: (BuildSet | null)[];
+  /** SPEC-119: 条件つきパネルの判定に使う累計記録 */
+  stats: LifetimeStats;
+}
+
+/** SPEC-119: ランをまたいだ累計記録（勝敗・撤退に関係なく積み上がる） */
+export interface LifetimeStats {
+  kills: number;
+  bossKills: number;
+  gumCollected: number;
+  wavesCleared: number;
+  /** 一度も到達ダメージを受けずにクリアした回数 */
+  flawlessClears: number;
+  runs: number;
+}
+
+export const LIFETIME_STAT_KEYS = ["kills", "bossKills", "gumCollected", "wavesCleared", "flawlessClears", "runs"] as const satisfies readonly (keyof LifetimeStats)[];
+
+export function emptyStats(): LifetimeStats {
+  return { kills: 0, bossKills: 0, gumCollected: 0, wavesCleared: 0, flawlessClears: 0, runs: 0 };
 }
 
 export interface BuildSet {
@@ -67,6 +86,7 @@ export function emptyMeta(): MetaState {
     seenDialogs: [],
     treeVersion: TREE_VERSION,
     buildSets: Array.from({ length: BUILD_SET_SLOTS }, () => null),
+    stats: emptyStats(),
   };
 }
 
@@ -103,6 +123,12 @@ export const MIGRATIONS: Migrations = {
         buildSets: Array.from({ length: BUILD_SET_SLOTS }, () => null),
       },
     };
+  },
+  // v5 → v6: 累計記録（SPEC-119）。挑戦回数はレベルごとの記録から復元し、ほかは 0 から数える
+  5: (d) => {
+    const meta = d.meta as MetaState;
+    const runs = Object.values(meta.levels).reduce((s, p) => s + p.runs, 0);
+    return { ...d, meta: { ...meta, stats: { ...emptyStats(), runs } } };
   },
 };
 
@@ -146,6 +172,7 @@ function isValidMeta(m: unknown): m is MetaState {
     if (!isObj(p) || typeof p.cleared !== "boolean" || !isCount(p.bestWave) || !isCount(p.clears) || !isCount(p.runs)) return false;
   }
   if (!Number.isInteger(m.treeVersion)) return false;
+  if (!isObj(m.stats) || !LIFETIME_STAT_KEYS.every((k) => isCount((m.stats as Record<string, unknown>)[k]))) return false;
   return Array.isArray(m.seenDialogs) && m.seenDialogs.every((x) => typeof x === "string");
 }
 

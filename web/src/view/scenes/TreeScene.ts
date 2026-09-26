@@ -1,9 +1,26 @@
 import Phaser from "phaser";
 import { DIALOGS } from "../../data/dialogs";
 import { LEVELS, getLevel } from "../../data/levels";
-import { MILESTONES, isMilestoneReached } from "../../data/milestones";
-import { STAT_LABEL, TOKEN_LABEL, TREE, TREE_BY_ID, nodeCost, type TreeBranch, type TreeNode } from "../../data/tree";
-import { buyBlock, buyNode, clearBuildSet, nextChallengeLevel, hasSeen, isReachable, loadBuildSet, markSeen, nodeLevel, refundAll, refundNode, saveBuildSet, totalSpent } from "../../meta/progress";
+import { CONDITION_LABEL, FEATURE_LABEL, STAT_LABEL, TOKEN_LABEL, TREE, TREE_BY_ID, nodeCost, type TreeBranch, type TreeNode } from "../../data/tree";
+import {
+  buyBlock,
+  buyNode,
+  clearBuildSet,
+  closestUnlock,
+  conditionValue,
+  hasSeen,
+  isFeatureUnlocked,
+  isReachable,
+  loadBuildSet,
+  markSeen,
+  nextChallengeLevel,
+  nextThreshold,
+  nodeLevel,
+  refundAll,
+  refundNode,
+  saveBuildSet,
+  totalSpent,
+} from "../../meta/progress";
 import type { SaveData } from "../../meta/save";
 import { playBgm, playSe } from "../audio";
 import { bindPress } from "../input/press";
@@ -17,7 +34,9 @@ import { jaWrap } from "../ui/jaWrap";
 
 /** ツリー座標 1 あたりの px */
 const UNIT = 120;
+/** パネルの半径（四角は一辺 NODE_R × 2） */
 const NODE_R = 40;
+const SQUARE_RADIUS = 10;
 const PANEL_TOP = 1000;
 const ZOOM_MIN = 0.55;
 const ZOOM_MAX = 1.6;
@@ -41,9 +60,16 @@ interface NodeView {
   icon: Phaser.GameObjects.Image;
   level: Phaser.GameObjects.Text;
   label: Phaser.GameObjects.Text;
-  /** エンブレムで買うノードの目印 */
-  badge?: Phaser.GameObjects.Image;
+  /** SPEC-119: エンブレムで買うパネルの上辺の印 */
+  badge?: Phaser.GameObjects.Container;
 }
+
+/** 条件の記録を読みやすく（1500 → 1,500） */
+const fmt = (v: number) => Math.floor(v).toLocaleString("ja-JP");
+
+/** SPEC-119: パネルの効果（機能を解放するパネルは機能名） */
+const effectText = (n: TreeNode, level: number) =>
+  n.feature && n.effects.length === 0 ? FEATURE_LABEL[n.feature] : n.effects.map((e) => STAT_LABEL[e.stat](e.perLevel * level)).join(" ／ ");
 
 /** 使用中のトークン（両方） */
 const spentLabel = (save: SaveData) => `CE ${totalSpent(save, "ce")}` + (save.meta.tokensEarned.emblem > 0 ? ` ／ エンブレム ${totalSpent(save, "emblem")}` : "");
@@ -112,7 +138,10 @@ export class TreeScene extends Phaser.Scene {
     }
 
     if (!hasSeen(session.data, "tree.first")) {
-      void playDialog(this, DIALOGS["tree.first"]).then(() => session.update((d) => markSeen(d, "tree.first")));
+      void playDialog(this, DIALOGS["tree.first"]).then(() => session.update((d) => markSeen(markSeen(d, "tree.first"), "tree.panels")));
+    } else if (!hasSeen(session.data, "tree.panels")) {
+      // SPEC-119: 以前から遊んでいる人には、新しいパネルの形だけ説明する
+      void playDialog(this, DIALOGS["tree.panels"]).then(() => session.update((d) => markSeen(d, "tree.panels")));
     }
   }
 
@@ -125,15 +154,21 @@ export class TreeScene extends Phaser.Scene {
     const icon = this.add.image(0, 0, n.icon);
     // 魔石の画像は余白が広いので大きめに
     icon.setScale((n.icon.startsWith("stone.") ? 96 : 46) / Math.max(icon.width, icon.height));
-    const level = this.add.text(0, NODE_R - 2, "", { ...textStyle(16, { color: COLORS.bg }), backgroundColor: "#f5c542", padding: { x: 5, y: 1 } }).setOrigin(0.5, 0);
+    const level = this.add.text(0, NODE_R - 12, "", { ...textStyle(15, { color: COLORS.bg }), backgroundColor: "#f5c542", padding: { x: 5, y: 1 } }).setOrigin(0.5, 0);
     const label = this.add
-      .text(0, NODE_R + 24, n.name, { ...textStyle(14, { weight: 500, color: COLORS.inkDim, align: "center" }), wordWrap: jaWrap(176) })
+      .text(0, NODE_R + 20, n.name, { ...textStyle(14, { weight: 500, color: COLORS.inkDim, align: "center" }), wordWrap: jaWrap(150) })
       .setOrigin(0.5, 0);
     const parts: Phaser.GameObjects.GameObject[] = [ring, icon, level, label];
-    let badge: Phaser.GameObjects.Image | undefined;
-    if (n.cost.token === "emblem") {
-      badge = this.add.image(NODE_R - 6, -NODE_R + 6, "icon.emblem");
-      badge.setScale(28 / badge.width);
+    let badge: Phaser.GameObjects.Container | undefined;
+    if (n.cost.token === "emblem" && !n.condition) {
+      // SPEC-119: エンブレムが要るパネルは、四角の上辺に重ねてエンブレムと枚数を出す
+      const bg = this.add.graphics();
+      bg.fillStyle(COLORS.bg, 0.95).fillRoundedRect(-30, -15, 60, 30, 15);
+      bg.lineStyle(2, COLORS.gold, 1).strokeRoundedRect(-30, -15, 60, 30, 15);
+      const em = this.add.image(-12, 0, "icon.emblem");
+      em.setScale(26 / Math.max(em.width, em.height));
+      const cnt = this.add.text(13, 0, `${n.cost.base}`, textStyle(18, { color: COLORS.gold })).setOrigin(0.5);
+      badge = this.add.container(0, -NODE_R, [bg, em, cnt]);
       parts.push(badge);
     }
     const c = this.add.container(x, y, parts).setSize(NODE_R * 2 + 8, NODE_R * 2 + 8).setInteractive({ useHandCursor: true });
@@ -166,15 +201,47 @@ export class TreeScene extends Phaser.Scene {
       const color = BRANCH_COLOR[n.branch];
       const maxed = lv >= n.maxLevel;
       const g = v.ring.clear();
-      g.fillStyle(lv > 0 ? color : COLORS.panelRaised, lv > 0 ? 0.3 : reachable ? 0.95 : 0.6).fillCircle(0, 0, NODE_R);
-      g.lineStyle(maxed ? 5 : canBuy ? 4 : 2, maxed ? COLORS.gold : canBuy ? COLORS.gold : lv > 0 ? color : COLORS.line, 1).strokeCircle(0, 0, NODE_R);
-      if (this.selected === n.id) g.lineStyle(3, 0xffffff, 0.9).strokeCircle(0, 0, NODE_R + 8);
-      v.icon.setAlpha(reachable ? 1 : 0.3);
-      v.badge?.setVisible(lv === 0).setAlpha(reachable ? 1 : 0.4);
+      const selected = this.selected === n.id;
+      if (n.condition) {
+        // SPEC-119: 条件つきパネルは丸。次のしきい値までの進み具合を外周の弧で見せる
+        g.fillStyle(lv > 0 ? color : COLORS.panelRaised, lv > 0 ? 0.3 : 0.9).fillCircle(0, 0, NODE_R);
+        g.lineStyle(maxed ? 5 : 3, maxed ? COLORS.gold : lv > 0 ? color : COLORS.line, 1).strokeCircle(0, 0, NODE_R);
+        const next = nextThreshold(save, n);
+        if (next !== null) {
+          const prev = lv > 0 ? n.condition.thresholds[lv - 1] : 0;
+          const t = Phaser.Math.Clamp((conditionValue(save, n.condition.stat) - prev) / (next - prev), 0, 1);
+          g.lineStyle(3, COLORS.line, 0.6).strokeCircle(0, 0, NODE_R + 7);
+          if (t > 0) {
+            g.lineStyle(5, COLORS.gold, 1).beginPath();
+            g.arc(0, 0, NODE_R + 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * t, false).strokePath();
+          }
+        }
+        if (selected) g.lineStyle(3, 0xffffff, 0.9).strokeCircle(0, 0, NODE_R + 14);
+      } else {
+        // 通常のパネルは四角
+        const r = NODE_R;
+        g.fillStyle(lv > 0 ? color : COLORS.panelRaised, lv > 0 ? 0.3 : reachable ? 0.95 : 0.6).fillRoundedRect(-r, -r, r * 2, r * 2, SQUARE_RADIUS);
+        g.lineStyle(maxed ? 5 : canBuy ? 4 : 2, maxed ? COLORS.gold : canBuy ? COLORS.gold : lv > 0 ? color : COLORS.line, 1).strokeRoundedRect(-r, -r, r * 2, r * 2, SQUARE_RADIUS);
+        if (selected) g.lineStyle(3, 0xffffff, 0.9).strokeRoundedRect(-r - 8, -r - 8, r * 2 + 16, r * 2 + 16, SQUARE_RADIUS + 6);
+      }
+      v.icon.setAlpha(reachable || lv > 0 ? 1 : 0.3);
+      v.badge?.setVisible(lv === 0).setAlpha(reachable ? 1 : 0.45);
       v.level.setText(`${lv}/${n.maxLevel}`).setVisible(reachable);
       v.label.setColor(`#${(lv > 0 ? COLORS.ink : reachable ? COLORS.inkDim : COLORS.inkMuted).toString(16).padStart(6, "0")}`);
     }
     this.renderPanel();
+  }
+
+  /** パネルを選んで画面の中央へ動かす */
+  private focusNode(id: string): void {
+    const n = TREE_BY_ID.get(id);
+    if (!n) return;
+    const s = this.world.scale;
+    this.world.x = CENTER_X - n.pos.x * UNIT * s;
+    this.world.y = (HEADER_H + PANEL_TOP) / 2 - n.pos.y * UNIT * s;
+    this.clampWorld();
+    this.selected = id;
+    this.refresh();
   }
 
   private select(id: string): void {
@@ -196,18 +263,31 @@ export class TreeScene extends Phaser.Scene {
     if (!this.selected) {
       add(this.add.text(MARGIN, PANEL_TOP + 40, "スキルをタップすると詳細が表示されます", textStyle(22)).setOrigin(0, 0.5));
       add(this.add.text(MARGIN, PANEL_TOP + 80, "ドラッグで移動 ／ ピンチ・ホイールで拡大縮小 ／ 返金は無料", textStyle(18, { weight: 500, color: COLORS.inkDim })).setOrigin(0, 0.5));
-      add(this.add.text(MARGIN, PANEL_TOP + 130, `使用中: ${spentLabel(save)} ／ 累計 CE ${save.meta.tokensEarned.ce}`, textStyle(20, { color: COLORS.inkDim })).setOrigin(0, 0.5));
-      // SPEC-116: マイルストーン / ビルドセット / 全返金
+      add(this.add.text(MARGIN, PANEL_TOP + 118, `使用中: ${spentLabel(save)} ／ 累計 CE ${save.meta.tokensEarned.ce}`, textStyle(20, { color: COLORS.inkDim })).setOrigin(0, 0.5));
+      // SPEC-119: 次に届きそうな丸いパネル（タップでそのパネルを選ぶ）
+      const soon = closestUnlock(save);
+      if (soon) {
+        const unit = CONDITION_LABEL[soon.node.condition!.stat];
+        const lv = nodeLevel(save, soon.node.id);
+        const hint = add(
+          this.add
+            .text(MARGIN, PANEL_TOP + 154, `もうすぐ解放: ${soon.node.name}${soon.node.maxLevel > 1 ? ` Lv${lv + 1}` : ""}（${unit.name} あと ${fmt(soon.remaining)} ${unit.unit}）`, textStyle(19, { color: COLORS.gold }))
+            .setOrigin(0, 0.5)
+            .setInteractive({ useHandCursor: true }),
+        );
+        hint.on("pointerup", () => this.focusNode(soon.node.id));
+      }
+      // SPEC-119: 記録（条件つきパネル） / ビルドセット / 全返金
       const w = (GAME_WIDTH - MARGIN * 2 - 32) / 3;
       const by = PANEL_TOP + 212;
-      add(new Button(this, MARGIN + w / 2, by, { width: w, label: "マイルストーン", onTap: () => this.showMilestones() }));
-      const builds = isMilestoneReached(save, "buildSets");
+      add(new Button(this, MARGIN + w / 2, by, { width: w, label: "記録と解放", onTap: () => this.showRecords() }));
+      const builds = isFeatureUnlocked(save, "buildSets");
       add(
         new Button(this, MARGIN + w * 1.5 + 16, by, {
           width: w,
           label: "ビルド",
           kind: builds ? "secondary" : "locked",
-          onTap: () => (builds ? this.showBuildSets() : showToast(this, "マイルストーン「ビルドセット」で解放されます")),
+          onTap: () => (builds ? this.showBuildSets() : showToast(this, "丸いパネル「大日本沿海輿地全図」（累計 CE 300）で解放されます")),
         }),
       );
       add(
@@ -223,7 +303,8 @@ export class TreeScene extends Phaser.Scene {
     const n = TREE_BY_ID.get(this.selected)!;
     const lv = nodeLevel(save, n.id);
     const block = buyBlock(save, n.id);
-    const fx = (level: number) => n.effects.map((e) => STAT_LABEL[e.stat](e.perLevel * level)).join(" ／ ");
+    const fx = (level: number) => effectText(n, level);
+    if (n.condition) return this.renderConditionPanel(n, add);
 
     add(this.add.text(MARGIN, PANEL_TOP + 18, n.name, textStyle(28)).setOrigin(0, 0));
     add(this.add.text(GAME_WIDTH - MARGIN, PANEL_TOP + 24, `Lv ${lv} / ${n.maxLevel}`, textStyle(24, { color: COLORS.gold })).setOrigin(1, 0));
@@ -252,6 +333,31 @@ export class TreeScene extends Phaser.Scene {
     );
   }
 
+  /** SPEC-119: 条件つきパネル（丸）の詳細。買えないので、条件と進み具合を出す */
+  private renderConditionPanel(n: TreeNode, add: <T extends Phaser.GameObjects.GameObject>(o: T) => T): void {
+    const save = session.data;
+    const c = n.condition!;
+    const lv = nodeLevel(save, n.id);
+    const value = conditionValue(save, c.stat);
+    const label = CONDITION_LABEL[c.stat];
+    add(this.add.text(MARGIN, PANEL_TOP + 18, n.name, textStyle(28)).setOrigin(0, 0));
+    add(this.add.text(GAME_WIDTH - MARGIN, PANEL_TOP + 24, `Lv ${lv} / ${n.maxLevel}`, textStyle(24, { color: COLORS.gold })).setOrigin(1, 0));
+    add(this.add.text(MARGIN, PANEL_TOP + 56, `出典: ${n.source}${n.note ? `　${n.note}` : ""}`, { ...textStyle(17, { weight: 500, color: COLORS.inkMuted }), wordWrap: jaWrap(GAME_WIDTH - MARGIN * 2) }));
+    add(this.add.text(MARGIN, PANEL_TOP + 96, `現在: ${lv > 0 ? effectText(n, lv) : "—"}`, textStyle(19, { weight: 500, color: COLORS.inkDim })));
+    if (lv < n.maxLevel) add(this.add.text(MARGIN, PANEL_TOP + 124, `次　: ${effectText(n, lv + 1)}`, textStyle(19, { color: COLORS.ink })));
+    const steps = c.thresholds.map((t, i) => (i < lv ? `✔${fmt(t)}` : fmt(t))).join(" → ");
+    add(this.add.text(MARGIN, PANEL_TOP + 160, `条件: ${label.name} ${steps}（いま ${fmt(value)}）`, { ...textStyle(18, { weight: 500, color: COLORS.gold }), wordWrap: jaWrap(GAME_WIDTH - MARGIN * 2) }));
+    const next = nextThreshold(save, n);
+    add(
+      new Button(this, CENTER_X, PANEL_TOP + 232, {
+        width: GAME_WIDTH - MARGIN * 2,
+        label: next === null ? "すべて解放済み" : `あと ${fmt(next - value)} ${label.unit}で${lv === 0 ? "解放" : "強化"}（無料）`,
+        kind: "locked",
+        onTap: () => showToast(this, "丸いパネルは条件を満たすと自動で解放されます（返金はありません）"),
+      }),
+    );
+  }
+
   private buy(id: string): void {
     const block = buyBlock(session.data, id);
     if (block === "tokens") {
@@ -262,6 +368,7 @@ export class TreeScene extends Phaser.Scene {
       );
     }
     if (block === "locked") return showToast(this, "先に線でつながった前のスキルを解放してください");
+    if (block === "condition") return showToast(this, "丸いパネルは条件を満たすと自動で解放されます");
     if (block) return;
     session.update((d) => buyNode(d, id));
     playSe(this, "se.buff");
@@ -279,7 +386,7 @@ export class TreeScene extends Phaser.Scene {
     this.refresh();
   }
 
-  // ─── モーダル（マイルストーン / ビルドセット） ──────────────
+  // ─── モーダル（記録と解放 / ビルドセット） ──────────────
 
   private openModal(title: string): { add: <T extends Phaser.GameObjects.GameObject>(o: T) => T; close: () => void } {
     const close = () => {
@@ -300,26 +407,36 @@ export class TreeScene extends Phaser.Scene {
     return { add, close };
   }
 
-  /** SPEC-116: マイルストーン一覧（累計 CE で自動的に解放） */
-  private showMilestones(): void {
-    const { add } = this.openModal("マイルストーン");
-    const earned = session.data.meta.tokensEarned.ce;
-    add(this.add.text(CENTER_X, 280, `累計獲得 CE ${earned} に応じて無料で解放されます`, textStyle(20, { weight: 500, color: COLORS.inkDim })).setOrigin(0.5));
-    MILESTONES.forEach((m, i) => {
-      const y = 350 + i * 160;
-      const ok = earned >= m.threshold;
+  /** SPEC-119: 記録と条件つきパネルの一覧（次に何をすれば解放されるか） */
+  private showRecords(): void {
+    const { add } = this.openModal("記録と解放");
+    const save = session.data;
+    add(this.add.text(CENTER_X, 272, "丸いパネルは記録が条件に届くと無料で解放されます", textStyle(19, { weight: 500, color: COLORS.inkDim })).setOrigin(0.5));
+    const nodes = TREE.filter((n) => n.condition);
+    const rowH = Math.min(64, 660 / nodes.length);
+    nodes.forEach((n, i) => {
+      const y = 300 + i * rowH;
+      const c = n.condition!;
+      const lv = nodeLevel(save, n.id);
+      const value = conditionValue(save, c.stat);
+      const next = nextThreshold(save, n);
       const g = add(this.add.graphics());
-      g.fillStyle(ok ? COLORS.panelRaised : COLORS.bg, 0.95).fillRoundedRect(60, y, GAME_WIDTH - 120, 140, 16);
-      g.lineStyle(2, ok ? COLORS.gold : COLORS.line, 1).strokeRoundedRect(60, y, GAME_WIDTH - 120, 140, 16);
-      const icon = add(this.add.image(116, y + 70, m.icon));
-      icon.setScale(64 / Math.max(icon.width, icon.height)).setAlpha(ok ? 1 : 0.4);
-      add(this.add.text(170, y + 22, m.name, textStyle(26, { color: ok ? COLORS.ink : COLORS.inkDim })));
-      add(this.add.text(170, y + 60, m.description, { ...textStyle(18, { weight: 500, color: COLORS.inkDim }), wordWrap: jaWrap(GAME_WIDTH - 250) }));
+      g.fillStyle(lv > 0 ? COLORS.panelRaised : COLORS.bg, 0.95).fillRoundedRect(56, y, GAME_WIDTH - 112, rowH - 6, 12);
+      const icon = add(this.add.image(90, y + (rowH - 6) / 2, n.icon));
+      icon.setScale(40 / Math.max(icon.width, icon.height)).setAlpha(lv > 0 ? 1 : 0.45);
+      add(this.add.text(122, y + 6, `${n.name}${n.maxLevel > 1 ? `  Lv${lv}/${n.maxLevel}` : lv > 0 ? "  解放済み" : ""}`, textStyle(19, { color: lv > 0 ? COLORS.ink : COLORS.inkDim })));
       add(
-        this.add
-          .text(GAME_WIDTH - 80, y + 26, ok ? "解放済み" : `あと ${m.threshold - earned} CE`, textStyle(20, { color: ok ? COLORS.gold : COLORS.inkMuted }))
-          .setOrigin(1, 0),
+        this.add.text(122, y + 32, `${CONDITION_LABEL[c.stat].name} ${fmt(value)}${next !== null ? ` / ${fmt(next)}` : "（最大）"}　${effectText(n, Math.max(1, next === null ? lv : lv + 1))}`, {
+          ...textStyle(14, { weight: 500, color: COLORS.inkMuted }),
+          wordWrap: jaWrap(GAME_WIDTH - 200),
+        }),
       );
+      // 次のしきい値までのバー
+      const barW = 150;
+      const prev = lv > 0 ? c.thresholds[lv - 1] : 0;
+      const t = next === null ? 1 : Phaser.Math.Clamp((value - prev) / (next - prev), 0, 1);
+      g.fillStyle(COLORS.line, 0.8).fillRoundedRect(GAME_WIDTH - 76 - barW, y + 12, barW, 10, 5);
+      g.fillStyle(COLORS.gold, 1).fillRoundedRect(GAME_WIDTH - 76 - barW, y + 12, Math.max(10, barW * t), 10, 5);
     });
   }
 

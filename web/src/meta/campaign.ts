@@ -1,6 +1,6 @@
 import { LEVELS } from "../data/levels";
 import { runBot, type BotOptions } from "../sim/bot";
-import { applyRunResult, buyBlock, buyNode, computeModifiers, computeReward, isLevelUnlocked } from "./progress";
+import { applyRunResult, buyBlock, buyNode, computeModifiers, computeReward, isLevelUnlocked, runResultOf } from "./progress";
 import { createNewSave, type SaveData } from "./save";
 
 export interface CampaignLog {
@@ -42,7 +42,7 @@ export function runCampaign(opts: {
     }
     const level = LEVELS.find((l) => isLevelUnlocked(save, l.id) && !save.meta.levels[l.id]?.cleared) ?? LEVELS[0];
     const sim = runBot(level, (opts.seed ?? 1) + run, { ...opts.bot, mods: computeModifiers(save) });
-    const result = { levelId: level.id, won: sim.status === "won", wavesReached: sim.stats.wavesReached, wavesCleared: sim.stats.wavesCleared };
+    const result = runResultOf(level.id, sim.status === "won", sim.stats);
     const reward = computeReward(level, result, save);
     save = applyRunResult(save, result, reward);
     log.push({ run, levelId: level.id, won: result.won, wavesReached: result.wavesReached, ce: reward.ce, seconds: Math.round(sim.time) });

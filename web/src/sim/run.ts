@@ -10,7 +10,12 @@ import {
   HASTE_CAP,
   HEAVY_SHOT_DAMAGE,
   HEAVY_SHOT_INTERVAL,
+  INTEREST_CAP,
   LOST_HP_CAP,
+  MARK_DURATION,
+  VENGEANCE_BOSS,
+  VENGEANCE_RADIUS,
+  WEAKNESS_MAX_STATUS,
   VOLLEY_DAMAGE,
   VOLLEY_TARGETS,
   WEALTH_CAP,
@@ -66,6 +71,8 @@ export interface StatusState {
   stunTime: number;
   vuln: number;
   vulnTime: number;
+  /** SPEC-119 印（Infinity = 自動マークで常に） */
+  markTime: number;
   /** 加速（Wave 繰り上げ・双子の激昂）。永続 */
   accel: number;
 }
@@ -169,6 +176,8 @@ export type SimEvent =
   | { type: "kill"; enemyId: number; x: number; y: number; boss: boolean }
   | { type: "leak"; enemyId: number; damage: number; blocked: boolean; gum: number }
   | { type: "blast"; x: number; y: number; r: number }
+  | { type: "vengeance"; x: number; y: number; r: number }
+  | { type: "interest"; value: number }
   | { type: "lastStand" }
   | { type: "leap"; enemyId: number }
   | { type: "gumOnHit"; x: number; y: number }
@@ -213,6 +222,10 @@ export interface RunStats {
   cannonDamage: number;
   /** 撃破時の爆発（伏爆の罠）のダメージ合計 */
   blastDamage: number;
+  /** SPEC-119: ボスの撃破数（分裂体・節は 1 体と数える） */
+  bossKills: number;
+  /** SPEC-119: 敵の到達で受けたダメージの合計（無効化した分は含まない） */
+  damageTaken: number;
 }
 
 interface SpawnEntry {
@@ -238,6 +251,7 @@ const newStatus = (): StatusState => ({
   stunTime: 0,
   vuln: 0,
   vulnTime: 0,
+  markTime: 0,
   accel: 0,
 });
 
@@ -261,7 +275,7 @@ export class RunSim {
   drops: DropState[] = [];
   /** 開放済みのロックマス（スロット番号） */
   readonly openedSlots = new Set<number>();
-  readonly stats: RunStats = { kills: 0, leaks: 0, gumEarned: 0, wavesReached: 0, wavesCleared: 0, cannonDamage: 0, blastDamage: 0 };
+  readonly stats: RunStats = { kills: 0, leaks: 0, gumEarned: 0, wavesReached: 0, wavesCleared: 0, cannonDamage: 0, blastDamage: 0, bossKills: 0, damageTaken: 0 };
   readonly paths: PathGeom[];
   /** 幻獣の位置（マス座標の中心） */
   readonly cryptidPos: Point;
@@ -745,6 +759,8 @@ export class RunSim {
       timer: def.healer?.interval ?? def.summon?.interval ?? 0,
       armor: (def.armor ?? 0) * Math.sqrt(hpMul),
     };
+    // SPEC-119 自動マーク: ボスとトール級には常に印
+    if (this.mods.autoMark > 0 && this.mods.markPct > 0 && (def.boss || def.leak >= 2)) enemy.status.markTime = Infinity;
     if (pool) {
       enemy.maxHp = pool.maxHp;
       enemy.pool = pool;
@@ -831,6 +847,7 @@ export class RunSim {
       }
       if (s.slowTime > 0 && (s.slowTime -= TICK) <= 0) s.slow = 0;
       if (s.vulnTime > 0 && (s.vulnTime -= TICK) <= 0) s.vuln = 0;
+      if (s.markTime > 0 && s.markTime !== Infinity) s.markTime = Math.max(0, s.markTime - TICK);
       if (s.stunTime > 0) s.stunTime = Math.max(0, s.stunTime - TICK);
     }
     this.enemies = this.enemies.filter((e) => e.hp > 0);
@@ -924,12 +941,21 @@ export class RunSim {
       return;
     }
     this.hp -= e.def.leak;
+    this.stats.damageTaken += e.def.leak;
     const gum = Math.round(e.def.leak * this.mods.gumOnLeak);
     if (gum > 0) {
       this.gum += gum;
       this.stats.gumEarned += gum;
     }
     this.emit({ type: "leak", enemyId: e.id, damage: e.def.leak, blocked: false, gum });
+    // SPEC-119 報復の炎: 到達した場所（幻獣の前）の周りの敵を焼く
+    if (this.mods.vengeancePct > 0 && this.hp > 0) {
+      this.emit({ type: "vengeance", x: e.x, y: e.y, r: VENGEANCE_RADIUS });
+      for (const o of [...this.enemies]) {
+        if (o === e || o.hp <= 0 || Math.hypot(o.x - e.x, o.y - e.y) > VENGEANCE_RADIUS) continue;
+        this.dealDamage(o, o.maxHp * this.mods.vengeancePct * (o.def.boss ? VENGEANCE_BOSS : 1), BLAST_SOURCE, false);
+      }
+    }
   }
 
   // ─── ヒーローの行動 ─────────────────────────────────────
@@ -1098,10 +1124,12 @@ export class RunSim {
   private fire(h: HeroState, target: EnemyState, baseDamage: number): void {
     const m = this.mods;
     const crit = m.critChance > 0 && this.rng.chance(m.critChance);
+    // SPEC-119 多重会心: 会心がもう一度会心になる
+    const critMul = crit ? (BASE_CRIT_MUL + m.critMulAdd) * (m.multiCritChance > 0 && this.rng.chance(m.multiCritChance) ? BASE_CRIT_MUL + m.critMulAdd : 1) : 1;
     const wealth = Math.min(WEALTH_CAP, m.wealthDamagePct * Math.floor(this.gum / 100));
     const damage =
       baseDamage *
-      (crit ? BASE_CRIT_MUL + m.critMulAdd : 1) *
+      critMul *
       (target.def.boss ? 1 + m.bossDamagePct : 1) *
       (1 + wealth);
     target.pending += damage;
@@ -1183,6 +1211,8 @@ export class RunSim {
         }
       }
       this.strike(target, p.damage, p.heroId, p.crit, { pierce: this.mods.heavyShot > 0 ? 1 : ARROW_PIERCE });
+      // SPEC-119 印: 当たった敵に印をつける（以降、全ヒーローから受けるダメージが増える）
+      if (this.mods.markPct > 0 && target.hp > 0 && target.status.markTime !== Infinity) target.status.markTime = MARK_DURATION;
       if (this.mods.gumOnHitChance > 0 && this.rng.chance(this.mods.gumOnHitChance)) {
         this.gum += 1;
         this.stats.gumEarned += 1;
@@ -1212,7 +1242,7 @@ export class RunSim {
   private dealDamage(e: EnemyState, amount: number, heroId: number, crit: boolean, silent = false, linked = false): void {
     if (e.hp <= 0 || amount <= 0) return;
     const hero = heroId > 0;
-    const total = amount * (1 + e.status.vuln) * (hero ? 1 + this.lostHpBonus : 1);
+    const total = amount * (1 + e.status.vuln + (hero ? this.heroBonusOn(e) : 0)) * (hero ? 1 + this.lostHpBonus : 1);
     const dealt = Math.min(total, e.hp);
     if (e.pool) {
       // 多節ボス: 共有 HP を減らし、全節に反映
@@ -1250,6 +1280,22 @@ export class RunSim {
     if (sb && e.gen < sb.generations && e.hp <= e.maxHp * 0.5) this.splitEnemy(e, sb.childHpPct);
   }
 
+  /** ボスを倒しきったか（多節ボスは頭だけ、分裂ボスは最後の 1 体で数える） */
+  private isBossDefeat(e: EnemyState): boolean {
+    if (!e.def.boss) return false;
+    if (e.pool) return !!e.def.segments;
+    if (e.gen > 0) return !this.enemies.some((o) => o !== e && o.hp > 0 && o.def === e.def);
+    return true;
+  }
+
+  /** SPEC-119: 印と弱点を突く（状態異常の種類数）による、ヒーローからの被ダメージ増加 */
+  private heroBonusOn(e: EnemyState): number {
+    const m = this.mods;
+    const mark = m.markPct > 0 && e.status.markTime > 0 ? m.markPct : 0;
+    const weak = m.weaknessPct > 0 ? m.weaknessPct * Math.min(WEAKNESS_MAX_STATUS, RunSim.statusCount(e)) : 0;
+    return mark + weak;
+  }
+
   private splitEnemy(e: EnemyState, childHpPct: number): void {
     const hp = e.hp * childHpPct;
     e.hp = 0; // 撃破扱いにせず取り除く（ドロップ・撃破数なし）
@@ -1266,6 +1312,7 @@ export class RunSim {
 
   private onKill(e: EnemyState): void {
     this.stats.kills += 1;
+    if (this.isBossDefeat(e)) this.stats.bossKills += 1;
     this.emit({ type: "kill", enemyId: e.id, x: e.x, y: e.y, boss: !!e.def.boss });
     if (e.def.reward > 0) {
       const drop: DropState = {
@@ -1338,6 +1385,15 @@ export class RunSim {
     this.gum += reward;
     this.stats.wavesCleared += 1;
     this.emit({ type: "waveClear", wave: this.waveIndex, reward });
+    // SPEC-119 利息: 所持 GUM に応じたボーナス
+    if (this.mods.interestPct > 0) {
+      const interest = Math.min(INTEREST_CAP, Math.floor(this.gum * this.mods.interestPct));
+      if (interest > 0) {
+        this.gum += interest;
+        this.stats.gumEarned += interest;
+        this.emit({ type: "interest", value: interest });
+      }
+    }
     for (const h of this.heroes) {
       const payout = this.payoutFor(h);
       if (payout <= 0) continue;

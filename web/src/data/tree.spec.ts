@@ -23,8 +23,20 @@ describe("スキルツリーのデータ (SPEC-107)", () => {
     }
   });
 
+  it("条件つきパネル（丸）はしきい値が正で増えていき、トークンを使わない (SPEC-119)", () => {
+    const free = TREE.filter((n) => n.condition);
+    expect(free.length).toBeGreaterThanOrEqual(10);
+    for (const n of free) {
+      const t = n.condition!.thresholds;
+      expect(n.maxLevel).toBe(t.length);
+      for (let i = 0; i < t.length; i++) expect(t[i]).toBeGreaterThan(i > 0 ? t[i - 1] : 0);
+    }
+    // 画面の機能（旧マイルストーン）はそれぞれちょうど 1 枚
+    for (const f of ["buildSets", "speed3x", "autoLevel"]) expect(TREE.filter((n) => n.feature === f)).toHaveLength(1);
+  });
+
   it("コストは正で、レベルとともに単調増加", () => {
-    for (const n of TREE) {
+    for (const n of TREE.filter((x) => !x.condition)) {
       expect(n.maxLevel).toBeGreaterThanOrEqual(1);
       for (let lv = 0; lv < n.maxLevel; lv++) {
         expect(nodeCost(n, lv)).toBeGreaterThan(0);
@@ -37,7 +49,7 @@ describe("スキルツリーのデータ (SPEC-107)", () => {
     for (const n of TREE) {
       expect(n.name.length).toBeGreaterThan(0);
       expect(n.source.length).toBeGreaterThan(0);
-      expect(n.effects.length).toBeGreaterThan(0);
+      expect(n.effects.length > 0 || !!n.feature, n.id).toBe(true);
       for (const e of n.effects) expect(STAT_LABEL[e.stat](e.perLevel).length).toBeGreaterThan(0);
       expect(getAsset(n.icon).type).toBe("image");
     }
