@@ -6,6 +6,7 @@ import {
   buyBlock,
   buyNode,
   clearBuildSet,
+  claimableNodes,
   closestUnlock,
   conditionValue,
   hasSeen,
@@ -16,6 +17,7 @@ import {
   nextChallengeLevel,
   nextThreshold,
   nodeLevel,
+  reachedLevel,
   refundAll,
   refundNode,
   saveBuildSet,
@@ -229,16 +231,21 @@ export class TreeScene extends Phaser.Scene {
       const maxed = lv >= n.maxLevel;
       const g = v.ring.clear();
       const selected = this.selected === n.id;
-      // 枠: 強化できる = 緑、まだ解放しておらず足りない = 赤、解放済み = 系統の色（最大は金）
-      const frame = maxed ? COLORS.gold : canBuy ? FRAME_OK : lv === 0 ? FRAME_NG : color;
-      const frameW = maxed || canBuy ? 5 : 3;
+      // 枠: 強化できる = 緑、まだ解放しておらず足りない = 赤、解放済み = 系統の色。
+      // 最大レベルは目立たせない（緑・赤に目が行くよう、暗く細い枠と控えめな塗り）
+      const frame = canBuy ? FRAME_OK : maxed ? color : lv === 0 ? FRAME_NG : color;
+      const frameW = canBuy ? 5 : maxed ? 2 : 3;
+      const frameA = maxed ? 0.4 : 1;
+      const fillC = lv > 0 ? color : COLORS.panelRaised;
+      const fillA = maxed ? 0.1 : lv > 0 ? 0.3 : reachable ? 0.95 : 0.6;
       if (n.condition) {
         // SPEC-119: 条件つきパネルは丸。次のしきい値までの進み具合を外周の弧で見せる
-        g.fillStyle(lv > 0 ? color : COLORS.panelRaised, lv > 0 ? 0.3 : 0.9).fillCircle(0, 0, NODE_R);
-        g.lineStyle(frameW, frame, 1).strokeCircle(0, 0, NODE_R);
+        g.fillStyle(fillC, fillA).fillCircle(0, 0, NODE_R);
+        g.lineStyle(frameW, frame, frameA).strokeCircle(0, 0, NODE_R);
         const next = nextThreshold(save, n);
         if (next !== null) {
-          const prev = lv > 0 ? n.condition.thresholds[lv - 1] : 0;
+          const reached = reachedLevel(save, n);
+          const prev = reached > 0 ? n.condition.thresholds[reached - 1] : 0;
           const t = Phaser.Math.Clamp((conditionValue(save, n.condition.stat) - prev) / (next - prev), 0, 1);
           g.lineStyle(3, COLORS.line, 0.6).strokeCircle(0, 0, NODE_R + 7);
           if (t > 0) {
@@ -250,14 +257,19 @@ export class TreeScene extends Phaser.Scene {
       } else {
         // 通常のパネルは四角
         const r = NODE_R;
-        g.fillStyle(lv > 0 ? color : COLORS.panelRaised, lv > 0 ? 0.3 : reachable ? 0.95 : 0.6).fillRoundedRect(-r, -r, r * 2, r * 2, SQUARE_RADIUS);
-        g.lineStyle(frameW, frame, 1).strokeRoundedRect(-r, -r, r * 2, r * 2, SQUARE_RADIUS);
+        g.fillStyle(fillC, fillA).fillRoundedRect(-r, -r, r * 2, r * 2, SQUARE_RADIUS);
+        g.lineStyle(frameW, frame, frameA).strokeRoundedRect(-r, -r, r * 2, r * 2, SQUARE_RADIUS);
         if (selected) g.lineStyle(3, 0xffffff, 0.9).strokeRoundedRect(-r - 8, -r - 8, r * 2 + 16, r * 2 + 16, SQUARE_RADIUS + 6);
       }
-      v.icon.setAlpha(reachable || lv > 0 ? 1 : 0.3);
+      v.icon.setAlpha(maxed ? 0.6 : reachable || lv > 0 ? 1 : 0.3);
       v.badge?.setVisible(lv === 0).setAlpha(reachable ? 1 : 0.45);
-      v.level.setText(`${lv}/${n.maxLevel}`).setVisible(reachable);
-      v.label.setColor(`#${(lv > 0 ? COLORS.ink : reachable ? COLORS.inkDim : COLORS.inkMuted).toString(16).padStart(6, "0")}`);
+      // 最大レベルは金のバッジをやめ、灰色の「MAX」にする
+      v.level
+        .setText(maxed ? "MAX" : `${lv}/${n.maxLevel}`)
+        .setBackgroundColor(maxed ? "#3a404c" : "#f5c542")
+        .setColor(maxed ? "#9aa3b2" : "#0b0d12")
+        .setVisible(reachable);
+      v.label.setColor(`#${(maxed ? COLORS.inkMuted : lv > 0 ? COLORS.ink : reachable ? COLORS.inkDim : COLORS.inkMuted).toString(16).padStart(6, "0")}`);
     }
     this.renderPanel();
   }
@@ -430,11 +442,22 @@ export class TreeScene extends Phaser.Scene {
       add(this.add.text(MARGIN, PANEL_TOP + 40, "スキルをタップすると詳細が表示されます", textStyle(22)).setOrigin(0, 0.5));
       add(this.add.text(MARGIN, PANEL_TOP + 80, "ドラッグで移動 ／ ピンチ・ホイールで拡大縮小 ／ 返金は無料", textStyle(18, { weight: 500, color: COLORS.inkDim })).setOrigin(0, 0.5));
       add(this.add.text(MARGIN, PANEL_TOP + 114, `使用中: ${spentLabel(save)} ／ 累計 CE ${save.meta.tokensEarned.ce}`, textStyle(20, { color: COLORS.inkDim })).setOrigin(0, 0.5));
-      // SPEC-119: 次に届きそうな丸いパネル（タップでそのパネルを選ぶ）
+      // SPEC-119: 無料で解放できる丸いパネルがあれば知らせる。なければ次に届きそうなもの（タップでそのパネルへ）
+      const claimable = claimableNodes(save, this.shown);
       const soon = closestUnlock(save, this.shown);
-      if (soon) {
+      if (claimable.length > 0) {
+        const first = claimable[0];
+        const more = claimable.length > 1 ? ` ほか ${claimable.length - 1} 枚` : "";
+        const hint = add(
+          this.add
+            .text(MARGIN, PANEL_TOP + 148, `▶ 無料で解放できます: ${first.name}${more}（タップで移動）`, textStyle(18, { color: FRAME_OK }))
+            .setOrigin(0, 0.5)
+            .setInteractive({ useHandCursor: true }),
+        );
+        hint.on("pointerup", () => this.focusNode(first.id));
+      } else if (soon) {
         const unit = CONDITION_LABEL[soon.node.condition!.stat];
-        const lv = nodeLevel(save, soon.node.id);
+        const lv = reachedLevel(save, soon.node);
         const hint = add(
           this.add
             .text(MARGIN, PANEL_TOP + 148, `もうすぐ解放: ${soon.node.name}${soon.node.maxLevel > 1 ? ` Lv${lv + 1}` : ""}（${unit.name} あと ${fmt(soon.remaining)} ${unit.unit}）`, textStyle(18, { color: COLORS.gold }))
@@ -499,29 +522,43 @@ export class TreeScene extends Phaser.Scene {
     );
   }
 
-  /** SPEC-119: 条件つきパネル（丸）の詳細。買えないので、条件と進み具合を出す */
+  /** SPEC-119: 条件つきパネル（丸）の詳細。条件と進み具合を出し、届いていれば無料で解放できる */
   private renderConditionPanel(n: TreeNode, add: <T extends Phaser.GameObjects.GameObject>(o: T) => T): void {
     const save = session.data;
     const c = n.condition!;
     const lv = nodeLevel(save, n.id);
+    const reached = reachedLevel(save, n);
     const value = conditionValue(save, c.stat);
     const label = CONDITION_LABEL[c.stat];
+    const block = buyBlock(save, n.id);
     add(this.add.text(MARGIN, PANEL_TOP + 18, n.name, textStyle(28)).setOrigin(0, 0));
     add(this.add.text(GAME_WIDTH - MARGIN, PANEL_TOP + 24, `Lv ${lv} / ${n.maxLevel}`, textStyle(24, { color: COLORS.gold })).setOrigin(1, 0));
     add(this.add.text(MARGIN, PANEL_TOP + 56, `出典: ${n.source}${n.note ? `　${n.note}` : ""}`, { ...textStyle(17, { weight: 500, color: COLORS.inkMuted }), wordWrap: jaWrap(GAME_WIDTH - MARGIN * 2) }));
     add(this.add.text(MARGIN, PANEL_TOP + 96, `現在: ${lv > 0 ? effectText(n, lv) : "—"}`, textStyle(19, { weight: 500, color: COLORS.inkDim })));
     if (lv < n.maxLevel) add(this.add.text(MARGIN, PANEL_TOP + 124, `次　: ${effectText(n, lv + 1)}`, textStyle(19, { color: COLORS.ink })));
-    const steps = c.thresholds.map((t, i) => (i < lv ? `✔${fmt(t)}` : fmt(t))).join(" → ");
+    const steps = c.thresholds.map((t, i) => (i < reached ? `✔${fmt(t)}` : fmt(t))).join(" → ");
     add(this.add.text(MARGIN, PANEL_TOP + 160, `条件: ${label.name} ${steps}（いま ${fmt(value)}）`, { ...textStyle(18, { weight: 500, color: COLORS.gold }), wordWrap: jaWrap(GAME_WIDTH - MARGIN * 2) }));
     const next = nextThreshold(save, n);
-    add(
-      new Button(this, CENTER_X, PANEL_TOP + 232, {
-        width: GAME_WIDTH - MARGIN * 2,
-        label: next === null ? "すべて解放済み" : `あと ${fmt(next - value)} ${label.unit}で${lv === 0 ? "解放" : "強化"}（無料）`,
-        kind: "locked",
-        onTap: () => showToast(this, "丸いパネルは条件を満たすと自動で解放されます（返金はありません）"),
-      }),
-    );
+    const text =
+      block === null
+        ? `${lv === 0 ? "無料で解放" : `無料で強化（Lv${lv + 1}）`}`
+        : block === "maxed"
+          ? "最大レベル"
+          : block === "locked"
+            ? "前のスキルが必要"
+            : next === null
+              ? "最大レベル"
+              : `あと ${fmt(next - value)} ${label.unit}で${lv === 0 ? "解放" : "強化"}できます`;
+    add(new Button(this, CENTER_X, PANEL_TOP + 232, { width: GAME_WIDTH - MARGIN * 2, label: text, kind: block === null ? "primary" : "locked", onTap: () => this.buy(n.id) }));
+  }
+
+  /** 解放・強化した効果をパネルの上に浮かべる（何が強くなったかを実感できるように） */
+  private popEffect(n: TreeNode, text: string): void {
+    const t = this.add
+      .text(n.pos.x * UNIT, n.pos.y * UNIT - NODE_R - 18, text, { ...textStyle(20, { color: FRAME_OK, align: "center" }), stroke: "#0b0d12", strokeThickness: 5, wordWrap: jaWrap(300) })
+      .setOrigin(0.5, 1);
+    this.world.add(t);
+    this.tweens.add({ targets: t, y: t.y - 40, alpha: { from: 1, to: 0 }, delay: 700, duration: 900, ease: "Quad.easeIn", onComplete: () => t.destroy() });
   }
 
   private buy(id: string): void {
@@ -534,9 +571,16 @@ export class TreeScene extends Phaser.Scene {
       );
     }
     if (block === "locked") return showToast(this, "先に線でつながった前のスキルを解放してください");
-    if (block === "condition") return showToast(this, "丸いパネルは条件を満たすと自動で解放されます");
+    if (block === "condition") return showToast(this, "丸いパネルは、記録が条件に届くと無料で解放できます");
     if (block) return;
     session.update((d) => buyNode(d, id));
+    const n = TREE_BY_ID.get(id)!;
+    const lv = nodeLevel(session.data, id);
+    this.popEffect(n, effectText(n, lv));
+    if (n.condition) {
+      playSe(this, "se.treasure");
+      showToast(this, `「${n.name}」${lv > 1 ? `Lv${lv}` : ""}を解放！ ${effectText(n, lv)}`);
+    }
     this.refresh();
   }
 
@@ -576,29 +620,32 @@ export class TreeScene extends Phaser.Scene {
   private showRecords(): void {
     const { add } = this.openModal("記録と解放");
     const save = session.data;
-    add(this.add.text(CENTER_X, 272, "丸いパネルは記録が条件に届くと無料で解放されます", textStyle(19, { weight: 500, color: COLORS.inkDim })).setOrigin(0.5));
+    add(this.add.text(CENTER_X, 272, "丸いパネルは記録が条件に届くと、ツリーで無料で解放できます", textStyle(19, { weight: 500, color: COLORS.inkDim })).setOrigin(0.5));
     const nodes = TREE.filter((n) => n.condition);
     const rowH = Math.min(64, 660 / nodes.length);
     nodes.forEach((n, i) => {
       const y = 300 + i * rowH;
       const c = n.condition!;
       const lv = nodeLevel(save, n.id);
+      const reached = reachedLevel(save, n);
       const value = conditionValue(save, c.stat);
       const next = nextThreshold(save, n);
+      const ready = reached > lv;
       const g = add(this.add.graphics());
       g.fillStyle(lv > 0 ? COLORS.panelRaised : COLORS.bg, 0.95).fillRoundedRect(56, y, GAME_WIDTH - 112, rowH - 6, 12);
       const icon = add(this.add.image(90, y + (rowH - 6) / 2, n.icon));
       icon.setScale(40 / Math.max(icon.width, icon.height)).setAlpha(lv > 0 ? 1 : 0.45);
       add(this.add.text(122, y + 6, `${n.name}${n.maxLevel > 1 ? `  Lv${lv}/${n.maxLevel}` : lv > 0 ? "  解放済み" : ""}`, textStyle(19, { color: lv > 0 ? COLORS.ink : COLORS.inkDim })));
+      if (ready) add(this.add.text(GAME_WIDTH - 76, y + 30, "解放できます！", textStyle(15, { color: FRAME_OK })).setOrigin(1, 0));
       add(
-        this.add.text(122, y + 32, `${CONDITION_LABEL[c.stat].name} ${fmt(value)}${next !== null ? ` / ${fmt(next)}` : "（最大）"}　${effectText(n, Math.max(1, next === null ? lv : lv + 1))}`, {
+        this.add.text(122, y + 32, `${CONDITION_LABEL[c.stat].name} ${fmt(value)}${next !== null ? ` / ${fmt(next)}` : "（最大）"}　${effectText(n, Math.max(1, Math.min(n.maxLevel, lv + 1)))}`, {
           ...textStyle(14, { weight: 500, color: COLORS.inkMuted }),
           wordWrap: jaWrap(GAME_WIDTH - 200),
         }),
       );
       // 次のしきい値までのバー
       const barW = 150;
-      const prev = lv > 0 ? c.thresholds[lv - 1] : 0;
+      const prev = reached > 0 ? c.thresholds[reached - 1] : 0;
       const t = next === null ? 1 : Phaser.Math.Clamp((value - prev) / (next - prev), 0, 1);
       g.fillStyle(COLORS.line, 0.8).fillRoundedRect(GAME_WIDTH - 76 - barW, y + 12, barW, 10, 5);
       g.fillStyle(COLORS.gold, 1).fillRoundedRect(GAME_WIDTH - 76 - barW, y + 12, Math.max(10, barW * t), 10, 5);

@@ -1,6 +1,6 @@
 import { LEVELS } from "../data/levels";
 import { runBot, type BotOptions } from "../sim/bot";
-import { applyRunResult, buyBlock, buyNode, computeModifiers, computeReward, isLevelUnlocked, runResultOf } from "./progress";
+import { applyRunResult, buyBlock, buyNode, claimableNodes, computeModifiers, computeReward, isLevelUnlocked, runResultOf } from "./progress";
 import { createNewSave, type SaveData } from "./save";
 
 export interface CampaignLog {
@@ -38,6 +38,11 @@ export function runCampaign(opts: {
           save = buyNode(save, id);
           bought = true;
         }
+      }
+      // 条件つきパネル（無料）は届いたらすぐ解放する
+      for (const n of claimableNodes(save)) {
+        save = buyNode(save, n.id);
+        bought = true;
       }
     }
     const level = LEVELS.find((l) => isLevelUnlocked(save, l.id) && !save.meta.levels[l.id]?.cleared) ?? LEVELS[0];

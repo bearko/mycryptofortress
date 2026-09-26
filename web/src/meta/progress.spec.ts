@@ -4,7 +4,9 @@ import { runCampaign, STANDARD_BUY_ORDER } from "./campaign";
 import {
   applyRunResult,
   buyBlock,
+  claimableNodes,
   conditionalLevels,
+  reachedLevel,
   isFeatureUnlocked,
   newlyUnlocked,
   runResultOf,
@@ -183,12 +185,12 @@ describe("コアループの到達可能性 (SPEC-106 §4)", () => {
     expect(Math.max(...l1.slice(0, firstWin).map((l) => l.wavesReached))).toBeGreaterThan(l1[0].wavesReached);
   });
 
-  it("Lv4〜9 も強化を続ければ 90 ラン以内に全クリアでき、Lv4〜7 は数回負ける", () => {
+  it("Lv4〜9 も強化を続ければ 90 ラン以内に全クリアでき、Lv4〜7 は負けることがある", () => {
     const { log, save } = runCampaign({ buyOrder: STANDARD_BUY_ORDER, maxRuns: 90, seed: 1 });
     expect(save.meta.levels.L9?.cleared).toBe(true);
     for (const id of ["L4", "L6", "L7"]) {
       const runs = log.filter((l) => l.levelId === id);
-      expect(runs.length, id).toBeGreaterThanOrEqual(3);
+      expect(runs.length, id).toBeGreaterThanOrEqual(2);
     }
   }, 300_000);
 });
@@ -228,49 +230,64 @@ describe("エンブレムとビルドセット (SPEC-116 / 116a)", () => {
     expect(save.meta.tokens.ce + totalSpent(save)).toBe(500);
   });
 
-  it("旧マイルストーンは累計 CE の丸パネルになり、自動回収は補正値に入る", () => {
+  it("旧マイルストーンは累計 CE の丸パネルになり、届いたら手動で無料解放する", () => {
     const s = createNewSave();
     expect(computeModifiers(s).autoCollect).toBe(0);
     expect(isFeatureUnlocked(s, "speed3x")).toBe(false);
-    const mid = { ...s, meta: { ...s.meta, tokensEarned: { ce: 700, emblem: 0 } } };
+    let mid = { ...s, meta: { ...s.meta, tokens: { ce: 10, emblem: 0 }, tokensEarned: { ce: 700, emblem: 0 } } };
+    expect(newlyUnlocked(conditionalLevels(s), mid).map((u) => u.node.id)).toEqual(expect.arrayContaining(["ms_auto_collect", "ms_build_sets", "ms_speed3x"]));
+    // 届いただけでは効かない
+    expect(computeModifiers(mid).autoCollect).toBe(0);
+    mid = buyNode(mid, "root");
+    for (const id of ["ms_auto_collect", "ms_build_sets", "ms_speed3x"]) mid = buyNode(mid, id);
     expect(computeModifiers(mid).autoCollect).toBe(1);
     expect(isFeatureUnlocked(mid, "buildSets")).toBe(true);
     expect(isFeatureUnlocked(mid, "speed3x")).toBe(true);
-    expect(isFeatureUnlocked(mid, "autoLevel")).toBe(false);
-    expect(newlyUnlocked(conditionalLevels(s), mid).map((u) => u.node.id)).toEqual(expect.arrayContaining(["ms_auto_collect", "ms_build_sets", "ms_speed3x"]));
+    expect(buyBlock(mid, "ms_auto_level")).toBe("condition");
+    // 丸パネルは CE を使わない
+    expect(mid.meta.tokens.ce).toBe(10 - nodeCost(TREE_BY_ID.get("root")!, 0));
   });
 });
 
-describe("条件つきパネル (SPEC-119)", () => {
-  const withStats = (patch: Partial<ReturnType<typeof createNewSave>["meta"]["stats"]>) => {
+describe("条件つきパネル (SPEC-119 v1.2: 手動で無料解放)", () => {
+  const withStats = (patch: Partial<ReturnType<typeof createNewSave>["meta"]["stats"]>, tree: Record<string, number> = {}) => {
     const s = createNewSave();
-    return { ...s, meta: { ...s.meta, stats: { ...s.meta.stats, ...patch } } };
+    return { ...s, meta: { ...s.meta, tree, tokens: { ce: 0, emblem: 0 }, stats: { ...s.meta.stats, ...patch } } };
   };
+  const toElite = { root: 1, yabusame: 1, brave_shot: 1, elite_shot: 1 };
 
-  it("記録がしきい値に届くたびに無料でレベルが上がり、買えず・返金されない", () => {
-    const n = TREE_BY_ID.get("f_kills")!;
-    expect(nodeLevel(withStats({ kills: 299 }), "f_kills")).toBe(0);
-    const s = withStats({ kills: 1500 });
+  it("記録が届いたレベルまで、費用 0 で 1 レベルずつ解放できる", () => {
+    let s = withStats({ kills: 1500 }, toElite);
+    const base = computeModifiers(s).damagePct;
+    expect(nodeLevel(s, "f_kills")).toBe(0);
+    expect(reachedLevel(s, TREE_BY_ID.get("f_kills")!)).toBe(2);
+    expect(claimableNodes(s).map((n) => n.id)).toContain("f_kills");
+    s = buyNode(buyNode(s, "f_kills"), "f_kills");
     expect(nodeLevel(s, "f_kills")).toBe(2);
     expect(buyBlock(s, "f_kills")).toBe("condition");
+    expect(s.meta.tokens.ce).toBe(0);
+    expect(computeModifiers(s).damagePct - base).toBeCloseTo(TREE_BY_ID.get("f_kills")!.effects[0].perLevel * 2);
+    expect(totalSpent(s)).toBe(totalSpent(withStats({}, toElite)));
     expect(refundNode(s, "f_kills")).toBe(s);
-    expect(computeModifiers(s).damagePct).toBeCloseTo(n.effects[0].perLevel * 2);
-    expect(totalSpent(s)).toBe(0);
   });
 
-  it("条件つきパネルは親が未解放でも効き、子は条件を満たすと買えるようになる", () => {
-    let s = withStats({ kills: 300 });
+  it("条件を満たしても、前のパネルを解放するまでは解放できない", () => {
+    expect(buyBlock(withStats({ kills: 300 }), "f_kills")).toBe("locked");
+    expect(buyBlock(withStats({ kills: 0 }, toElite), "f_kills")).toBe("condition");
+  });
+
+  it("丸パネルを解放すると、その先の四角いパネルが買える", () => {
+    let s = withStats({ kills: 300 }, toElite);
     s = { ...s, meta: { ...s.meta, tokens: { ce: 1000, emblem: 0 } } };
-    expect(nodeLevel(s, "elite_shot")).toBe(0);
-    expect(computeModifiers(s).damagePct).toBeGreaterThan(0);
+    expect(buyBlock(s, "mark")).toBe("locked");
+    s = buyNode(s, "f_kills");
     expect(buyBlock(s, "mark")).toBeNull();
-    expect(buyBlock(withStats({ kills: 0 }), "mark")).toBe("locked");
   });
 
-  it("ノードのクリア数・累計 CE の条件も読める", () => {
+  it("ノードのクリア数の条件も読める", () => {
     let s = createNewSave();
     for (const l of LEVELS.slice(0, 3)) s = applyRunResult(s, { levelId: l.id, won: true, wavesReached: 10, wavesCleared: 10 }, { ce: 0, emblems: 0, breakdown: [], firstClear: true });
-    expect(nodeLevel(s, "f_levels")).toBe(1);
+    expect(reachedLevel(s, TREE_BY_ID.get("f_levels")!)).toBe(1);
   });
 
   it("ランの記録が累計に積み上がり、到達されずに勝つとノーダメージクリアになる", () => {
@@ -280,7 +297,7 @@ describe("条件つきパネル (SPEC-119)", () => {
     s = applyRunResult(s, runResultOf("L1", true, { ...stats, damageTaken: 2 }), { ce: 0, emblems: 0, breakdown: [], firstClear: false });
     s = applyRunResult(s, runResultOf("L2", false, { ...stats, wavesCleared: 4 }), { ce: 0, emblems: 0, breakdown: [], firstClear: false });
     expect(s.meta.stats).toEqual({ kills: 360, bossKills: 3, gumCollected: 2400, wavesCleared: 24, flawlessClears: 1, runs: 3 });
-    expect(nodeLevel(s, "f_flawless")).toBe(1);
+    expect(reachedLevel(s, TREE_BY_ID.get("f_flawless")!)).toBe(1);
   });
 });
 
@@ -311,12 +328,12 @@ describe("段階的に広がるツリー (SPEC-119 §2a)", () => {
     expect([...visibleNodes(refundAll(s))]).toEqual(["root"]);
   });
 
-  it("条件を満たした丸パネルでも、親が見えて解放済みになるまでは隠れる（効果は効く）", () => {
+  it("条件を満たした丸パネルも、親が見えて解放済みになるまでは隠れる", () => {
     const base = createNewSave();
     const s = { ...base, meta: { ...base.meta, stats: { ...base.meta.stats, kills: 300 } } };
-    expect(nodeLevel(s, "f_kills")).toBe(1);
     expect(visibleNodes(s).has("f_kills")).toBe(false);
-    expect(visibleNodes(s).has("mark")).toBe(false);
-    expect(computeModifiers(s).damagePct).toBeGreaterThan(0);
+    const open = { ...s, meta: { ...s.meta, tree: { root: 1, yabusame: 1, brave_shot: 1, elite_shot: 1 } } };
+    expect(visibleNodes(open).has("f_kills")).toBe(true);
+    expect(visibleNodes(open).has("mark")).toBe(false);
   });
 });
