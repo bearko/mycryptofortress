@@ -28,7 +28,7 @@ export class LevelSelectScene extends Phaser.Scene {
     this.cameras.main.fadeIn(180, 11, 13, 18);
     playBgm(this, "bgm.land");
     void new LandBackground(this, 0.7).show(session.data.profile.cryptidId);
-    new Header(this, "ノードを選ぶ", () => goTo(this, "Home")).setCe(session.data.meta.tokens.ce);
+    new Header(this, "ノードを選ぶ", () => goTo(this, "Home")).setTokens(session.data.meta.tokens.ce, session.data.meta.tokens.emblem, session.data.meta.tokensEarned.emblem > 0);
 
     LEVELS.forEach((lv, i) => this.card(lv, i));
 

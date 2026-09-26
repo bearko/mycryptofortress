@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import { ENEMIES } from "../../data/balance/enemies";
 import { ROLES, roleStats, type RoleId } from "../../data/balance/heroes";
+import { STONES, type StoneId } from "../../data/balance/stones";
+import { isMilestoneReached, newlyReached } from "../../data/milestones";
 import { getAsset } from "../../data/assets";
 import { getLevel } from "../../data/levels";
 import { DIALOGS, maycriComment } from "../../data/dialogs";
@@ -20,7 +22,10 @@ import { goTo } from "../ui/header";
 import { COLORS, textStyle } from "../ui/theme";
 import { Button, showToast, showTooltip } from "../ui/widgets";
 
-const SPEEDS = [1, 2] as const;
+/** 倍速。3x はマイルストーンで解放（SPEC-116） */
+const SPEEDS = [1, 2, 3] as const;
+/** オートレベルの判断間隔（秒） */
+const AUTO_LEVEL_EVERY = 0.5;
 /** 1 フレームで進める tick の上限（タブ復帰時などの暴走防止） */
 const MAX_STEPS_PER_FRAME = 12;
 /** 同じ SE を鳴らす最短間隔（ms） */
@@ -46,6 +51,7 @@ export class RunScene extends Phaser.Scene {
   private lastSe = new Map<string, number>();
   /** SPEC-114: 幻獣砲モード（ON の間は盤面を押している方向へ撃ち続ける） */
   private cannonArmed = false;
+  private autoLevelAcc = 0;
 
   constructor() {
     super("Run");
@@ -98,7 +104,7 @@ export class RunScene extends Phaser.Scene {
       {
         startWave: () => this.sim.startNextWave(),
         callEarly: () => this.sim.callEarly(),
-        toggleSpeed: () => (this.speedIndex = (this.speedIndex + 1) % SPEEDS.length),
+        toggleSpeed: () => (this.speedIndex = (this.speedIndex + 1) % this.speedCount),
         toggleCannon: () => {
           this.cannonArmed = !this.cannonArmed;
           if (this.cannonArmed) showToast(this, "盤面を押している方向へ幻獣砲を撃ちます");
@@ -108,6 +114,11 @@ export class RunScene extends Phaser.Scene {
         openSlot: (i) => this.openSlot(i),
         previewRole: (role) => this.board.setPreviewRole(role),
         showRoleInfo: (role, x, y) => this.showRoleInfo(role, x, y),
+        toggleStone: (stone, target) => this.toggleStone(stone, target),
+        showStoneInfo: (stone, target, x, y) => {
+          const def = STONES[stone];
+          showTooltip(this, x, y - 120, def.name, `${def.element}の魔石\n${def.effects[target]}\n（★ = 攻撃の挙動が変わる）`);
+        },
         levelUp: (id) => this.levelUp(id),
         cycleTarget: (id) => this.cycleTarget(id),
         deselect: () => this.select(null),
@@ -123,7 +134,9 @@ export class RunScene extends Phaser.Scene {
 
   /** SPEC-108a: 初回のチュートリアル（マインちゃん）/ ステージ紹介（クリスくん）。再生中は一時停止 */
   private playIntroDialog(levelId: string): void {
-    const id = levelId === "L1" ? "run.tutorial" : `level.${levelId}.intro`;
+    // 魔石を初めて持ち込んだランは、ステージ紹介より先に装着の説明
+    const stoneTip = this.sim.unlockedStones().length > 0 && !hasSeen(session.data, "stone.first");
+    const id = stoneTip ? "stone.first" : levelId === "L1" ? "run.tutorial" : `level.${levelId}.intro`;
     const lines = DIALOGS[id];
     if (!lines || hasSeen(session.data, id)) return;
     this.paused = true;
@@ -146,6 +159,7 @@ export class RunScene extends Phaser.Scene {
       }
       if (steps === MAX_STEPS_PER_FRAME) this.acc = 0;
       this.updateCannon();
+      this.updateAutoLevel(delta);
     }
     for (const e of this.sim.drainEvents()) this.onEvent(e);
     this.board.sync(time);
@@ -175,6 +189,35 @@ export class RunScene extends Phaser.Scene {
     this.input.on(Phaser.Input.Events.POINTER_DOWN, collect);
   }
 
+  private get speedCount(): number {
+    return isMilestoneReached(session.data, "speed3x") ? 3 : 2;
+  }
+
+  /** SPEC-116: オートレベル（マイルストーン + 設定 ON）。一番低いレベルのヒーローを GUM が足りれば強化 */
+  private get autoLevelOn(): boolean {
+    return isMilestoneReached(session.data, "autoLevel") && session.data.settings.autoLevel;
+  }
+
+  private updateAutoLevel(delta: number): void {
+    if (!this.autoLevelOn) return;
+    this.autoLevelAcc += (delta / 1000) * SPEEDS[this.speedIndex];
+    if (this.autoLevelAcc < AUTO_LEVEL_EVERY) return;
+    this.autoLevelAcc = 0;
+    const target = [...this.sim.heroes]
+      .filter((h) => {
+        const c = this.sim.levelUpCost(h);
+        return c !== null && c <= this.sim.gum;
+      })
+      .sort((a, b) => a.level - b.level || a.id - b.id)[0];
+    if (target) this.sim.levelUp(target.id);
+  }
+
+  /** SPEC-115: 魔石の付け外し（装着中をもう一度タップで外す） */
+  private toggleStone(stone: StoneId, target: number | "cannon"): void {
+    if (this.sim.stoneHolderOf(stone) === target) this.sim.unequipStone(stone);
+    else if (!this.sim.equipStone(stone, target)) showToast(this, "ここには付けられません");
+  }
+
   /** 幻獣砲: ON で盤面を押している間、指の方向へ撃つ（クールダウンは sim 側） */
   private updateCannon(): void {
     if (!this.cannonArmed) return;
@@ -187,6 +230,13 @@ export class RunScene extends Phaser.Scene {
   private onBoardTap(px: number, py: number): void {
     if (this.paused || this.sim.isOver || this.cannonArmed) return;
     const c = toCell(px, py);
+    // 幻獣をタップすると幻獣砲のパネル（魔石の装着）
+    const cp = this.sim.cryptidPos;
+    if (Math.abs(c.x - cp.x) < 0.6 && Math.abs(c.y - cp.y) < 0.6) {
+      this.select(null);
+      this.panel.setMode({ kind: "cannon" });
+      return;
+    }
     const index = this.sim.level.slots.findIndex((s) => s.col === Math.floor(c.x) && s.row === Math.floor(c.y));
     this.select(index >= 0 && index !== this.selectedSlot ? index : null);
   }
@@ -204,7 +254,12 @@ export class RunScene extends Phaser.Scene {
         px,
         py,
         def.name,
-        `HP ${Math.ceil(enemy.hp)} / ${Math.ceil(enemy.maxHp)}\n速度 ${def.speed.toFixed(2)} マス/秒 ／ 撃破 ${def.reward} GUM\n幻獣に到達すると ${def.leak} ダメージ${def.boss ? "（即陥落）" : ""}`,
+        [
+          `HP ${Math.ceil(enemy.hp)} / ${Math.ceil(enemy.maxHp)}`,
+          `速度 ${def.speed.toFixed(2)} マス/秒 ／ 撃破 ${Math.round(def.reward * enemy.rewardMul)} GUM`,
+          `幻獣に到達すると ${def.leak} ダメージ${def.boss ? "（即陥落）" : ""}`,
+          ...gimmickLines(def),
+        ].join("\n"),
       );
       return;
     }
@@ -218,7 +273,8 @@ export class RunScene extends Phaser.Scene {
         px,
         py,
         `${this.sim.heroVisual(hero.role).heroName}（${role.roleName}） Lv${hero.level}`,
-        `攻撃 ${st.damage.toFixed(1)} ／ 射程 ${st.range.toFixed(1)} ／ 間隔 ${st.interval.toFixed(2)}秒\n狙い: ${TARGET_LABEL[hero.targetMode]} ／ 累計ダメージ ${Math.floor(hero.totalDamage)}`,
+        `攻撃 ${st.damage.toFixed(1)} ／ 射程 ${st.range.toFixed(1)} ／ 間隔 ${st.interval.toFixed(2)}秒\n狙い: ${TARGET_LABEL[hero.targetMode]} ／ 累計ダメージ ${Math.floor(hero.totalDamage)}` +
+          (this.sim.heroElement(hero) ? `\n${STONES[this.sim.heroElement(hero)!].name}: ${STONES[this.sim.heroElement(hero)!].effects[hero.role]}` : ""),
       );
     }
   }
@@ -293,7 +349,7 @@ export class RunScene extends Phaser.Scene {
         break;
       }
       case "waveClear":
-        if (e.wave < this.sim.wavesTotal - 1) showToast(this, `WAVE ${e.wave + 1} クリア！ +${e.reward} GUM`);
+        if (e.wave < this.sim.wavesTotal - 1 && !this.resultShown) showToast(this, `WAVE ${e.wave + 1} クリア！ +${e.reward} GUM`);
         break;
       case "hit":
         this.se("se.hit");
@@ -403,6 +459,19 @@ export class RunScene extends Phaser.Scene {
     add(this.add.text(CENTER_X, 470, "一時停止中", textStyle(44)).setOrigin(0.5).setDepth(201));
     add(new Button(this, CENTER_X, 600, { width: 420, label: "再開", kind: "primary", onTap: () => this.closeMenu() }).setDepth(201));
     add(new Button(this, CENTER_X, 720, { width: 420, label: "撤退する", sub: "ここまでの CE を受け取る", onTap: () => this.showResult(true) }).setDepth(201));
+    // SPEC-116: オートレベルの切り替え（マイルストーン解放後）
+    if (isMilestoneReached(session.data, "autoLevel")) {
+      const btn = add(
+        new Button(this, CENTER_X, 840, {
+          width: 420,
+          label: `オートレベル: ${this.autoLevelOn ? "ON" : "OFF"}`,
+          onTap: () => {
+            session.update((d) => ({ ...d, settings: { ...d.settings, autoLevel: !d.settings.autoLevel } }));
+            btn.setLabel(`オートレベル: ${this.autoLevelOn ? "ON" : "OFF"}`);
+          },
+        }).setDepth(201),
+      );
+    }
   }
 
   private closeMenu(): void {
@@ -422,7 +491,11 @@ export class RunScene extends Phaser.Scene {
     const level = this.sim.level;
     const result = { levelId: level.id, won, wavesReached: this.sim.stats.wavesReached, wavesCleared: this.sim.stats.wavesCleared };
     const reward = computeReward(level, result, session.data);
+    const ceBefore = session.data.meta.tokensEarned.ce;
     session.update((d) => applyRunResult(d, result, reward));
+    // SPEC-116: 新しく届いたマイルストーン
+    const reached = newlyReached(ceBefore, session.data.meta.tokensEarned.ce);
+    if (reached.length > 0) this.time.delayedCall(1200, () => showToast(this, `マイルストーン解放: ${reached.map((m) => m.name).join("・")}`));
 
     this.dim();
     const add = <T extends Phaser.GameObjects.GameObject>(o: T) => {
@@ -467,8 +540,14 @@ export class RunScene extends Phaser.Scene {
     box.lineStyle(2, COLORS.gold, 0.6).strokeRoundedRect(70, rt, GAME_WIDTH - 140, boxH, 16);
     add(box);
     add(this.add.text(96, rt + 34, "獲得 CE", textStyle(22, { color: COLORS.inkDim })).setOrigin(0, 0.5));
-    add(this.add.image(GAME_WIDTH - 250, rt + 38, "icon.ce").setScale(0.7));
-    add(this.add.text(GAME_WIDTH - 96, rt + 38, `+${reward.ce}`, textStyle(44, { display: true, color: COLORS.gold })).setOrigin(1, 0.5));
+    const ceText = add(this.add.text(GAME_WIDTH - 96, rt + 38, `+${reward.ce}`, textStyle(44, { display: true, color: COLORS.gold })).setOrigin(1, 0.5));
+    const ceIcon = add(this.add.image(ceText.x - ceText.width - 30, rt + 38, "icon.ce").setScale(0.7));
+    // SPEC-116a: エンブレム（初回クリア）
+    if (reward.emblems > 0) {
+      const eText = add(this.add.text(ceIcon.x - 40, rt + 38, `+${reward.emblems}`, textStyle(32, { display: true, color: 0xff9ec7 })).setOrigin(1, 0.5));
+      const eIcon = add(this.add.image(eText.x - eText.width - 26, rt + 38, "icon.emblem"));
+      eIcon.setScale(44 / eIcon.width);
+    }
     lines.forEach((b, i) => {
       const y = rt + 84 + i * 28;
       add(this.add.text(96, y, b.label, textStyle(19, { weight: 500, color: COLORS.inkDim })).setOrigin(0, 0.5));
@@ -513,10 +592,28 @@ export class RunScene extends Phaser.Scene {
     );
     if (affordable > 0) this.tweens.add({ targets: treeBtn, scale: 1.05, duration: 520, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
 
-    if (!hasSeen(session.data, "result.first")) {
+    if (reward.emblems > 0 && !hasSeen(session.data, "emblem.first")) {
+      this.time.delayedCall(700, () => {
+        void playDialog(this, DIALOGS["emblem.first"]).then(() => session.update((d) => markSeen(d, "emblem.first")));
+      });
+    } else if (!hasSeen(session.data, "result.first")) {
       this.time.delayedCall(700, () => {
         void playDialog(this, DIALOGS["result.first"]).then(() => session.update((d) => markSeen(d, "result.first")));
       });
     }
   }
+}
+
+/** SPEC-117: 敵の特徴（長押しツールチップ） */
+function gimmickLines(def: (typeof ENEMIES)[string]): string[] {
+  const out: string[] = [];
+  if (def.stealth) out.push("隠密: ヒーローの近くかガルーダの射程に入るまで狙われない");
+  if (def.healer) out.push(`回復: ${def.healer.interval} 秒ごとに周りの敵を回復`);
+  if (def.summon) out.push(`召喚: ${def.summon.interval} 秒ごとに手下を呼ぶ`);
+  if (def.splitBoss) out.push("分裂: HP が半分を切るたびに 2 体に分かれる");
+  if (def.segments) out.push("多節: 節すべてで HP を共有。範囲攻撃が有効");
+  if (def.twinGroup) out.push("双子: 片方が倒れるともう片方が加速する");
+  if (def.split) out.push("分裂: 倒すと小さな敵に分かれる");
+  if (def.resist) out.push(`状態異常耐性 ${Math.round(def.resist * 100)}%`);
+  return out;
 }
