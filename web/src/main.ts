@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "./view/layout";
 import { BootScene } from "./view/scenes/BootScene";
 import { HomeScene } from "./view/scenes/HomeScene";
+import { RunScene } from "./view/scenes/RunScene";
 import { TitleScene } from "./view/scenes/TitleScene";
 import { COLORS, FONT_DISPLAY, FONT_FAMILY } from "./view/ui/theme";
 
@@ -32,7 +33,7 @@ async function start(): Promise<void> {
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
     input: { activePointers: 2 },
-    scene: [BootScene, TitleScene, HomeScene],
+    scene: [BootScene, TitleScene, HomeScene, RunScene],
   });
 
   if (import.meta.env.DEV) {

@@ -35,7 +35,8 @@ function validateManifest(m, errs) {
   const seenPaths = new Set();
   for (const a of m.assets) {
     if (!a.key || !a.type || !a.path) errs.push(`不正なエントリ: ${JSON.stringify(a)}`);
-    if (a.type !== "image" && a.type !== "audio") errs.push(`${a.key}: type は image | audio`);
+    if (!["image", "audio", "spritesheet"].includes(a.type)) errs.push(`${a.key}: type は image | audio | spritesheet`);
+    if (a.type === "spritesheet" && !(a.frameWidth > 0 && a.frameHeight > 0)) errs.push(`${a.key}: spritesheet には frameWidth / frameHeight が必要`);
     if (seenKeys.has(a.key)) errs.push(`キー重複: ${a.key}`);
     if (seenPaths.has(a.path)) errs.push(`パス重複: ${a.path}`);
     if (a.path.includes("..") || path.isAbsolute(a.path)) errs.push(`${a.key}: 不正なパス ${a.path}`);

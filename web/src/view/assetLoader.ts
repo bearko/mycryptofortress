@@ -6,6 +6,8 @@ const PIXEL_ART_PREFIXES = ["cryptid.", "chara.", "icon.", "hero.", "enemy."];
 
 export function queueAsset(scene: Phaser.Scene, a: AssetEntry): void {
   if (a.type === "image") scene.load.image(a.key, assetUrl(a));
+  else if (a.type === "spritesheet")
+    scene.load.spritesheet(a.key, assetUrl(a), { frameWidth: a.frameWidth!, frameHeight: a.frameHeight! });
   else scene.load.audio(a.key, assetUrl(a));
 }
 
