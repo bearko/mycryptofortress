@@ -17,9 +17,16 @@ import { jaWrap } from "../ui/jaWrap";
 const CARD_H = 196;
 const CARD_GAP = 18;
 const CARD_TOP = HEADER_H + 28;
+/** リストが見える下端（クリスくんの吹き出しの上） */
+const LIST_BOTTOM = 1080;
 
 /** SPEC-106 §3: ステージ（ノード）選択。クリスくんが案内する。 */
 export class LevelSelectScene extends Phaser.Scene {
+  /** カードを載せてスクロールするコンテナ */
+  private list!: Phaser.GameObjects.Container;
+  private scrollY = 0;
+  private maxScroll = 0;
+
   constructor() {
     super("LevelSelect");
   }
@@ -30,10 +37,19 @@ export class LevelSelectScene extends Phaser.Scene {
     void new LandBackground(this, 0.7).show(session.data.profile.cryptidId);
     new Header(this, "ノードを選ぶ", () => goTo(this, "Home")).setTokens(session.data.meta.tokens.ce, session.data.meta.tokens.emblem, session.data.meta.tokensEarned.emblem > 0);
 
+    this.list = this.add.container(0, 0).setDepth(10);
     LEVELS.forEach((lv, i) => this.card(lv, i));
+    const contentH = LEVELS.length * (CARD_H + CARD_GAP) - CARD_GAP;
+    this.maxScroll = Math.max(0, CARD_TOP + contentH - LIST_BOTTOM);
+    this.setupScroll();
+    // 最初は「次に挑むノード」（解放済みで未クリアの最初）が見える位置へ
+    const frontier = LEVELS.findIndex((l) => isLevelUnlocked(session.data, l.id) && !session.data.meta.levels[l.id]?.cleared);
+    if (frontier > 0) this.scrollTo(frontier * (CARD_H + CARD_GAP) - (CARD_H + CARD_GAP));
 
+    // 吹き出しの後ろはリストを隠す（スクロールしたカードが透けないように）
+    this.add.rectangle(0, LIST_BOTTOM, GAME_WIDTH, 1280 - LIST_BOTTOM, COLORS.bg, 0.88).setOrigin(0).setDepth(50);
     const tip = CHRIS_TIPS[Math.floor(Math.random() * CHRIS_TIPS.length)];
-    speechBubble(this, "chris", 110, 1240, tip, { width: 480 });
+    speechBubble(this, "chris", 110, 1240, tip, { width: 480, depth: 60 });
 
     if (!hasSeen(session.data, "levelSelect.first")) {
       void playDialog(this, DIALOGS["levelSelect.first"]).then(() => session.update((d) => markSeen(d, "levelSelect.first")));
@@ -76,12 +92,48 @@ export class LevelSelectScene extends Phaser.Scene {
     // Container の当たり判定は中心基準なので、中身を左上基準の内側コンテナに入れて中央に置く
     const inner = this.add.container(-w / 2, -CARD_H / 2, parts);
     const card = this.add.container(MARGIN + w / 2, y + CARD_H / 2, [inner]).setSize(w, CARD_H).setInteractive({ useHandCursor: true });
+    this.list.add(card);
     bindPress(card, {
       onPressChange: (p) => card.setAlpha(p ? 0.8 : 1),
       onTap: () => {
         if (!unlocked) return showToast(this, `Lv${index} をクリアすると解放されます`);
         goTo(this, "Run", { levelId: lv.id });
       },
+    });
+  }
+
+  // ─── スクロール（スマホはドラッグ、PC はホイール） ─────────────
+
+  private scrollTo(y: number): void {
+    this.scrollY = Phaser.Math.Clamp(y, 0, this.maxScroll);
+    this.list.y = -this.scrollY;
+  }
+
+  private setupScroll(): void {
+    let lastY: number | null = null;
+    let velocity = 0;
+    this.input.on(Phaser.Input.Events.POINTER_DOWN, (p: Phaser.Input.Pointer) => {
+      lastY = p.y;
+      velocity = 0;
+    });
+    this.input.on(Phaser.Input.Events.POINTER_MOVE, (p: Phaser.Input.Pointer) => {
+      if (lastY === null || !p.isDown) return;
+      const dy = p.y - lastY;
+      lastY = p.y;
+      velocity = dy;
+      this.scrollTo(this.scrollY - dy);
+    });
+    const release = () => {
+      lastY = null;
+    };
+    this.input.on(Phaser.Input.Events.POINTER_UP, release);
+    this.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, release);
+    this.input.on(Phaser.Input.Events.POINTER_WHEEL, (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => this.scrollTo(this.scrollY + dy));
+    // 指を離した後の慣性
+    this.events.on(Phaser.Scenes.Events.UPDATE, () => {
+      if (lastY !== null || Math.abs(velocity) < 0.5) return;
+      velocity *= 0.92;
+      this.scrollTo(this.scrollY - velocity);
     });
   }
 }
