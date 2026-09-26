@@ -30,6 +30,7 @@ const BRANCH_COLOR: Record<TreeBranch, number> = {
   cannon: 0x5ee0ff,
   defense: 0x5aa9ff,
   economy: 0xf5a142,
+  stone: 0xff5fa2,
 };
 
 interface NodeView {

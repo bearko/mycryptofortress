@@ -21,7 +21,20 @@ export interface EnemyDef {
   split?: { enemy: string; count: number };
   /** 双子: 同じグループの片方が倒れると、残りが永続的に加速する */
   twinGroup?: string;
+  /** SPEC-117 隠密: ヒーローの近く（REVEAL_RANGE）かガルーダの射程に入るまで狙われない（範囲攻撃は当たる） */
+  stealth?: boolean;
+  /** SPEC-117 回復: interval 秒ごとに radius マス内の他の敵を最大 HP × pct 回復する */
+  healer?: { interval: number; radius: number; pct: number };
+  /** SPEC-117 召喚: interval 秒ごとに自分の位置へ count 体呼ぶ */
+  summon?: { enemy: string; count: number; interval: number };
+  /** SPEC-117 分裂ボス: HP が半分を切るたびに 2 体へ分かれる（generations 回まで。1 体でも到達で陥落） */
+  splitBoss?: { generations: number; childHpPct: number };
+  /** SPEC-117 多節: 後ろに count 個の節（enemy）を連れ、全員で HP を共有する */
+  segments?: { enemy: string; count: number; spacing: number };
 }
+
+/** 隠密の敵が見えるようになるヒーローとの距離（マス） */
+export const REVEAL_RANGE = 1.2;
 
 /** 双子の片割れが倒れた時の加速 */
 export const TWIN_ENRAGE = 0.6;
@@ -43,6 +56,47 @@ const defs: EnemyDef[] = [
   { id: "love_mini", name: "ラブレター ショート", imageKey: "enemy.397", hp: 8, speed: 1.3, reward: 1, leak: 1, scale: 0.8 },
   { id: "love_t", name: "ラブレター トール", imageKey: "enemy.398", hp: 30, speed: 0.9, reward: 4, leak: 1, split: { enemy: "love_mini", count: 2 } },
   { id: "love_g", name: "ラブレター グランデ", imageKey: "enemy.399", hp: 55, speed: 0.85, reward: 6, leak: 1, split: { enemy: "love_t", count: 2 }, scale: 1.15 },
+  { id: "chameleon_s", name: "カメレオン ショート", imageKey: "enemy.408", hp: 26, speed: 1.0, reward: 6, leak: 1, stealth: true },
+  { id: "chameleon_t", name: "カメレオン トール", imageKey: "enemy.409", hp: 45, speed: 0.95, reward: 8, leak: 2, stealth: true, scale: 1.1 },
+  { id: "heartbleed_s", name: "ハートブリード ショート", imageKey: "enemy.121", hp: 30, speed: 0.8, reward: 6, leak: 1, healer: { interval: 2.5, radius: 1.5, pct: 0.06 } },
+  { id: "heartbleed_t", name: "ハートブリード トール", imageKey: "enemy.122", hp: 55, speed: 0.75, reward: 9, leak: 2, healer: { interval: 2.5, radius: 1.6, pct: 0.08 }, scale: 1.1 },
+  { id: "pooly_seg", name: "プーリー・ビーストの節", imageKey: "enemy.372", hp: 1, speed: 0.4, reward: 0, leak: 99, boss: true, scale: 0.75 },
+  {
+    id: "boss_genghis",
+    name: "ゴースト・チンギス・ハン",
+    imageKey: "enemy.451",
+    hp: 3200,
+    speed: 0.42,
+    reward: 160,
+    leak: 99,
+    boss: true,
+    scale: 1.6,
+    summon: { enemy: "rabbit_t", count: 2, interval: 5 },
+  },
+  {
+    id: "boss_yoshka",
+    name: "ディープ・ヨシュカ",
+    imageKey: "enemy.171",
+    hp: 4200,
+    speed: 0.38,
+    reward: 200,
+    leak: 99,
+    boss: true,
+    scale: 1.0,
+    splitBoss: { generations: 2, childHpPct: 0.6 },
+  },
+  {
+    id: "boss_pooly",
+    name: "プーリー・ビースト",
+    imageKey: "enemy.372",
+    hp: 6000,
+    speed: 0.4,
+    reward: 240,
+    leak: 99,
+    boss: true,
+    scale: 1.0,
+    segments: { enemy: "pooly_seg", count: 5, spacing: 0.55 },
+  },
   {
     id: "boss_kenshin",
     name: "ゴースト・上杉謙信",

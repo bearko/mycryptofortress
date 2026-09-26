@@ -1,4 +1,5 @@
-import { ENEMIES, TWIN_ENRAGE, resistOf, type EnemyDef } from "../data/balance/enemies";
+import { ENEMIES, REVEAL_RANGE, TWIN_ENRAGE, resistOf, type EnemyDef } from "../data/balance/enemies";
+import { STONES, STONE_IDS, STONE_NUM, STONE_REVEALS, type StoneId } from "../data/balance/stones";
 import { ROLES, heroVisual, maxLevel, roleStats, type RoleId } from "../data/balance/heroes";
 import type { LevelDef } from "./level";
 import {
@@ -24,6 +25,8 @@ export const TICK = 1 / 30;
 /** SPEC-104 §5: GUM ドロップの寿命（秒）と既定の回収半径（マス） */
 export const DROP_LIFETIME = 10;
 export const COLLECT_RADIUS = 0.7;
+/** SPEC-116: 自動回収までの秒数 */
+export const AUTO_COLLECT_DELAY = 0.5;
 /** 敵の見た目の重なりを避ける、経路法線方向のオフセット幅（マス） */
 const LANE_JITTER = 0.18;
 
@@ -86,6 +89,25 @@ export interface EnemyState {
   status: StatusState;
   /** 通行料を払った採掘ヒーローの ID */
   tolledBy: number[];
+  /** SPEC-117: 隠密の敵がいま見えているか（隠密でない敵は常に true） */
+  revealed: boolean;
+  /** 分裂ボスの世代（0 = 本体） */
+  gen: number;
+  /** 表示倍率（分裂で小さくなる） */
+  scale: number;
+  /** 撃破 GUM の倍率（分裂体は減る） */
+  rewardMul: number;
+  /** 回復・召喚の残り秒数 */
+  timer: number;
+  /** 多節ボス: 共有 HP */
+  pool?: HpPool;
+}
+
+/** SPEC-117: 多節ボスの共有 HP */
+export interface HpPool {
+  hp: number;
+  maxHp: number;
+  members: EnemyState[];
 }
 
 export interface HeroState {
@@ -101,6 +123,10 @@ export interface HeroState {
   /** 採掘ヒーローが稼いだ GUM */
   totalGum: number;
   facing: 1 | -1;
+  /** SPEC-115: 装着中の魔石（属性マスの属性は heroElement() で合成する） */
+  stone: StoneId | null;
+  /** ガルーダ + 炎の十字火球の残り秒数 */
+  crossTimer: number;
 }
 
 export interface ProjectileState {
@@ -158,6 +184,12 @@ export type SimEvent =
   | { type: "slotOpened"; slotIndex: number }
   | { type: "earlyCall"; bonus: number }
   | { type: "cannon"; x0: number; y0: number; x1: number; y1: number; hits: number }
+  | { type: "stoneEquipped"; stone: StoneId; target: number | "cannon" | null }
+  | { type: "enemyHeal"; enemyId: number; x: number; y: number; r: number }
+  | { type: "summon"; enemyId: number; x: number; y: number }
+  | { type: "split"; enemyId: number; x: number; y: number }
+  | { type: "cross"; heroId: number; x: number; y: number; len: number }
+  | { type: "knockback"; enemyId: number }
   | { type: "won" }
   | { type: "lost" };
 
@@ -184,6 +216,8 @@ interface SpawnEntry {
   path: number;
   hpMul: number;
   accel: number;
+  /** 多節ボスの節（共有 HP に加わる） */
+  pool?: HpPool;
 }
 
 const newStatus = (): StatusState => ({
@@ -234,6 +268,8 @@ export class RunSim {
   private events: SimEvent[] = [];
   private lastStandUsed = false;
   private cannonCooldown = 0;
+  /** SPEC-115: 魔石の装着先（ヒーロー ID / 幻獣砲）。未装着は入らない */
+  private readonly stoneHolder = new Map<StoneId, number | "cannon">();
 
   constructor(
     readonly level: LevelDef,
@@ -285,6 +321,70 @@ export class RunSim {
   placeCost(role: RoleId): number {
     const flat = role === "archer" ? this.mods.placeCostFlat : 0;
     return Math.max(10, ROLES[role].placeCost - flat);
+  }
+
+  // ─── 魔石（SPEC-115） ───────────────────────────────────
+
+  isStoneUnlocked(id: StoneId): boolean {
+    return this.mods[STONES[id].unlock] > 0;
+  }
+
+  unlockedStones(): StoneId[] {
+    return STONE_IDS.filter((id) => this.isStoneUnlocked(id));
+  }
+
+  /** 魔石の装着先（なければ null） */
+  stoneHolderOf(id: StoneId): number | "cannon" | null {
+    return this.stoneHolder.get(id) ?? null;
+  }
+
+  /** 属性マスの属性 */
+  slotElement(slotIndex: number): StoneId | null {
+    return this.level.slots[slotIndex]?.element ?? null;
+  }
+
+  /** ヒーローの属性（属性マスが優先） */
+  heroElement(hero: HeroState): StoneId | null {
+    return this.slotElement(hero.slotIndex) ?? hero.stone;
+  }
+
+  get cannonStone(): StoneId | null {
+    for (const [id, t] of this.stoneHolder) if (t === "cannon") return id;
+    return null;
+  }
+
+  /** 魔石を装着する（別の装着先から付け替え）。属性マスのヒーローには付けられない */
+  equipStone(id: StoneId, target: number | "cannon"): boolean {
+    if (this.isOver || !this.isStoneUnlocked(id)) return false;
+    if (target === "cannon") {
+      if (!this.cannonUnlocked) return false;
+      const prev = this.cannonStone;
+      if (prev) this.stoneHolder.delete(prev);
+    } else {
+      const hero = this.findHero(target);
+      if (!hero || this.slotElement(hero.slotIndex)) return false;
+      if (hero.stone) this.stoneHolder.delete(hero.stone);
+      hero.stone = id;
+    }
+    const from = this.stoneHolder.get(id);
+    if (typeof from === "number") {
+      const h = this.findHero(from);
+      if (h) h.stone = null;
+    }
+    this.stoneHolder.set(id, target);
+    this.emit({ type: "stoneEquipped", stone: id, target });
+    return true;
+  }
+
+  unequipStone(id: StoneId): void {
+    const from = this.stoneHolder.get(id);
+    if (from === undefined) return;
+    if (typeof from === "number") {
+      const h = this.findHero(from);
+      if (h) h.stone = null;
+    }
+    this.stoneHolder.delete(id);
+    this.emit({ type: "stoneEquipped", stone: id, target: null });
   }
 
   /** GUM の回収半径（マス） */
@@ -342,6 +442,8 @@ export class RunSim {
       totalDamage: 0,
       totalGum: 0,
       facing: 1,
+      stone: null,
+      crossTimer: 0,
     };
     this.heroes.push(hero);
     this.emit({ type: "heroPlaced", heroId: hero.id });
@@ -373,7 +475,19 @@ export class RunSim {
 
   /** ツリー補正込みの性能（ボス補正・会心・所持 GUM 補正は命中時に別途掛かる） */
   heroStats(hero: HeroState, level = hero.level): { damage: number; interval: number; range: number } {
-    return this.statsFor(hero.role, level);
+    const st = this.statsFor(hero.role, level);
+    const el = this.heroElement(hero);
+    const N = STONE_NUM;
+    if (el === "garuda") {
+      if (hero.role === "archer") st.interval /= 1 + N.garudaArcherSpeed;
+      if (hero.role === "pulse") st.interval *= N.garudaPulseInterval;
+      if (hero.role === "miner") st.range += N.garudaMinerRange;
+    }
+    if (el === "tiamat") {
+      if (hero.role === "archer") st.damage *= 1 + N.tiamatArcherDmg;
+      if (hero.role === "fire") st.damage *= 1 + N.tiamatFireDmg;
+    }
+    return st;
   }
 
   /** 配置前のプレビューにも使う: ロールとレベルから性能を出す */
@@ -413,13 +527,17 @@ export class RunSim {
   /** 採掘ヒーローの通行料（1 体あたり） */
   tollFor(hero: HeroState): number {
     const miner = ROLES[hero.role].miner;
-    return miner ? miner.tollPerLevel * hero.level + this.mods.minerTollAdd : 0;
+    if (!miner) return 0;
+    const toll = miner.tollPerLevel * hero.level + this.mods.minerTollAdd;
+    return this.heroElement(hero) === "tiamat" ? toll * STONE_NUM.tiamatMinerMul : toll;
   }
 
   /** 採掘ヒーローの Wave クリア配当 */
   payoutFor(hero: HeroState): number {
     const miner = ROLES[hero.role].miner;
-    return miner ? Math.round(miner.payoutPerLevel * hero.level * (1 + this.mods.minerPayoutPct)) : 0;
+    if (!miner) return 0;
+    const garuda = this.heroElement(hero) === "garuda" ? STONE_NUM.garudaMinerPayout : 0;
+    return Math.round(miner.payoutPerLevel * hero.level * (1 + this.mods.minerPayoutPct + garuda));
   }
 
   /** 炎ヒーローが 1 回の命中で積む炎上（毎秒ダメージ） */
@@ -427,7 +545,8 @@ export class RunSim {
     const flame = ROLES[hero.role].flame;
     if (!flame) return 0;
     const lvMul = ROLES[hero.role].perLevel.damageMul ** (hero.level - 1);
-    return flame.burnPerHit * lvMul * (1 + this.mods.fireBurnPct) * (1 + this.mods.fireDamagePct);
+    const ifrit = this.heroElement(hero) === "ifrit" ? STONE_NUM.ifritFireBurnMul : 1;
+    return flame.burnPerHit * lvMul * (1 + this.mods.fireBurnPct) * (1 + this.mods.fireDamagePct) * ifrit;
   }
 
   // ─── Wave ───────────────────────────────────────────────
@@ -508,7 +627,8 @@ export class RunSim {
     const uy = (ty - o.y) / len;
     const x1 = o.x + ux * CANNON.length;
     const y1 = o.y + uy * CANNON.length;
-    const width = CANNON.width + this.mods.cannonWidthAdd;
+    const stone = this.cannonStone;
+    const width = (CANNON.width + this.mods.cannonWidthAdd) * (stone === "garuda" ? STONE_NUM.garudaCannonWidth : 1);
     const damage = CANNON.damage * (1 + this.mods.cannonDamagePct);
     let hits = 0;
     for (const e of [...this.enemies]) {
@@ -518,7 +638,9 @@ export class RunSim {
       const d = Math.abs((e.x - o.x) * uy - (e.y - o.y) * ux);
       if (d > width) continue;
       hits++;
-      if (this.mods.cannonBurn > 0) this.applyBurn(e, CANNON.burnDps, CANNON.burnDuration, 0, Infinity);
+      if (this.mods.cannonBurn > 0 || stone === "ifrit") this.applyBurn(e, CANNON.burnDps, CANNON.burnDuration, 0, Infinity);
+      if (stone === "leviathan") this.applySlow(e, STONE_NUM.cannonSlow, STONE_NUM.levSlowDuration);
+      if (stone === "tiamat") this.applyPoison(e, 0);
       this.dealDamage(e, damage, 0, false);
     }
     this.emit({ type: "cannon", x0: o.x, y0: o.y, x1, y1, hits });
@@ -547,6 +669,8 @@ export class RunSim {
     this.updateStatuses();
     this.moveEnemies();
     if (this.isOver) return;
+    this.updateGimmicks();
+    this.updateReveal();
     this.updateMiners();
     this.updateHeroes();
     this.updateProjectiles();
@@ -584,13 +708,14 @@ export class RunSim {
     this.waveTime += TICK;
     while (this.spawnQueue.length > 0 && this.spawnQueue[0].t <= this.waveTime + 1e-9) {
       const s = this.spawnQueue.shift()!;
-      const e = this.spawnEnemy(ENEMIES[s.enemy], s.path, 0, s.hpMul);
+      if (s.pool && s.pool.hp <= 0) continue; // 本体ごと倒された節は出さない
+      const e = this.spawnEnemy(ENEMIES[s.enemy], s.path, 0, s.hpMul, s.pool);
       e.status.accel = s.accel;
     }
   }
 
-  private spawnEnemy(def: EnemyDef, pathIndex: number, dist: number, hpMul: number): EnemyState {
-    const hp = def.hp * hpMul;
+  private spawnEnemy(def: EnemyDef, pathIndex: number, dist: number, hpMul: number, pool?: HpPool): EnemyState {
+    const hp = pool ? pool.hp : def.hp * hpMul;
     const enemy: EnemyState = {
       id: this.nextId++,
       def,
@@ -608,11 +733,72 @@ export class RunSim {
       leapRemaining: 0,
       status: newStatus(),
       tolledBy: [],
+      revealed: !def.stealth,
+      gen: 0,
+      scale: def.scale ?? 1,
+      rewardMul: 1,
+      timer: def.healer?.interval ?? def.summon?.interval ?? 0,
     };
+    if (pool) {
+      enemy.maxHp = pool.maxHp;
+      enemy.pool = pool;
+      pool.members.push(enemy);
+    }
     this.placeOnPath(enemy);
     this.enemies.push(enemy);
     this.emit({ type: "spawn", enemyId: enemy.id });
+    // SPEC-117 多節ボス: 節を後ろに連ねて出す（全員で HP を共有）
+    if (def.segments && !pool) {
+      const shared: HpPool = { hp, maxHp: hp, members: [enemy] };
+      enemy.pool = shared;
+      const seg = def.segments;
+      for (let k = 1; k <= seg.count; k++) {
+        this.spawnQueue.push({ t: this.waveTime + (k * seg.spacing) / def.speed, enemy: seg.enemy, path: pathIndex, hpMul, accel: 0, pool: shared });
+      }
+      this.spawnQueue.sort((a, b) => a.t - b.t);
+    }
     return enemy;
+  }
+
+  // ─── ギミック（SPEC-117） ──────────────────────────────
+
+  /** 回復と召喚 */
+  private updateGimmicks(): void {
+    for (const e of [...this.enemies]) {
+      const heal = e.def.healer;
+      const summon = e.def.summon;
+      if (!heal && !summon) continue;
+      if (e.status.stunTime > 0) continue;
+      e.timer -= TICK;
+      if (e.timer > 0) continue;
+      if (heal) {
+        e.timer = heal.interval;
+        for (const o of this.enemies) {
+          if (o === e || o.hp <= 0 || o.pool || o.hp >= o.maxHp || Math.hypot(o.x - e.x, o.y - e.y) > heal.radius) continue;
+          o.hp = Math.min(o.maxHp, o.hp + o.maxHp * heal.pct);
+        }
+        this.emit({ type: "enemyHeal", enemyId: e.id, x: e.x, y: e.y, r: heal.radius });
+      }
+      if (summon) {
+        e.timer = summon.interval;
+        for (let i = 0; i < summon.count; i++) {
+          this.spawnEnemy(ENEMIES[summon.enemy], e.pathIndex, Math.max(0, e.dist - 0.3 * i), e.hpMul);
+        }
+        this.emit({ type: "summon", enemyId: e.id, x: e.x, y: e.y });
+      }
+    }
+  }
+
+  /** 隠密: ヒーローの近く、またはガルーダ（風）のヒーローの射程内で見える */
+  private updateReveal(): void {
+    const seers = this.heroes.map((h) => ({
+      h,
+      r: Math.max(REVEAL_RANGE, this.heroElement(h) === STONE_REVEALS ? this.heroStats(h).range : 0),
+    }));
+    for (const e of this.enemies) {
+      if (!e.def.stealth) continue;
+      e.revealed = seers.some(({ h, r }) => Math.hypot(e.x - h.x, e.y - h.y) <= r);
+    }
   }
 
   private placeOnPath(e: EnemyState): void {
@@ -750,6 +936,9 @@ export class RunSim {
       for (const e of this.enemies) {
         if (e.tolledBy.includes(h.id) || Math.hypot(e.x - h.x, e.y - h.y) > range) continue;
         e.tolledBy.push(h.id);
+        const el = this.heroElement(h);
+        if (el === "ifrit") this.applyBurn(e, STONE_NUM.ifritMinerBurn * h.level, STONE_NUM.ifritBurnDuration, h.id, STONE_NUM.ifritMinerBurn * h.level * 3);
+        if (el === "leviathan") this.applySlow(e, STONE_NUM.levMinerSlow, STONE_NUM.levMinerSlowDuration);
         this.gum += toll;
         this.stats.gumEarned += toll;
         h.totalGum += toll;
@@ -773,7 +962,7 @@ export class RunSim {
       h.cooldown = stats.interval * (1 - this.hasteFor(h));
       h.facing = target.x < h.x ? -1 : 1;
       if (h.role === "lightning") this.lightning(h, target, stats.damage);
-      else if (h.role === "fire") this.flame(h, target, stats.damage);
+      else if (h.role === "fire") this.flame(h, target, stats);
       else this.archer(h, target, stats);
       this.emit({ type: "attack", heroId: h.id, targetId: target.id, tx: target.x, ty: target.y });
     }
@@ -792,6 +981,11 @@ export class RunSim {
       return;
     }
     this.fire(h, target, stats.damage);
+    // ガルーダ（疾風）: 毎回もう 1 体に撃つ
+    if (this.heroElement(h) === "garuda") {
+      const second = this.selectTarget(h, stats.range, [target]);
+      if (second) this.fire(h, second, stats.damage);
+    }
     if (this.mods.extraShotChance > 0 && this.rng.chance(this.mods.extraShotChance)) {
       const second = this.selectTarget(h, stats.range, [target]);
       if (second) this.fire(h, second, stats.damage);
@@ -801,7 +995,10 @@ export class RunSim {
   /** SPEC-110: 雷。初撃から近くの敵へ連鎖し、感電を積む。閾値で放電（スタン） */
   private lightning(h: HeroState, first: EnemyState, damage: number): void {
     const c = ROLES.lightning.chain!;
-    const jumps = c.jumps + this.mods.lightningChains;
+    const el = this.heroElement(h);
+    const garuda = el === "garuda";
+    const jumps = c.jumps + this.mods.lightningChains + (garuda ? STONE_NUM.garudaChains : 0);
+    const jumpRange = c.jumpRange + (garuda ? STONE_NUM.garudaJumpRange : 0);
     const hit: EnemyState[] = [];
     let cur: EnemyState | undefined = first;
     const points: Point[] = [{ x: h.x, y: h.y }];
@@ -810,6 +1007,8 @@ export class RunSim {
       points.push({ x: cur.x, y: cur.y });
       const dmg = damage * (1 - c.falloff) ** k;
       this.dealDamage(cur, dmg, h.id, false);
+      if (el === "ifrit" && cur.hp > 0) this.applyBurn(cur, dmg * STONE_NUM.ifritBurnPct, STONE_NUM.ifritBurnDuration, h.id, dmg * STONE_NUM.ifritBurnPct * 4);
+      if (el === "tiamat" && cur.hp > 0) this.applyPoison(cur, h.id);
       const s = cur.status;
       s.shock += c.shockPerHit + this.mods.lightningShock;
       if (s.shock >= c.shockThreshold && cur.hp > 0) {
@@ -817,10 +1016,17 @@ export class RunSim {
         this.applyStun(cur, c.stun + this.mods.dischargeStunAdd);
         this.emit({ type: "discharge", enemyId: cur.id, x: cur.x, y: cur.y });
         if (this.mods.arcFlash > 0) this.dealDamage(cur, dmg * 3, h.id, false);
+        // リヴァイアサン: 放電で押し戻す（ボスは半分）
+        if (el === "leviathan" && cur.hp > 0) {
+          cur.dist = Math.max(0, cur.dist - STONE_NUM.levKnockback * (1 - resistOf(cur.def)));
+          this.placeOnPath(cur);
+          this.applySlow(cur, STONE_NUM.levSlow, STONE_NUM.levSlowDuration);
+          this.emit({ type: "knockback", enemyId: cur.id });
+        }
       }
       const from: EnemyState = cur;
       cur = this.enemies
-        .filter((e) => e.hp > 0 && !hit.includes(e) && Math.hypot(e.x - from.x, e.y - from.y) <= c.jumpRange)
+        .filter((e) => e.hp > 0 && !hit.includes(e) && Math.hypot(e.x - from.x, e.y - from.y) <= jumpRange)
         .sort((a, b) => Math.hypot(a.x - from.x, a.y - from.y) - Math.hypot(b.x - from.x, b.y - from.y) || a.id - b.id)[0];
     }
     this.emit({ type: "chain", heroId: h.id, points });
@@ -831,10 +1037,15 @@ export class RunSim {
     const inRange = this.enemies.filter((e) => e.hp > 0 && Math.hypot(e.x - h.x, e.y - h.y) <= stats.range);
     if (inRange.length === 0) return false;
     const p = ROLES.pulse.pulse!;
+    const el = this.heroElement(h);
+    const lev = el === "leviathan";
+    const stun = this.mods.pulseStunChance + (lev ? STONE_NUM.levPulseStun : 0);
     for (const e of inRange) {
-      this.applySlow(e, p.slow + this.mods.pulseSlowAdd, p.slowDuration + this.mods.pulseSlowDurAdd);
+      this.applySlow(e, p.slow + this.mods.pulseSlowAdd + (lev ? STONE_NUM.levPulseSlow : 0), p.slowDuration + this.mods.pulseSlowDurAdd);
       if (this.mods.pulseZhuge > 0) this.applyVuln(e, ZHUGE_VULN, ZHUGE_VULN_DURATION);
-      if (this.mods.pulseStunChance > 0 && this.rng.chance(this.mods.pulseStunChance)) this.applyStun(e, PULSE_STUN);
+      if (stun > 0 && this.rng.chance(stun)) this.applyStun(e, PULSE_STUN);
+      if (el === "ifrit") this.applyBurn(e, stats.damage, STONE_NUM.ifritBurnDuration, h.id, stats.damage * 4);
+      if (el === "tiamat") this.applyPoison(e, h.id);
       this.dealDamage(e, stats.damage, h.id, false);
     }
     this.emit({ type: "pulse", heroId: h.id, x: h.x, y: h.y, r: stats.range });
@@ -842,17 +1053,39 @@ export class RunSim {
   }
 
   /** SPEC-112: 炎。標的とその周りに小ダメージと炎上を積む */
-  private flame(h: HeroState, target: EnemyState, damage: number): void {
+  private flame(h: HeroState, target: EnemyState, stats: { damage: number; interval: number; range: number }): void {
     const f = ROLES.fire.flame!;
+    const el = this.heroElement(h);
+    const damage = stats.damage;
     const burn = this.burnPerHit(h);
     const duration = f.burnDuration + this.mods.fireBurnDurAdd;
-    const cap = burn * f.burnCapHits;
+    const cap = burn * f.burnCapHits * (el === "ifrit" ? STONE_NUM.ifritFireCapMul : 1);
     const victims = this.enemies.filter((e) => e.hp > 0 && Math.hypot(e.x - target.x, e.y - target.y) <= f.splash);
     for (const e of victims) {
       this.applyBurn(e, burn, duration, h.id, cap);
+      if (el === "leviathan") this.applySlow(e, STONE_NUM.levFireSlow, STONE_NUM.levSlowDuration);
       this.dealDamage(e, damage, h.id, false, true);
     }
     this.emit({ type: "flame", heroId: h.id, tx: target.x, ty: target.y });
+    // ガルーダ（十字火球）: 1 秒ごとに縦横 4 方向へ貫通する火を放つ
+    if (el === "garuda") {
+      h.crossTimer -= stats.interval;
+      if (h.crossTimer <= 0) {
+        h.crossTimer = 1;
+        const len = stats.range + STONE_NUM.garudaCrossExtra;
+        const w = STONE_NUM.garudaCrossWidth;
+        for (const e of [...this.enemies]) {
+          if (e.hp <= 0) continue;
+          const dx = Math.abs(e.x - h.x);
+          const dy = Math.abs(e.y - h.y);
+          if ((dy <= w && dx <= len) || (dx <= w && dy <= len)) {
+            this.applyBurn(e, burn, duration, h.id, cap);
+            this.dealDamage(e, damage * STONE_NUM.garudaCrossDmg, h.id, false);
+          }
+        }
+        this.emit({ type: "cross", heroId: h.id, x: h.x, y: h.y, len });
+      }
+    }
   }
 
   /** 弓: 1 本の弾を撃つ。会心・ボス補正・所持 GUM 補正は発射時に確定させ、予定ダメージに積む */
@@ -883,7 +1116,7 @@ export class RunSim {
   /** SPEC-102 §2.4: 射程内から優先度に従って標的を選ぶ（撃ちすぎ防止つき） */
   selectTarget(h: HeroState, range: number, exclude: readonly EnemyState[] = []): EnemyState | null {
     const inRange = this.enemies.filter(
-      (e) => e.hp > 0 && !exclude.includes(e) && Math.hypot(e.x - h.x, e.y - h.y) <= range,
+      (e) => e.hp > 0 && e.revealed && !exclude.includes(e) && Math.hypot(e.x - h.x, e.y - h.y) <= range,
     );
     if (inRange.length === 0) return null;
     const notDoomed = inRange.filter((e) => e.pending < e.hp);
@@ -930,7 +1163,19 @@ export class RunSim {
         this.emit({ type: "combust", enemyId: target.id, x: target.x, y: target.y, damage: combust });
         this.dealDamage(target, combust, p.heroId, false);
       }
-      if (this.mods.poisonChance > 0 && target.hp > 0 && this.rng.chance(this.mods.poisonChance)) this.applyPoison(target, p.heroId);
+      const shooter = this.findHero(p.heroId);
+      const el = shooter ? this.heroElement(shooter) : null;
+      if (target.hp > 0 && (el === "tiamat" || (this.mods.poisonChance > 0 && this.rng.chance(this.mods.poisonChance)))) this.applyPoison(target, p.heroId);
+      if (el === "leviathan" && target.hp > 0) this.applySlow(target, STONE_NUM.levSlow, STONE_NUM.levSlowDuration);
+      if (el === "ifrit") {
+        // 火矢: 周りに小爆発し、当たった敵をまとめて炎上させる
+        const burn = p.damage * STONE_NUM.ifritBurnPct;
+        for (const o of [...this.enemies]) {
+          if (o.hp <= 0 || Math.hypot(o.x - target.x, o.y - target.y) > STONE_NUM.ifritSplash) continue;
+          this.applyBurn(o, burn, STONE_NUM.ifritBurnDuration, p.heroId, burn * 4);
+          if (o !== target) this.dealDamage(o, p.damage * STONE_NUM.ifritSplashPct, p.heroId, false, true);
+        }
+      }
       this.dealDamage(target, p.damage, p.heroId, p.crit);
       if (this.mods.gumOnHitChance > 0 && this.rng.chance(this.mods.gumOnHitChance)) {
         this.gum += 1;
@@ -950,7 +1195,13 @@ export class RunSim {
     const hero = heroId > 0;
     const total = amount * (1 + e.status.vuln) * (hero ? 1 + this.lostHpBonus : 1);
     const dealt = Math.min(total, e.hp);
-    e.hp -= total;
+    if (e.pool) {
+      // 多節ボス: 共有 HP を減らし、全節に反映
+      e.pool.hp -= total;
+      for (const m of e.pool.members) m.hp = e.pool.hp;
+    } else {
+      e.hp -= total;
+    }
     if (heroId === 0) this.stats.cannonDamage += dealt;
     else if (heroId === BLAST_SOURCE) this.stats.blastDamage += dealt;
     else {
@@ -965,21 +1216,49 @@ export class RunSim {
         if (o !== e && o.hp > 0 && o.status.slowTime > 0) this.dealDamage(o, share, heroId, false, true, true);
       }
     }
-    if (e.hp <= 0) this.onKill(e);
+    if (e.hp <= 0) {
+      if (e.pool) {
+        const members = e.pool.members;
+        e.pool.members = [];
+        for (const m of members) this.onKill(m);
+      } else {
+        this.onKill(e);
+      }
+      return;
+    }
+    // 分裂ボス: HP が半分を切ったら 2 体に分かれる
+    const sb = e.def.splitBoss;
+    if (sb && e.gen < sb.generations && e.hp <= e.maxHp * 0.5) this.splitEnemy(e, sb.childHpPct);
+  }
+
+  private splitEnemy(e: EnemyState, childHpPct: number): void {
+    const hp = e.hp * childHpPct;
+    e.hp = 0; // 撃破扱いにせず取り除く（ドロップ・撃破数なし）
+    this.emit({ type: "split", enemyId: e.id, x: e.x, y: e.y });
+    for (let i = 0; i < 2; i++) {
+      const c = this.spawnEnemy(e.def, e.pathIndex, Math.max(0, e.dist - 0.35 * i), e.hpMul);
+      c.hp = c.maxHp = hp;
+      c.gen = e.gen + 1;
+      c.scale = e.scale * 0.8;
+      c.rewardMul = e.rewardMul * 0.5;
+      c.status.accel = e.status.accel;
+    }
   }
 
   private onKill(e: EnemyState): void {
     this.stats.kills += 1;
     this.emit({ type: "kill", enemyId: e.id, x: e.x, y: e.y, boss: !!e.def.boss });
-    const drop: DropState = {
-      id: this.nextId++,
-      x: e.x,
-      y: e.y,
-      value: e.def.reward + this.mods.dropValueFlat,
-      ttl: DROP_LIFETIME + this.mods.dropLifetimeAdd,
-    };
-    this.drops.push(drop);
-    this.emit({ type: "drop", dropId: drop.id });
+    if (e.def.reward > 0) {
+      const drop: DropState = {
+        id: this.nextId++,
+        x: e.x,
+        y: e.y,
+        value: Math.max(1, Math.round(e.def.reward * e.rewardMul)) + this.mods.dropValueFlat,
+        ttl: DROP_LIFETIME + this.mods.dropLifetimeAdd,
+      };
+      this.drops.push(drop);
+      this.emit({ type: "drop", dropId: drop.id });
+    }
     // 伏爆の罠: 確率で爆発して周りの敵を巻き込む
     if (this.mods.deathBlastChance > 0 && this.rng.chance(this.mods.deathBlastChance)) {
       this.emit({ type: "blast", x: e.x, y: e.y, r: BLAST_RADIUS });
@@ -1008,6 +1287,11 @@ export class RunSim {
   }
 
   private updateDrops(): void {
+    // SPEC-116: 自動回収（落ちてから少し見せてから集める）
+    if (this.mods.autoCollect > 0) {
+      const life = DROP_LIFETIME + this.mods.dropLifetimeAdd;
+      for (const d of this.drops.filter((x) => life - x.ttl >= AUTO_COLLECT_DELAY)) this.collectDropsAt(d.x, d.y, 0.001);
+    }
     this.drops = this.drops.filter((d) => {
       d.ttl -= TICK;
       if (d.ttl > 0) return true;

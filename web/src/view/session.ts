@@ -19,7 +19,7 @@ class Session {
     const loaded = this.store.loadOrCreate(this.slot);
     const synced = syncTreeVersion(loaded);
     this.data = synced.save === loaded ? loaded : this.store.save(this.slot, synced.save);
-    if (synced.refunded) this.notice = "スキルツリーが新しくなったため、CE を全額返金しました";
+    if (synced.refunded) this.notice = "スキルツリーが新しくなったため、CE とエンブレムを全額返金しました";
   }
 
   /** ホームで一度だけ表示するお知らせ */

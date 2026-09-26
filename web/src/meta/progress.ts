@@ -1,8 +1,9 @@
-import { TREE, TREE_BY_ID, TREE_VERSION, nodeCost, type TreeNode } from "../data/tree";
+import { TREE, TREE_BY_ID, TREE_VERSION, nodeCost, type TokenId, type TreeNode } from "../data/tree";
+import { MILESTONES, isMilestoneReached } from "../data/milestones";
 import { LEVELS } from "../data/levels";
 import type { LevelDef } from "../sim/level";
 import { emptyModifiers, type RunModifiers } from "../sim/modifiers";
-import type { LevelProgress, SaveData } from "./save";
+import { BUILD_SET_SLOTS, type LevelProgress, type SaveData } from "./save";
 
 /**
  * SPEC-106 / 107 / 108: メタ進行の純粋関数。SaveData を受け取り、新しい SaveData を返す（破壊しない）。
@@ -71,29 +72,30 @@ export function refundNode(save: SaveData, id: string): SaveData {
   const lv = n ? nodeLevel(save, id) : 0;
   if (!n || lv === 0) return save;
   const tree = { ...save.meta.tree };
-  let refund = nodeCost(n, lv - 1);
+  const tokens = { ...save.meta.tokens };
+  tokens[n.cost.token] += nodeCost(n, lv - 1);
   if (lv - 1 === 0) {
     delete tree[id];
     for (const d of descendants(id)) {
       const dl = nodeLevel(save, d.id);
-      if (dl > 0) refund += spentOn(d, dl);
+      if (dl > 0) tokens[d.cost.token] += spentOn(d, dl);
       delete tree[d.id];
     }
   } else {
     tree[id] = lv - 1;
   }
-  return withMeta(save, { tokens: { ...save.meta.tokens, ce: save.meta.tokens.ce + refund }, tree });
+  return withMeta(save, { tokens, tree });
 }
 
 /** すべて返金する */
 export function refundAll(save: SaveData): SaveData {
-  let refund = 0;
-  for (const n of TREE) refund += spentOn(n, nodeLevel(save, n.id));
-  return withMeta(save, { tokens: { ...save.meta.tokens, ce: save.meta.tokens.ce + refund }, tree: {} });
+  const tokens = { ...save.meta.tokens };
+  for (const n of TREE) tokens[n.cost.token] += spentOn(n, nodeLevel(save, n.id));
+  return withMeta(save, { tokens, tree: {} });
 }
 
-export function totalSpent(save: SaveData): number {
-  return TREE.reduce((sum, n) => sum + spentOn(n, nodeLevel(save, n.id)), 0);
+export function totalSpent(save: SaveData, token: TokenId = "ce"): number {
+  return TREE.filter((n) => n.cost.token === token).reduce((sum, n) => sum + spentOn(n, nodeLevel(save, n.id)), 0);
 }
 
 /**
@@ -104,7 +106,7 @@ export function syncTreeVersion(save: SaveData): { save: SaveData; refunded: boo
   if (save.meta.treeVersion === TREE_VERSION) return { save, refunded: false };
   const hadTree = Object.keys(save.meta.tree).length > 0;
   return {
-    save: withMeta(save, { tree: {}, tokens: { ...save.meta.tokens, ce: save.meta.tokensEarned.ce }, treeVersion: TREE_VERSION }),
+    save: withMeta(save, { tree: {}, tokens: { ...save.meta.tokensEarned }, treeVersion: TREE_VERSION }),
     refunded: hadTree,
   };
 }
@@ -117,7 +119,50 @@ export function computeModifiers(save: SaveData): RunModifiers {
     if (lv === 0 || (n.parent && nodeLevel(save, n.parent) === 0)) continue;
     for (const e of n.effects) mods[e.stat] += e.perLevel * lv;
   }
+  // SPEC-116: ランに効くマイルストーン
+  for (const m of MILESTONES) if (m.stat && isMilestoneReached(save, m.id)) mods[m.stat] += 1;
   return mods;
+}
+
+// ─── ビルドセット（SPEC-116） ─────────────────────────────
+
+/** 今のツリーを枠 i に保存する */
+export function saveBuildSet(save: SaveData, index: number, name: string): SaveData {
+  if (index < 0 || index >= BUILD_SET_SLOTS) return save;
+  const buildSets = [...save.meta.buildSets];
+  buildSets[index] = { name, tree: { ...save.meta.tree } };
+  return withMeta(save, { buildSets });
+}
+
+/**
+ * 枠 i のビルドを読み込む: 全返金してから、保存したノードを親から順に買い直す。
+ * トークンが足りない分は買えるところまで（戻り値の missing に数を返す）。
+ */
+export function loadBuildSet(save: SaveData, index: number): { save: SaveData; missing: number } {
+  const set = save.meta.buildSets[index];
+  if (!set) return { save, missing: 0 };
+  let next = refundAll(save);
+  let missing = 0;
+  // TREE は親が先に並ぶとは限らないので、買えなくなるまで繰り返す
+  let progressed = true;
+  while (progressed) {
+    progressed = false;
+    for (const n of TREE) {
+      const want = Math.min(n.maxLevel, set.tree[n.id] ?? 0);
+      while (nodeLevel(next, n.id) < want && buyBlock(next, n.id) === null) {
+        next = buyNode(next, n.id);
+        progressed = true;
+      }
+    }
+  }
+  for (const n of TREE) missing += Math.max(0, Math.min(n.maxLevel, set.tree[n.id] ?? 0) - nodeLevel(next, n.id));
+  return { save: next, missing };
+}
+
+export function clearBuildSet(save: SaveData, index: number): SaveData {
+  const buildSets = [...save.meta.buildSets];
+  buildSets[index] = null;
+  return withMeta(save, { buildSets });
 }
 
 // ─── ラン結果と報酬 ───────────────────────────────────────
@@ -131,6 +176,8 @@ export interface RunResult {
 
 export interface RunReward {
   ce: number;
+  /** SPEC-116a: 初回クリアのエンブレム */
+  emblems: number;
   breakdown: { label: string; ce: number }[];
   firstClear: boolean;
 }
@@ -143,14 +190,14 @@ export function computeReward(level: LevelDef, result: RunResult, save: SaveData
     breakdown.push({ label: `Wave クリア ×${result.wavesCleared}`, ce: result.wavesCleared * level.reward.perWave });
   if (result.won) breakdown.push({ label: "防衛成功", ce: level.reward.clear });
   if (firstClear) breakdown.push({ label: "初回クリア", ce: level.reward.firstClear });
-  return { ce: breakdown.reduce((s, b) => s + b.ce, 0), breakdown, firstClear };
+  return { ce: breakdown.reduce((s, b) => s + b.ce, 0), emblems: firstClear ? (level.reward.emblems ?? 0) : 0, breakdown, firstClear };
 }
 
 export function applyRunResult(save: SaveData, result: RunResult, reward: RunReward): SaveData {
   const prev: LevelProgress = save.meta.levels[result.levelId] ?? { cleared: false, bestWave: 0, clears: 0, runs: 0 };
   return withMeta(save, {
-    tokens: { ...save.meta.tokens, ce: save.meta.tokens.ce + reward.ce },
-    tokensEarned: { ...save.meta.tokensEarned, ce: save.meta.tokensEarned.ce + reward.ce },
+    tokens: { ce: save.meta.tokens.ce + reward.ce, emblem: save.meta.tokens.emblem + reward.emblems },
+    tokensEarned: { ce: save.meta.tokensEarned.ce + reward.ce, emblem: save.meta.tokensEarned.emblem + reward.emblems },
     levels: {
       ...save.meta.levels,
       [result.levelId]: {

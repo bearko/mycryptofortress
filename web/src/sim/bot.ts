@@ -1,4 +1,5 @@
 import type { RoleId } from "../data/balance/heroes";
+import type { StoneId } from "../data/balance/stones";
 import type { RunModifiers } from "./modifiers";
 import { RunSim } from "./run";
 import type { LevelDef } from "./level";
@@ -28,6 +29,27 @@ export interface BotOptions {
 
 /** 解放済みなら混成で置く標準の順番（弓 2 → 結界 → 雷 → 炎 → 採掘 → 以降は弓と雷） */
 export const DEFAULT_ROLE_PLAN: RoleId[] = ["archer", "archer", "pulse", "lightning", "fire", "miner", "archer", "lightning", "archer", "fire"];
+
+/** 魔石を付けたいロールの優先順（SPEC-115） */
+const STONE_PREFERENCE: Record<StoneId, RoleId[]> = {
+  ifrit: ["archer", "fire", "pulse", "lightning"],
+  garuda: ["archer", "lightning", "fire", "pulse"],
+  leviathan: ["lightning", "pulse", "archer", "fire"],
+  tiamat: ["pulse", "lightning", "archer", "miner"],
+};
+
+/** 空いている魔石を、属性のないヒーロー（なければ幻獣砲）に付ける */
+export function assignStones(sim: RunSim): void {
+  for (const stone of sim.unlockedStones()) {
+    if (sim.stoneHolderOf(stone) !== null) continue;
+    const free = sim.heroes.filter((h) => sim.heroElement(h) === null);
+    const pick = STONE_PREFERENCE[stone]
+      .map((role) => free.filter((h) => h.role === role).sort((a, b) => b.level - a.level || a.id - b.id)[0])
+      .find((h) => h !== undefined);
+    if (pick) sim.equipStone(stone, pick.id);
+    else if (sim.cannonUnlocked && sim.cannonStone === null) sim.equipStone(stone, "cannon");
+  }
+}
 
 /** 幻獣砲を撃つのは、この GUM を残せるときだけ */
 const CANNON_RESERVE = 60;
@@ -74,6 +96,7 @@ export function runBot(level: LevelDef, seed: number, opts: BotOptions = {}): Ru
             if (target) acted = sim.levelUp(target.id);
           }
         }
+        assignStones(sim);
         if (cannon && sim.canFireCannon() && sim.gum >= CANNON_RESERVE + sim.cannonCost) {
           const c = sim.cryptidPos;
           const lead = [...sim.enemies].sort((a, b) => Math.hypot(a.x - c.x, a.y - c.y) - Math.hypot(b.x - c.x, b.y - c.y))[0];
