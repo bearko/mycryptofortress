@@ -34,7 +34,7 @@ export const DIALOGS: Record<string, DialogLine[]> = {
   ],
   "tree.first": [
     { speaker: "navi", text: "ここがスキルツリーです。真ん中の「黄金の工房」から、線でつながったスキルを順に解放できます。" },
-    { speaker: "navi", text: "上は弓、左下は幻獣の守り、右下は GUM の稼ぎ。スキルをタップすると効果と必要な CE が見られます。" },
+    { speaker: "navi", text: "上は弓、左は雷と結界、右は炎と採掘。下は幻獣の守り・幻獣砲・GUM の稼ぎです。スキルをタップすると効果と必要な CE が見られます。" },
     { speaker: "navi", text: "ドラッグで移動、ピンチ（PC はホイール）で拡大縮小。返金は無料なので、気軽に試してください！" },
   ],
   "levelSelect.first": [

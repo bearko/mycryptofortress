@@ -1,8 +1,8 @@
 import Phaser from "phaser";
 import { getCryptid, type CryptidId } from "../../data/cryptids";
-import { ROLES } from "../../data/balance/heroes";
+import type { RoleId } from "../../data/balance/heroes";
 import { pathCells } from "../../sim/level";
-import type { RunSim, SimEvent } from "../../sim/run";
+import type { RunSim, SimEvent, StatusState } from "../../sim/run";
 import { GAME_WIDTH } from "../layout";
 import { COLORS, textStyle } from "../ui/theme";
 import { CryptidDisplay } from "../ui/widgets";
@@ -19,10 +19,26 @@ export const toCell = (px: number, py: number) => ({ x: px / CELL, y: (py - BOAR
 const HERO_FACES_RIGHT = true;
 const ENEMY_FACES_RIGHT = false;
 
+/** SPEC-109: 敵の頭上に出す状態異常アイコン（表示順） */
+const STATUS_ICONS: [(s: StatusState) => boolean, string][] = [
+  [(s) => s.burnTime > 0, "icon.battle.bleed"],
+  [(s) => s.poisonTime > 0, "icon.battle.poison"],
+  [(s) => s.slowTime > 0, "icon.battle.dbf_agi"],
+  [(s) => s.stunTime > 0, "icon.battle.sleep"],
+  [(s) => s.stunTime <= 0 && s.shock > 0, "icon.battle.confused"],
+  [(s) => s.vulnTime > 0, "icon.battle.dbf_phy"],
+  [(s) => s.accel > 0, "icon.battle.buf_agi"],
+];
+const STATUS_ICON_PX = 20;
+
+/** 攻撃演出の色 */
+const FX = { lightning: 0x8fe3ff, pulse: 0xc58bff, fire: 0xff8a3d, cannon: 0xfff1a8 } as const;
+
 interface EnemyView {
   sprite: Phaser.GameObjects.Image;
   bar: Phaser.GameObjects.Graphics;
   aura?: Phaser.GameObjects.Arc;
+  icons: Phaser.GameObjects.Image[];
 }
 
 interface HeroView {
@@ -45,6 +61,8 @@ export class BoardView {
   private readonly heroes = new Map<number, HeroView>();
   private readonly drops = new Map<number, Phaser.GameObjects.Image>();
   private selectedSlot: number | null = null;
+  private previewRole: RoleId = "archer";
+  private readonly lockLabels = new Map<number, Phaser.GameObjects.GameObject[]>();
   private readonly accent: number;
 
   constructor(
@@ -88,10 +106,19 @@ export class BoardView {
 
     // ビルドマス
     this.slotGfx = scene.add.graphics().setDepth(-15);
-    for (const s of lv.slots) {
+    lv.slots.forEach((s, i) => {
       const { x, y } = toPx(s.col + 0.5, s.row + 0.5);
       this.slotPlus.push(scene.add.text(x, y, "+", textStyle(34, { color: COLORS.inkDim })).setOrigin(0.5).setAlpha(0.7).setDepth(-14));
-    }
+      // SPEC-113: ロックマスは開放費用を表示
+      const cost = sim.slotOpenCost(i);
+      if (cost !== null) {
+        this.lockLabels.set(i, [
+          scene.add.text(x, y - 14, "LOCK", textStyle(15, { display: true, color: COLORS.inkDim })).setOrigin(0.5).setDepth(-14),
+          scene.add.image(x - 16, y + 14, "icon.gum").setScale(0.26).setDepth(-14),
+          scene.add.text(x + 8, y + 14, String(cost), textStyle(18, { color: COLORS.gold })).setOrigin(0.5).setDepth(-14),
+        ]);
+      }
+    });
     this.rangeGfx = scene.add.graphics().setDepth(5);
 
     // 幻獣（拠点）
@@ -109,6 +136,12 @@ export class BoardView {
     this.redrawRange();
   }
 
+  /** 配置前の射程プレビューに使うロール */
+  setPreviewRole(role: RoleId): void {
+    this.previewRole = role;
+    this.redrawRange();
+  }
+
   /** 毎フレーム: sim の状態を表示に反映 */
   sync(time: number): void {
     const sim = this.sim;
@@ -120,6 +153,7 @@ export class BoardView {
         v.sprite.destroy();
         v.bar.destroy();
         v.aura?.destroy();
+        for (const i of v.icons) i.destroy();
         this.enemies.delete(id);
       }
     }
@@ -129,7 +163,11 @@ export class BoardView {
         const scale = 0.9 * (e.def.scale ?? 1);
         const sprite = this.scene.add.image(0, 0, e.def.imageKey).setScale(scale).setOrigin(0.5, 0.7).setDepth(10);
         const aura = e.def.boss ? this.scene.add.circle(0, 0, 40 * scale, COLORS.danger, 0.25).setDepth(9) : undefined;
-        v = { sprite, bar: this.scene.add.graphics().setDepth(20), aura };
+        const icons = STATUS_ICONS.map(([, key]) => {
+          const img = this.scene.add.image(0, 0, key).setDepth(21).setVisible(false);
+          return img.setScale(STATUS_ICON_PX / img.width);
+        });
+        v = { sprite, bar: this.scene.add.graphics().setDepth(20), aura, icons };
         this.enemies.set(e.id, v);
       }
       const { x, y } = toPx(e.x, e.y);
@@ -140,11 +178,27 @@ export class BoardView {
       if (e.dirX !== 0) v.sprite.setFlipX(e.dirX > 0 === !ENEMY_FACES_RIGHT);
       v.aura?.setPosition(x, y - 10).setScale(1 + 0.08 * Math.sin(time / 150));
       v.bar.clear();
+      const top = y - lift - v.sprite.displayHeight * 0.7 - 6;
       if (e.hp < e.maxHp) {
         const w = e.def.boss ? 90 : 48;
-        const top = y - v.sprite.displayHeight * 0.7 - 6;
         v.bar.fillStyle(0x000000, 0.7).fillRect(x - w / 2 - 1, top - 1, w + 2, 8);
         v.bar.fillStyle(e.def.boss ? COLORS.danger : 0x6be675, 1).fillRect(x - w / 2, top, (w * Math.max(0, e.hp)) / e.maxHp, 6);
+      }
+      // 状態異常アイコン（HP バーの上に横並び）
+      const shown = STATUS_ICONS.map(([on]) => on(e.status));
+      const n = shown.filter(Boolean).length;
+      let k = 0;
+      v.icons.forEach((img, i) => {
+        img.setVisible(shown[i]);
+        if (!shown[i]) return;
+        img.setPosition(x + (k - (n - 1) / 2) * (STATUS_ICON_PX + 2), top - STATUS_ICON_PX / 2 - 4);
+        k++;
+      });
+      // 足止め中は色を落とす（被弾の白フラッシュ中は触らない）
+      if (!v.sprite.tintFill) {
+        if (e.status.stunTime > 0) v.sprite.setTint(0x8888aa);
+        else if (e.status.slowTime > 0) v.sprite.setTint(0xb8c8ff);
+        else v.sprite.clearTint();
       }
     }
 
@@ -153,7 +207,7 @@ export class BoardView {
       let v = this.heroes.get(h.id);
       const { x, y } = toPx(h.x, h.y);
       if (!v) {
-        const sprite = this.scene.add.image(x, y, ROLES[h.role].imageKey).setScale(1.15).setOrigin(0.5, 0.62).setDepth(12);
+        const sprite = this.scene.add.image(x, y, sim.heroVisual(h.role).imageKey).setScale(1.15).setOrigin(0.5, 0.62).setDepth(12);
         const badge = this.scene.add
           .text(x + 30, y + 30, "", { ...textStyle(18, { color: COLORS.bg }), backgroundColor: "#f5c542", padding: { x: 5, y: 1 } })
           .setOrigin(1, 1)
@@ -228,15 +282,108 @@ export class BoardView {
       }
       case "heroPlaced":
       case "heroLevelUp":
+      case "slotOpened":
         this.redrawSlots();
         this.redrawRange();
         break;
+      case "chain":
+        this.chainFx(e.points);
+        break;
+      case "pulse": {
+        const c = toPx(e.x, e.y);
+        const ring = this.scene.add.circle(c.x, c.y, e.r * CELL, FX.pulse, 0.12).setStrokeStyle(4, FX.pulse, 0.9).setDepth(6);
+        ring.setScale(0.2);
+        this.scene.tweens.add({ targets: ring, scale: 1, alpha: 0, duration: 380, ease: "Cubic.easeOut", onComplete: () => ring.destroy() });
+        break;
+      }
+      case "flame": {
+        const h = this.heroes.get(e.heroId);
+        const t = toPx(e.tx, e.ty);
+        if (h) {
+          const g = this.scene.add.graphics().setDepth(29);
+          g.lineStyle(10, FX.fire, 0.55).lineBetween(h.baseX, h.sprite.y - 6, t.x, t.y - 10);
+          g.lineStyle(4, 0xffe08a, 0.9).lineBetween(h.baseX, h.sprite.y - 6, t.x, t.y - 10);
+          this.scene.tweens.add({ targets: g, alpha: 0, duration: 140, onComplete: () => g.destroy() });
+        }
+        break;
+      }
+      case "discharge":
+        this.popText(e.x, e.y, "放電!", FX.lightning);
+        break;
+      case "combust":
+        this.areaFx(e.x, e.y, 0.9);
+        this.popText(e.x, e.y, "誘爆!", FX.fire);
+        break;
+      case "blast":
+        this.areaFx(e.x, e.y, e.r * 1.2);
+        break;
+      case "toll":
+        this.popText(e.x, e.y, `+${e.value}`, COLORS.gold, 18);
+        break;
+      case "payout": {
+        const h = this.sim.heroes.find((x) => x.id === e.heroId);
+        if (h) this.popText(h.x, h.y - 0.4, `配当 +${e.value}`, COLORS.gold, 22);
+        break;
+      }
+      case "cannon": {
+        // 盤面の外（HUD・パネル）には描かない
+        const lv = this.sim.level;
+        const dx = e.x1 - e.x0;
+        const dy = e.y1 - e.y0;
+        let t = 1;
+        if (dy < 0) t = Math.min(t, (0 - e.y0) / dy);
+        if (dy > 0) t = Math.min(t, (lv.rows - e.y0) / dy);
+        if (dx < 0) t = Math.min(t, (0 - e.x0) / dx);
+        if (dx > 0) t = Math.min(t, (lv.cols - e.x0) / dx);
+        const a = toPx(e.x0, e.y0);
+        const b = toPx(e.x0 + dx * t, e.y0 + dy * t);
+        const g = this.scene.add.graphics().setDepth(31);
+        const w = 2 * CELL * (this.sim.mods.cannonWidthAdd + 0.45);
+        g.lineStyle(w, this.accent, 0.35).lineBetween(a.x, a.y, b.x, b.y);
+        g.lineStyle(w * 0.35, FX.cannon, 0.95).lineBetween(a.x, a.y, b.x, b.y);
+        this.scene.tweens.add({ targets: g, alpha: 0, duration: 160, onComplete: () => g.destroy() });
+        break;
+      }
       case "leak": {
         this.cryptid.flash();
         this.scene.cameras.main.shake(180, 0.006);
         break;
       }
     }
+  }
+
+  /** 雷の連鎖: ギザギザの線でヒーロー → 敵 → 敵 … を結ぶ */
+  private chainFx(points: { x: number; y: number }[]): void {
+    const g = this.scene.add.graphics().setDepth(29);
+    for (const [width, color, alpha] of [[8, FX.lightning, 0.35], [3, 0xffffff, 1]] as const) {
+      g.lineStyle(width, color, alpha);
+      for (let i = 1; i < points.length; i++) {
+        const a = toPx(points[i - 1].x, points[i - 1].y - 0.1);
+        const b = toPx(points[i].x, points[i].y - 0.1);
+        g.beginPath();
+        g.moveTo(a.x, a.y);
+        for (let k = 1; k < 4; k++) {
+          const t = k / 4;
+          g.lineTo(a.x + (b.x - a.x) * t + (Math.random() - 0.5) * 18, a.y + (b.y - a.y) * t + (Math.random() - 0.5) * 18);
+        }
+        g.lineTo(b.x, b.y);
+        g.strokePath();
+      }
+    }
+    this.scene.tweens.add({ targets: g, alpha: 0, duration: 180, onComplete: () => g.destroy() });
+  }
+
+  private areaFx(x: number, y: number, scale: number): void {
+    const p = toPx(x, y);
+    const fx = this.scene.add.sprite(p.x, p.y - 10, "fx.single_damage").setScale(scale * 2).setTint(FX.fire).setDepth(28);
+    fx.play("fx.kill");
+    fx.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => fx.destroy());
+  }
+
+  private popText(x: number, y: number, text: string, color: number, size = 20): void {
+    const p = toPx(x, y);
+    const t = this.scene.add.text(p.x, p.y - 40, text, textStyle(size, { color })).setOrigin(0.5).setDepth(62);
+    this.scene.tweens.add({ targets: t, y: t.y - 26, alpha: 0, duration: 600, onComplete: () => t.destroy() });
   }
 
   /** 回収した GUM をスクリーン座標 (tx, ty) へ飛ばす */
@@ -254,6 +401,14 @@ export class BoardView {
       const { x, y } = toPx(s.col, s.row);
       const occupied = !!this.sim.heroAt(i);
       const selected = this.selectedSlot === i;
+      const locked = !this.sim.isSlotOpen(i);
+      for (const o of this.lockLabels.get(i) ?? []) (o as unknown as Phaser.GameObjects.Components.Visible).setVisible(locked);
+      if (locked) {
+        g.fillStyle(0x000000, 0.45).fillRoundedRect(x + 8, y + 8, CELL - 16, CELL - 16, 12);
+        g.lineStyle(selected ? 4 : 2, selected ? COLORS.gold : COLORS.inkMuted, selected ? 1 : 0.8).strokeRoundedRect(x + 8, y + 8, CELL - 16, CELL - 16, 12);
+        this.slotPlus[i].setVisible(false);
+        return;
+      }
       g.fillStyle(occupied ? this.accent : 0xffffff, occupied ? 0.14 : 0.06).fillRoundedRect(x + 8, y + 8, CELL - 16, CELL - 16, 12);
       g.lineStyle(selected ? 4 : 2, selected ? COLORS.gold : occupied ? this.accent : COLORS.inkDim, selected ? 1 : 0.55);
       g.strokeRoundedRect(x + 8, y + 8, CELL - 16, CELL - 16, 12);
@@ -267,6 +422,7 @@ export class BoardView {
     const hero = this.sim.heroAt(this.selectedSlot);
     const s = this.sim.level.slots[this.selectedSlot];
     const c = toPx(s.col + 0.5, s.row + 0.5);
+    if (!this.sim.isSlotOpen(this.selectedSlot)) return;
     if (hero) {
       const now = this.sim.heroStats(hero);
       if (this.sim.levelUpCost(hero) !== null) {
@@ -276,7 +432,7 @@ export class BoardView {
       g.fillStyle(COLORS.gold, 0.08).fillCircle(c.x, c.y, now.range * CELL);
       g.lineStyle(3, COLORS.gold, 0.8).strokeCircle(c.x, c.y, now.range * CELL);
     } else {
-      const range = this.sim.statsFor("archer").range;
+      const range = this.sim.statsFor(this.previewRole).range;
       g.fillStyle(0xffffff, 0.06).fillCircle(c.x, c.y, range * CELL);
       g.lineStyle(2, 0xffffff, 0.5).strokeCircle(c.x, c.y, range * CELL);
     }
