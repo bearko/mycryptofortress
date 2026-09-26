@@ -8,6 +8,7 @@ import {
   isFeatureUnlocked,
   newlyUnlocked,
   runResultOf,
+  visibleNodes,
   buyNode,
   computeModifiers,
   computeReward,
@@ -292,5 +293,30 @@ describe("次に挑むノード", () => {
     // 最後のノードをクリア済みなら同じノード
     const all = LEVELS.reduce((acc, l) => applyRunResult(acc, { levelId: l.id, won: true, wavesReached: 10, wavesCleared: 10 }, { ce: 0, emblems: 0, breakdown: [], firstClear: true }), s);
     expect(nextChallengeLevel(all, "L3")).toBe("L3");
+  });
+});
+
+describe("段階的に広がるツリー (SPEC-119 §2a)", () => {
+  it("最初はルートだけ。解放するとその子が見え、子を解放するとさらに先が見える", () => {
+    let s = { ...createNewSave() };
+    s = { ...s, meta: { ...s.meta, tokens: { ce: 1000, emblem: 0 } } };
+    expect([...visibleNodes(s)]).toEqual(["root"]);
+    s = buyNode(s, "root");
+    const kids = TREE.filter((n) => n.parent === "root").map((n) => n.id);
+    expect([...visibleNodes(s)].sort()).toEqual(["root", ...kids].sort());
+    expect(visibleNodes(s).has("elite_yabusame")).toBe(false);
+    s = buyNode(s, "yabusame");
+    expect(visibleNodes(s).has("elite_yabusame")).toBe(true);
+    // 返金すると先の枝は隠れる
+    expect([...visibleNodes(refundAll(s))]).toEqual(["root"]);
+  });
+
+  it("条件を満たした丸パネルでも、親が見えて解放済みになるまでは隠れる（効果は効く）", () => {
+    const base = createNewSave();
+    const s = { ...base, meta: { ...base.meta, stats: { ...base.meta.stats, kills: 300 } } };
+    expect(nodeLevel(s, "f_kills")).toBe(1);
+    expect(visibleNodes(s).has("f_kills")).toBe(false);
+    expect(visibleNodes(s).has("mark")).toBe(false);
+    expect(computeModifiers(s).damagePct).toBeGreaterThan(0);
   });
 });
