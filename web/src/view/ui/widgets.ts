@@ -6,6 +6,7 @@ import { playSe } from "../audio";
 import { bindPress } from "../input/press";
 import { GAME_HEIGHT, GAME_WIDTH, MIN_TAP } from "../layout";
 import { COLORS, textStyle } from "./theme";
+import { jaWrap } from "./jaWrap";
 
 export type ButtonKind = "primary" | "secondary" | "locked";
 
@@ -115,7 +116,7 @@ export function showTooltip(scene: Phaser.Scene, x: number, y: number, title: st
   const w = 420;
   const titleText = scene.add.text(-w / 2 + 20, 0, title, textStyle(26)).setOrigin(0, 0);
   const bodyText = scene.add
-    .text(-w / 2 + 20, 0, body, { ...textStyle(20, { weight: 500, color: COLORS.inkDim }), wordWrap: { width: w - 40, useAdvancedWrap: true } })
+    .text(-w / 2 + 20, 0, body, { ...textStyle(20, { weight: 500, color: COLORS.inkDim }), wordWrap: jaWrap(w - 40) })
     .setOrigin(0, 0);
   const h = 20 + titleText.height + 8 + bodyText.height + 20;
   titleText.setY(-h / 2 + 20);

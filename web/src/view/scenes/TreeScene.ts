@@ -11,6 +11,7 @@ import { playDialog } from "../ui/dialog";
 import { Header, HEADER_H, goTo } from "../ui/header";
 import { COLORS, textStyle } from "../ui/theme";
 import { Button, LandBackground, showToast } from "../ui/widgets";
+import { jaWrap } from "../ui/jaWrap";
 
 /** ツリー座標 1 あたりの px */
 const UNIT = 120;
@@ -111,7 +112,7 @@ export class TreeScene extends Phaser.Scene {
     icon.setScale(46 / Math.max(icon.width, icon.height));
     const level = this.add.text(0, NODE_R - 2, "", { ...textStyle(16, { color: COLORS.bg }), backgroundColor: "#f5c542", padding: { x: 5, y: 1 } }).setOrigin(0.5, 0);
     const label = this.add
-      .text(0, NODE_R + 24, n.name, { ...textStyle(14, { weight: 500, color: COLORS.inkDim, align: "center" }), wordWrap: { width: 176, useAdvancedWrap: true } })
+      .text(0, NODE_R + 24, n.name, { ...textStyle(14, { weight: 500, color: COLORS.inkDim, align: "center" }), wordWrap: jaWrap(176) })
       .setOrigin(0.5, 0);
     const c = this.add.container(x, y, [ring, icon, level, label]).setSize(NODE_R * 2 + 8, NODE_R * 2 + 8).setInteractive({ useHandCursor: true });
     bindPress(c, {
@@ -190,7 +191,7 @@ export class TreeScene extends Phaser.Scene {
 
     add(this.add.text(MARGIN, PANEL_TOP + 18, n.name, textStyle(28)).setOrigin(0, 0));
     add(this.add.text(GAME_WIDTH - MARGIN, PANEL_TOP + 24, `Lv ${lv} / ${n.maxLevel}`, textStyle(24, { color: COLORS.gold })).setOrigin(1, 0));
-    add(this.add.text(MARGIN, PANEL_TOP + 56, `出典: ${n.source}${n.note ? `　${n.note}` : ""}`, { ...textStyle(17, { weight: 500, color: COLORS.inkMuted }), wordWrap: { width: GAME_WIDTH - MARGIN * 2 } }));
+    add(this.add.text(MARGIN, PANEL_TOP + 56, `出典: ${n.source}${n.note ? `　${n.note}` : ""}`, { ...textStyle(17, { weight: 500, color: COLORS.inkMuted }), wordWrap: jaWrap(GAME_WIDTH - MARGIN * 2) }));
     add(this.add.text(MARGIN, PANEL_TOP + 96, `現在: ${lv > 0 ? fx(lv) : "—"}`, textStyle(19, { weight: 500, color: COLORS.inkDim })));
     if (lv < n.maxLevel) add(this.add.text(MARGIN, PANEL_TOP + 124, `次　: ${fx(lv + 1)}`, textStyle(19, { color: COLORS.ink })));
 
