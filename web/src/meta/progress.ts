@@ -1,4 +1,4 @@
-import { TREE, TREE_BY_ID, TREE_VERSION, isConditional, nodeCost, type ConditionStat, type FeatureId, type TokenId, type TreeNode } from "../data/tree";
+import { TREE, TREE_BY_ID, TREE_VERSION, nodeCost, type ConditionStat, type FeatureId, type TokenId, type TreeNode } from "../data/tree";
 import { LEVELS } from "../data/levels";
 import type { LevelDef } from "../sim/level";
 import { emptyModifiers, type RunModifiers } from "../sim/modifiers";
@@ -13,12 +13,15 @@ import { BUILD_SET_SLOTS, type LevelProgress, type SaveData } from "./save";
 export function nodeLevel(save: SaveData, id: string): number {
   const n = TREE_BY_ID.get(id);
   if (!n) return 0;
-  // SPEC-119: 条件つきパネルは記録から決まる（届いたしきい値の数）
-  if (n.condition) {
-    const v = conditionValue(save, n.condition.stat);
-    return n.condition.thresholds.filter((t) => v >= t).length;
-  }
-  return Math.min(n.maxLevel, save.meta.tree[id] ?? 0);
+  // SPEC-119 v1.2: 条件つきパネルもプレイヤーが手動で解放する（届いたしきい値の数までしか上がらない）
+  return Math.min(n.maxLevel, reachedLevel(save, n), save.meta.tree[id] ?? 0);
+}
+
+/** 条件つきパネルで、記録が届いているレベル（通常のパネルは maxLevel） */
+export function reachedLevel(save: SaveData, n: TreeNode): number {
+  if (!n.condition) return n.maxLevel;
+  const v = conditionValue(save, n.condition.stat);
+  return n.condition.thresholds.filter((t) => v >= t).length;
 }
 
 /** SPEC-119: 条件つきパネルの判定に使う記録の現在値 */
@@ -28,10 +31,10 @@ export function conditionValue(save: SaveData, stat: ConditionStat): number {
   return save.meta.stats[stat];
 }
 
-/** 条件つきパネルの次のしきい値（最大なら null） */
+/** 条件つきパネルの、まだ届いていない次のしきい値（すべて届いていれば null） */
 export function nextThreshold(save: SaveData, n: TreeNode): number | null {
   if (!n.condition) return null;
-  return n.condition.thresholds[nodeLevel(save, n.id)] ?? null;
+  return n.condition.thresholds[reachedLevel(save, n)] ?? null;
 }
 
 /** SPEC-119: 画面の機能（ビルドセット・3 倍速・オートレベル）が解放済みか */
@@ -39,16 +42,21 @@ export function isFeatureUnlocked(save: SaveData, feature: FeatureId): boolean {
   return TREE.some((n) => n.feature === feature && nodeLevel(save, n.id) > 0);
 }
 
-/** 条件つきパネルのレベルを並べたもの（リザルトで新しく届いたパネルを知らせるため） */
+/** 条件つきパネルの届いたレベルを並べたもの（リザルトで新しく解放できるようになったパネルを知らせるため） */
 export function conditionalLevels(save: SaveData): Record<string, number> {
   const out: Record<string, number> = {};
-  for (const n of TREE) if (n.condition) out[n.id] = nodeLevel(save, n.id);
+  for (const n of TREE) if (n.condition) out[n.id] = reachedLevel(save, n);
   return out;
 }
 
-/** before → after で上がった条件つきパネル */
+/** before → after で条件が新しく届いた（ツリーで解放できるようになった）パネル */
 export function newlyUnlocked(before: Record<string, number>, after: SaveData): { node: TreeNode; level: number }[] {
-  return TREE.filter((n) => n.condition && nodeLevel(after, n.id) > (before[n.id] ?? 0)).map((n) => ({ node: n, level: nodeLevel(after, n.id) }));
+  return TREE.filter((n) => n.condition && reachedLevel(after, n) > (before[n.id] ?? 0)).map((n) => ({ node: n, level: reachedLevel(after, n) }));
+}
+
+/** SPEC-119 v1.2: 条件を満たし、いま無料で解放できる条件つきパネル */
+export function claimableNodes(save: SaveData, only?: ReadonlySet<string>): TreeNode[] {
+  return TREE.filter((n) => n.condition && (!only || only.has(n.id)) && buyBlock(save, n.id) === null);
 }
 
 /** SPEC-119: 次のしきい値に一番近い条件つきパネル（進み具合 0〜1 が最大のもの） */
@@ -57,7 +65,7 @@ export function closestUnlock(save: SaveData, only?: ReadonlySet<string>): { nod
   for (const n of TREE) {
     const next = nextThreshold(save, n);
     if (!n.condition || next === null || (only && !only.has(n.id))) continue;
-    const lv = nodeLevel(save, n.id);
+    const lv = reachedLevel(save, n);
     const prev = lv > 0 ? n.condition.thresholds[lv - 1] : 0;
     const v = conditionValue(save, n.condition.stat);
     const progress = Math.max(0, Math.min(1, (v - prev) / (next - prev)));
@@ -89,15 +97,16 @@ export function buyBlock(save: SaveData, id: string): BuyBlock | null {
   if (!n) return "unknown";
   const lv = nodeLevel(save, id);
   if (lv >= n.maxLevel) return "maxed";
-  if (n.condition) return "condition";
   if (n.parent && nodeLevel(save, n.parent) < 1) return "locked";
+  // 条件つきパネル: 記録が次のしきい値に届いていれば無料（費用 0）で解放できる
+  if (n.condition && reachedLevel(save, n) <= lv) return "condition";
   if (save.meta.tokens[n.cost.token] < nodeCost(n, lv)) return "tokens";
   return null;
 }
 
 /** 親が解放済み（またはルート）で、表示上「手が届く」ノードか */
 export function isReachable(save: SaveData, n: TreeNode): boolean {
-  return !n.parent || isConditional(n) || nodeLevel(save, n.parent) >= 1;
+  return !n.parent || nodeLevel(save, n.parent) >= 1;
 }
 
 export function buyNode(save: SaveData, id: string): SaveData {
@@ -182,8 +191,7 @@ export function computeModifiers(save: SaveData): RunModifiers {
   const mods = emptyModifiers();
   for (const n of TREE) {
     const lv = nodeLevel(save, n.id);
-    // 条件つきパネルは親が未解放でも効く（SPEC-119）
-    if (lv === 0 || (!n.condition && n.parent && nodeLevel(save, n.parent) === 0)) continue;
+    if (lv === 0 || (n.parent && nodeLevel(save, n.parent) === 0)) continue;
     for (const e of n.effects) mods[e.stat] += e.perLevel * lv;
   }
   return mods;
