@@ -16,7 +16,14 @@ export interface SaveData {
   schemaVersion: typeof SAVE_SCHEMA_VERSION;
   createdAt: string;
   updatedAt: string;
-  settings: { bgmVolume: number; seVolume: number; /** SPEC-116: オートレベル（マイルストーン解放後に有効） */ autoLevel: boolean };
+  settings: {
+    bgmVolume: number;
+    seVolume: number;
+    /** SPEC-116: オートレベル（マイルストーン解放後に有効） */
+    autoLevel: boolean;
+    /** テストプレイ用の 5 倍速（省略時 OFF） */
+    testSpeed?: boolean;
+  };
   profile: { cryptidId: CryptidId };
   /** SPEC-106 / 107: メタ進行 */
   meta: MetaState;
@@ -120,6 +127,7 @@ export function isValidSave(v: unknown): v is SaveData {
   if (typeof v.createdAt !== "string" || typeof v.updatedAt !== "string") return false;
   const { settings, profile } = v;
   if (!isObj(settings) || !isVolume(settings.bgmVolume) || !isVolume(settings.seVolume) || typeof settings.autoLevel !== "boolean") return false;
+  if (settings.testSpeed !== undefined && typeof settings.testSpeed !== "boolean") return false;
   if (!isObj(profile) || !isCryptidId(profile.cryptidId)) return false;
   return isValidMeta(v.meta);
 }
