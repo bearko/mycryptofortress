@@ -340,6 +340,19 @@ export class BoardView {
       case "blast":
         this.areaFx(e.x, e.y, e.r * 1.2);
         break;
+      case "interest": {
+        const cr = this.sim.level.cryptid;
+        this.popText(cr.col + 0.5, cr.row - 0.2, `利息 +${e.value}`, COLORS.gold, 24);
+        break;
+      }
+      case "vengeance": {
+        // SPEC-119 報復の炎: 幻獣の前から炎の輪が広がる
+        const c = toPx(e.x, e.y);
+        const ring = this.scene.add.circle(c.x, c.y, 20, FX.fire, 0.18).setStrokeStyle(5, FX.fire, 0.9).setDepth(27);
+        this.scene.tweens.add({ targets: ring, radius: e.r * CELL, alpha: 0, duration: 450, onComplete: () => ring.destroy() });
+        this.areaFx(e.x, e.y, 1.2);
+        break;
+      }
       case "toll":
         this.popText(e.x, e.y, `+${e.value}`, COLORS.gold, 18);
         break;

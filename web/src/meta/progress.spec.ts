@@ -1,10 +1,13 @@
 import { LEVELS, getLevel } from "../data/levels";
-import { newlyReached } from "../data/milestones";
 import { TREE, TREE_BY_ID, TREE_VERSION, nodeCost } from "../data/tree";
 import { runCampaign, STANDARD_BUY_ORDER } from "./campaign";
 import {
   applyRunResult,
   buyBlock,
+  conditionalLevels,
+  isFeatureUnlocked,
+  newlyUnlocked,
+  runResultOf,
   buyNode,
   computeModifiers,
   computeReward,
@@ -80,7 +83,7 @@ describe("無料返金 (SPEC-108)", () => {
   });
 
   it("descendants は子孫だけを返す", () => {
-    expect(descendants("kyudo").map((n) => n.id).sort()).toEqual(["dokugiri", "eiyu", "kyudo_a", "ogi_otoshi", "sanjushi", "ten_ichigeki"].sort());
+    expect(descendants("kyudo").map((n) => n.id).sort()).toEqual(["dokugiri", "eiyu", "f_levels", "kyudo_a", "multi_crit", "ogi_otoshi", "sanjushi", "ten_ichigeki"]);
   });
 });
 
@@ -224,12 +227,59 @@ describe("エンブレムとビルドセット (SPEC-116 / 116a)", () => {
     expect(save.meta.tokens.ce + totalSpent(save)).toBe(500);
   });
 
-  it("マイルストーンは累計 CE で解放され、自動回収は補正値に入る", () => {
+  it("旧マイルストーンは累計 CE の丸パネルになり、自動回収は補正値に入る", () => {
     const s = createNewSave();
     expect(computeModifiers(s).autoCollect).toBe(0);
-    const rich = { ...s, meta: { ...s.meta, tokensEarned: { ce: 10_000, emblem: 0 } } };
-    expect(computeModifiers(rich).autoCollect).toBe(1);
-    expect(newlyReached(100, 700).map((m) => m.id)).toEqual(["autoCollect", "buildSets", "speed3x"]);
+    expect(isFeatureUnlocked(s, "speed3x")).toBe(false);
+    const mid = { ...s, meta: { ...s.meta, tokensEarned: { ce: 700, emblem: 0 } } };
+    expect(computeModifiers(mid).autoCollect).toBe(1);
+    expect(isFeatureUnlocked(mid, "buildSets")).toBe(true);
+    expect(isFeatureUnlocked(mid, "speed3x")).toBe(true);
+    expect(isFeatureUnlocked(mid, "autoLevel")).toBe(false);
+    expect(newlyUnlocked(conditionalLevels(s), mid).map((u) => u.node.id)).toEqual(expect.arrayContaining(["ms_auto_collect", "ms_build_sets", "ms_speed3x"]));
+  });
+});
+
+describe("条件つきパネル (SPEC-119)", () => {
+  const withStats = (patch: Partial<ReturnType<typeof createNewSave>["meta"]["stats"]>) => {
+    const s = createNewSave();
+    return { ...s, meta: { ...s.meta, stats: { ...s.meta.stats, ...patch } } };
+  };
+
+  it("記録がしきい値に届くたびに無料でレベルが上がり、買えず・返金されない", () => {
+    const n = TREE_BY_ID.get("f_kills")!;
+    expect(nodeLevel(withStats({ kills: 299 }), "f_kills")).toBe(0);
+    const s = withStats({ kills: 1500 });
+    expect(nodeLevel(s, "f_kills")).toBe(2);
+    expect(buyBlock(s, "f_kills")).toBe("condition");
+    expect(refundNode(s, "f_kills")).toBe(s);
+    expect(computeModifiers(s).damagePct).toBeCloseTo(n.effects[0].perLevel * 2);
+    expect(totalSpent(s)).toBe(0);
+  });
+
+  it("条件つきパネルは親が未解放でも効き、子は条件を満たすと買えるようになる", () => {
+    let s = withStats({ kills: 300 });
+    s = { ...s, meta: { ...s.meta, tokens: { ce: 1000, emblem: 0 } } };
+    expect(nodeLevel(s, "elite_shot")).toBe(0);
+    expect(computeModifiers(s).damagePct).toBeGreaterThan(0);
+    expect(buyBlock(s, "mark")).toBeNull();
+    expect(buyBlock(withStats({ kills: 0 }), "mark")).toBe("locked");
+  });
+
+  it("ノードのクリア数・累計 CE の条件も読める", () => {
+    let s = createNewSave();
+    for (const l of LEVELS.slice(0, 3)) s = applyRunResult(s, { levelId: l.id, won: true, wavesReached: 10, wavesCleared: 10 }, { ce: 0, emblems: 0, breakdown: [], firstClear: true });
+    expect(nodeLevel(s, "f_levels")).toBe(1);
+  });
+
+  it("ランの記録が累計に積み上がり、到達されずに勝つとノーダメージクリアになる", () => {
+    let s = createNewSave();
+    const stats = { wavesReached: 10, wavesCleared: 10, kills: 120, bossKills: 1, gumEarned: 800, damageTaken: 0 };
+    s = applyRunResult(s, runResultOf("L1", true, stats), { ce: 0, emblems: 0, breakdown: [], firstClear: true });
+    s = applyRunResult(s, runResultOf("L1", true, { ...stats, damageTaken: 2 }), { ce: 0, emblems: 0, breakdown: [], firstClear: false });
+    s = applyRunResult(s, runResultOf("L2", false, { ...stats, wavesCleared: 4 }), { ce: 0, emblems: 0, breakdown: [], firstClear: false });
+    expect(s.meta.stats).toEqual({ kills: 360, bossKills: 3, gumCollected: 2400, wavesCleared: 24, flawlessClears: 1, runs: 3 });
+    expect(nodeLevel(s, "f_flawless")).toBe(1);
   });
 });
 
