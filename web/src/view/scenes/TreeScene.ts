@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { DIALOGS } from "../../data/dialogs";
+import { getLevel } from "../../data/levels";
 import { STAT_LABEL, TREE, TREE_BY_ID, nodeCost, type TreeBranch, type TreeNode } from "../../data/tree";
 import { buyBlock, buyNode, hasSeen, isReachable, markSeen, nodeLevel, refundAll, refundNode, totalSpent } from "../../meta/progress";
 import { playBgm, playSe } from "../audio";
@@ -48,6 +49,13 @@ export class TreeScene extends Phaser.Scene {
     super("Tree");
   }
 
+  /** リザルトから来た場合の再挑戦先 */
+  private retryLevelId: string | null = null;
+
+  init(data: { retryLevelId?: string }): void {
+    this.retryLevelId = data?.retryLevelId ?? null;
+  }
+
   create(): void {
     this.views.clear();
     this.selected = null;
@@ -69,6 +77,19 @@ export class TreeScene extends Phaser.Scene {
     this.add.rectangle(0, PANEL_TOP, GAME_WIDTH, GAME_HEIGHT - PANEL_TOP, COLORS.bg, 0.94).setOrigin(0).setDepth(80);
     this.add.rectangle(0, PANEL_TOP, GAME_WIDTH, 2, COLORS.line).setOrigin(0).setDepth(80);
     this.refresh();
+
+    // リザルトから来た場合は、強化したらそのまま再挑戦できるようにする
+    if (this.retryLevelId) {
+      const level = getLevel(this.retryLevelId);
+      const retry = new Button(this, GAME_WIDTH - MARGIN - 160, PANEL_TOP - 66, {
+        width: 320,
+        label: "▶ 再挑戦",
+        sub: level.name,
+        kind: "primary",
+        onTap: () => goTo(this, "Run", { levelId: level.id }),
+      }).setDepth(82);
+      retry.setAlpha(0.97);
+    }
 
     if (!hasSeen(session.data, "tree.first")) {
       void playDialog(this, DIALOGS["tree.first"]).then(() => session.update((d) => markSeen(d, "tree.first")));
