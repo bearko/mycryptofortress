@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { getCryptid, type CryptidId } from "../../data/cryptids";
 import type { RoleId } from "../../data/balance/heroes";
+import { STONES } from "../../data/balance/stones";
 import { pathCells } from "../../sim/level";
 import type { RunSim, SimEvent, StatusState } from "../../sim/run";
 import { GAME_WIDTH } from "../layout";
@@ -44,8 +45,13 @@ interface EnemyView {
 interface HeroView {
   sprite: Phaser.GameObjects.Image;
   badge: Phaser.GameObjects.Text;
+  /** SPEC-115: 属性（魔石）のしるし */
+  stone: Phaser.GameObjects.Image;
   baseX: number;
 }
+
+/** 魔石アイコンを px の大きさで出す（MCH の魔石画像は余白が広いので 2 倍で描く） */
+const fit = (img: Phaser.GameObjects.Image, px: number) => img.setScale((px * 2) / Math.max(img.width, img.height));
 
 /**
  * SPEC-105 §3: RunSim の状態を毎フレーム描画に同期する。
@@ -62,6 +68,8 @@ export class BoardView {
   private readonly drops = new Map<number, Phaser.GameObjects.Image>();
   private selectedSlot: number | null = null;
   private previewRole: RoleId = "archer";
+  /** 幻獣砲に付けた魔石のしるし */
+  private readonly cannonBadge: Phaser.GameObjects.Image;
   private readonly lockLabels = new Map<number, Phaser.GameObjects.GameObject[]>();
   private readonly accent: number;
 
@@ -109,6 +117,10 @@ export class BoardView {
     lv.slots.forEach((s, i) => {
       const { x, y } = toPx(s.col + 0.5, s.row + 0.5);
       this.slotPlus.push(scene.add.text(x, y, "+", textStyle(34, { color: COLORS.inkDim })).setOrigin(0.5).setAlpha(0.7).setDepth(-14));
+      // SPEC-115: 属性マスは魔石の色と小さな魔石を出す
+      if (s.element) {
+        fit(scene.add.image(x + 24, y - 24, STONES[s.element].imageKey), 26).setDepth(-13).setAlpha(0.95);
+      }
       // SPEC-113: ロックマスは開放費用を表示
       const cost = sim.slotOpenCost(i);
       if (cost !== null) {
@@ -125,6 +137,7 @@ export class BoardView {
     const c = toPx(lv.cryptid.col + 0.5, lv.cryptid.row + 0.5);
     this.cryptid = new CryptidDisplay(scene, c.x, c.y - 6, cryptidId, 0.9);
     this.cryptid.setDepth(8);
+    this.cannonBadge = fit(scene.add.image(c.x + 34, c.y + 22, "stone.ifrit"), 30).setDepth(9).setVisible(false);
 
     this.projectileGfx = scene.add.graphics().setDepth(30);
     this.redrawSlots();
@@ -160,7 +173,7 @@ export class BoardView {
     for (const e of sim.enemies) {
       let v = this.enemies.get(e.id);
       if (!v) {
-        const scale = 0.9 * (e.def.scale ?? 1);
+        const scale = 0.9 * e.scale;
         const sprite = this.scene.add.image(0, 0, e.def.imageKey).setScale(scale).setOrigin(0.5, 0.7).setDepth(10);
         const aura = e.def.boss ? this.scene.add.circle(0, 0, 40 * scale, COLORS.danger, 0.25).setDepth(9) : undefined;
         const icons = STATUS_ICONS.map(([, key]) => {
@@ -175,6 +188,8 @@ export class BoardView {
       const leap = e.def.leap;
       const lift = leap && e.leapRemaining > 0 ? Math.sin(Math.PI * (1 - e.leapRemaining / leap.duration)) * 34 : 0;
       v.sprite.setPosition(x, y - lift).setDepth(10 + e.y / 100);
+      // SPEC-117: 隠れている間は半透明
+      v.sprite.setAlpha(e.revealed ? 1 : 0.3);
       if (e.dirX !== 0) v.sprite.setFlipX(e.dirX > 0 === !ENEMY_FACES_RIGHT);
       v.aura?.setPosition(x, y - 10).setScale(1 + 0.08 * Math.sin(time / 150));
       v.bar.clear();
@@ -212,13 +227,21 @@ export class BoardView {
           .text(x + 30, y + 30, "", { ...textStyle(18, { color: COLORS.bg }), backgroundColor: "#f5c542", padding: { x: 5, y: 1 } })
           .setOrigin(1, 1)
           .setDepth(13);
-        v = { sprite, badge, baseX: x };
+        const stone = fit(this.scene.add.image(x - 26, y + 22, "stone.ifrit"), 26).setDepth(13).setVisible(false);
+        v = { sprite, badge, stone, baseX: x };
         this.heroes.set(h.id, v);
         this.scene.tweens.add({ targets: sprite, scale: { from: 0.4, to: 1.15 }, duration: 220, ease: "Back.easeOut" });
       }
       v.sprite.setFlipX(h.facing === 1 !== HERO_FACES_RIGHT);
       v.badge.setText(`Lv${h.level}`);
+      const el = sim.heroElement(h);
+      v.stone.setVisible(el !== null);
+      if (el && v.stone.texture.key !== STONES[el].imageKey) fit(v.stone.setTexture(STONES[el].imageKey), 26);
     }
+
+    const cs = sim.cannonStone;
+    this.cannonBadge.setVisible(cs !== null);
+    if (cs && this.cannonBadge.texture.key !== STONES[cs].imageKey) fit(this.cannonBadge.setTexture(STONES[cs].imageKey), 30);
 
     // 弾
     this.projectileGfx.clear();
@@ -323,6 +346,38 @@ export class BoardView {
       case "payout": {
         const h = this.sim.heroes.find((x) => x.id === e.heroId);
         if (h) this.popText(h.x, h.y - 0.4, `配当 +${e.value}`, COLORS.gold, 22);
+        break;
+      }
+      case "enemyHeal": {
+        const c = toPx(e.x, e.y);
+        const ring = this.scene.add.circle(c.x, c.y, e.r * CELL, 0x6be675, 0.1).setStrokeStyle(3, 0x6be675, 0.8).setDepth(6);
+        this.scene.tweens.add({ targets: ring, alpha: 0, duration: 500, onComplete: () => ring.destroy() });
+        this.popText(e.x, e.y, "回復", 0x6be675, 18);
+        break;
+      }
+      case "summon":
+        this.popText(e.x, e.y, "召喚!", COLORS.danger, 22);
+        break;
+      case "split":
+        this.areaFx(e.x, e.y, 1.2);
+        this.popText(e.x, e.y, "分裂!", COLORS.danger, 24);
+        break;
+      case "knockback":
+        {
+          const v = this.enemies.get(e.enemyId);
+          if (v) this.scene.tweens.add({ targets: v.sprite, alpha: 0.4, duration: 80, yoyo: true });
+        }
+        break;
+      case "cross": {
+        const c = toPx(e.x, e.y);
+        const g = this.scene.add.graphics().setDepth(29);
+        const len = e.len * CELL;
+        for (const [w, col, a] of [[26, FX.fire, 0.35], [8, 0xffe08a, 0.9]] as const) {
+          g.lineStyle(w, col, a);
+          g.lineBetween(c.x - len, c.y, c.x + len, c.y);
+          g.lineBetween(c.x, c.y - len, c.x, c.y + len);
+        }
+        this.scene.tweens.add({ targets: g, alpha: 0, duration: 220, onComplete: () => g.destroy() });
         break;
       }
       case "cannon": {

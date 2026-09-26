@@ -1,10 +1,12 @@
 import Phaser from "phaser";
 import { ROLES, ROLE_IDS, type RoleId } from "../../data/balance/heroes";
+import { STONES, type StoneId } from "../../data/balance/stones";
 import type { HeroState, RunSim, TargetMode } from "../../sim/run";
 import { bindPress } from "../input/press";
 import { GAME_WIDTH, MARGIN } from "../layout";
 import { COLORS, textStyle } from "../ui/theme";
 import { Button } from "../ui/widgets";
+import { jaWrap } from "../ui/jaWrap";
 
 export const PANEL_TOP = 1072;
 
@@ -27,11 +29,19 @@ export interface PanelActions {
   previewRole(role: RoleId): void;
   showRoleInfo(role: RoleId, x: number, y: number): void;
   levelUp(heroId: number): void;
+  /** SPEC-115: 魔石の付け外し（target null で外す） */
+  toggleStone(stone: StoneId, target: number | "cannon"): void;
+  showStoneInfo(stone: StoneId, target: RoleId | "cannon", x: number, y: number): void;
   cycleTarget(heroId: number): void;
   deselect(): void;
 }
 
-type Mode = { kind: "none" } | { kind: "slot"; slotIndex: number };
+type Mode =
+  | { kind: "none" }
+  | { kind: "slot"; slotIndex: number }
+  | { kind: "cannon" }
+  /** SPEC-115: 魔石を選ぶ（戻り先の Mode を持つ） */
+  | { kind: "stone"; target: number | "cannon"; back: Mode };
 
 /** ロール選択カードの寸法（5 枚 + 閉じるボタンで横幅に収める） */
 const CARD_W = 116;
@@ -86,10 +96,12 @@ export class Panel {
 
   private structureKey(): string {
     if (this.mode.kind === "none") return "none";
+    if (this.mode.kind === "cannon") return `cannon:${this.sim.cannonStone}`;
+    if (this.mode.kind === "stone") return `stone:${this.mode.target}:${this.sim.unlockedStones().map((id) => this.sim.stoneHolderOf(id)).join(",")}`;
     const i = this.mode.slotIndex;
     if (!this.sim.isSlotOpen(i)) return `locked:${i}`;
     const hero = this.sim.heroAt(i);
-    return hero ? `hero:${hero.id}:${hero.level}:${hero.targetMode}` : `slot:${i}`;
+    return hero ? `hero:${hero.id}:${hero.level}:${hero.targetMode}:${this.sim.heroElement(hero)}` : `slot:${i}`;
   }
 
   private clear(): void {
@@ -110,6 +122,8 @@ export class Panel {
   private rebuild(): void {
     this.clear();
     if (this.mode.kind === "none") return this.buildIdle();
+    if (this.mode.kind === "cannon") return this.buildCannon();
+    if (this.mode.kind === "stone") return this.buildStonePicker(this.mode.target, this.mode.back);
     const i = this.mode.slotIndex;
     if (!this.sim.isSlotOpen(i)) return this.buildLocked(i);
     const hero = this.sim.heroAt(i);
@@ -246,17 +260,38 @@ export class Panel {
     const y = PANEL_TOP + 150;
     // 結界と採掘は狙いを持たない
     const targeted = hero.role !== "pulse" && hero.role !== "miner";
-    const targetW = targeted ? 200 : 0;
+    const targetW = targeted ? 170 : 0;
+    let x = MARGIN;
     if (targeted) {
       this.add(
-        new Button(this.scene, MARGIN + targetW / 2, y, { width: targetW, label: `狙い: ${TARGET_LABEL[hero.targetMode]}`, onTap: () => this.actions.cycleTarget(hero.id) }),
+        new Button(this.scene, x + targetW / 2, y, { width: targetW, label: TARGET_LABEL[hero.targetMode], sub: "狙い", onTap: () => this.actions.cycleTarget(hero.id) }),
       );
+      x += targetW + 16;
     }
-    const closeW = 120;
-    const lvW = GAME_WIDTH - MARGIN * 2 - closeW - 16 - (targeted ? targetW + 16 : 0);
+    // SPEC-115: 魔石（解放済みのときだけ）。属性マスなら属性名を出す
+    const fixed = this.sim.slotElement(hero.slotIndex);
+    const stones = this.sim.unlockedStones().length > 0 || fixed !== null;
+    const stoneW = stones ? 140 : 0;
+    if (stones) {
+      const el = this.sim.heroElement(hero);
+      const b = this.add(
+        new Button(this.scene, x + stoneW / 2, y, {
+          width: stoneW,
+          label: "魔石",
+          sub: el ? (fixed ? `属性マス:${STONES[el].element}` : STONES[el].element) : "なし",
+          accent: el ? STONES[el].color : COLORS.gold,
+          kind: el ? "primary" : "secondary",
+          onTap: () => (fixed ? undefined : this.setMode({ kind: "stone", target: hero.id, back: this.mode })),
+        }),
+      );
+      if (fixed) b.setKind("locked");
+      x += stoneW + 16;
+    }
+    const closeW = 100;
+    const lvW = GAME_WIDTH - MARGIN - x - closeW - 16;
     const cost = this.sim.levelUpCost(hero);
     const btn = this.add(
-      new Button(this.scene, MARGIN + (targeted ? targetW + 16 : 0) + lvW / 2, y, {
+      new Button(this.scene, x + lvW / 2, y, {
         width: lvW,
         label: cost === null ? "最大レベル" : `強化  ${cost} GUM`,
         kind: cost === null ? "locked" : "primary",
@@ -265,6 +300,64 @@ export class Panel {
     );
     this.actionBtn = { btn, cost: () => this.sim.levelUpCost(hero) };
     this.add(new Button(this.scene, GAME_WIDTH - MARGIN - closeW / 2, y, { width: closeW, label: "×", onTap: () => this.actions.deselect() }));
+  }
+
+  /** SPEC-115: 魔石を選ぶ。タップで付け外し、長押しで効果（装着先のロールに応じた説明） */
+  private buildStonePicker(target: number | "cannon", back: Mode): void {
+    const s = this.scene;
+    const top = PANEL_TOP + 14;
+    const role: RoleId | "cannon" = target === "cannon" ? "cannon" : (this.sim.heroes.find((h) => h.id === target)?.role ?? "archer");
+    const stones = this.sim.unlockedStones();
+    const w = 132;
+    stones.forEach((id, i) => {
+      const def = STONES[id];
+      const holder = this.sim.stoneHolderOf(id);
+      const mine = holder === target;
+      const cx = MARGIN + w / 2 + i * (w + 8);
+      const g = this.add(s.add.graphics());
+      g.fillStyle(mine ? def.color : COLORS.panelRaised, mine ? 0.35 : 0.95).fillRoundedRect(cx - w / 2, top, w, CARD_H, 14);
+      g.lineStyle(mine ? 3 : 2, mine ? COLORS.gold : COLORS.line, 1).strokeRoundedRect(cx - w / 2, top, w, CARD_H, 14);
+      const img = this.add(s.add.image(cx, top + 50, def.imageKey));
+      img.setScale(150 / img.width).setAlpha(holder !== null && !mine ? 0.5 : 1);
+      this.add(s.add.text(cx, top + 104, def.element, textStyle(22)).setOrigin(0.5));
+      const state = mine ? "装着中" : holder === null ? "装着する" : holder === "cannon" ? "幻獣砲から移す" : "付け替える";
+      this.add(s.add.text(cx, top + 142, state, textStyle(15, { weight: 500, color: mine ? COLORS.gold : COLORS.inkDim })).setOrigin(0.5));
+      const hit = this.add(s.add.zone(cx, top + CARD_H / 2, w, CARD_H).setInteractive({ useHandCursor: true }));
+      bindPress(hit, {
+        onTap: () => this.actions.toggleStone(id, target),
+        onLongPress: () => this.actions.showStoneInfo(id, role, cx, PANEL_TOP - 20),
+      });
+    });
+    const backW = GAME_WIDTH - MARGIN * 2 - 4 * (w + 8);
+    this.add(new Button(s, GAME_WIDTH - MARGIN - backW / 2, top + CARD_H / 2, { width: backW, height: CARD_H, label: "戻る", onTap: () => this.setMode(back) }));
+  }
+
+  /** 幻獣（幻獣砲）をタップしたとき: 魔石を付けられる */
+  private buildCannon(): void {
+    const s = this.scene;
+    this.add(s.add.text(MARGIN, PANEL_TOP + 30, "幻獣砲", textStyle(26)).setOrigin(0, 0.5));
+    const stone = this.sim.cannonStone;
+    const line = !this.sim.cannonUnlocked
+      ? "スキルツリーの「アメン・ラーの陽光」で解放"
+      : stone
+        ? `${STONES[stone].name}: ${STONES[stone].effects.cannon}`
+        : this.sim.unlockedStones().length > 0
+          ? "「魔石を装着」から、光線に魔石の力を宿せます"
+          : `1 発 ${this.sim.cannonCost} GUM。ON にして盤面を押すと撃つ`;
+    this.add(s.add.text(MARGIN, PANEL_TOP + 76, line, { ...textStyle(18, { weight: 500, color: COLORS.inkDim }), wordWrap: jaWrap(GAME_WIDTH - MARGIN * 2 - 20) }));
+    if (this.sim.cannonUnlocked && this.sim.unlockedStones().length > 0) {
+      this.add(
+        new Button(s, MARGIN + 150, PANEL_TOP + 150, {
+          width: 300,
+          label: "魔石を装着",
+          sub: stone ? STONES[stone].element : "なし",
+          kind: "primary",
+          accent: stone ? STONES[stone].color : COLORS.gold,
+          onTap: () => this.setMode({ kind: "stone", target: "cannon", back: this.mode }),
+        }),
+      );
+    }
+    this.add(new Button(s, GAME_WIDTH - MARGIN - 80, PANEL_TOP + 150, { width: 160, label: "閉じる", onTap: () => this.actions.deselect() }));
   }
 
   private refreshDynamic(): void {
