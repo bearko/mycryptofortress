@@ -133,7 +133,10 @@ export class BoardView {
         this.enemies.set(e.id, v);
       }
       const { x, y } = toPx(e.x, e.y);
-      v.sprite.setPosition(x, y).setDepth(10 + e.y / 100);
+      // 跳躍中は放物線を描いて浮く
+      const leap = e.def.leap;
+      const lift = leap && e.leapRemaining > 0 ? Math.sin(Math.PI * (1 - e.leapRemaining / leap.duration)) * 34 : 0;
+      v.sprite.setPosition(x, y - lift).setDepth(10 + e.y / 100);
       if (e.dirX !== 0) v.sprite.setFlipX(e.dirX > 0 === !ENEMY_FACES_RIGHT);
       v.aura?.setPosition(x, y - 10).setScale(1 + 0.08 * Math.sin(time / 150));
       v.bar.clear();
@@ -208,6 +211,10 @@ export class BoardView {
       case "hit": {
         const v = this.enemies.get(e.enemyId);
         if (!v) return;
+        if (e.crit) {
+          const t = this.scene.add.text(v.sprite.x, v.sprite.y - 50, "会心!", textStyle(20, { color: COLORS.gold })).setOrigin(0.5).setDepth(62);
+          this.scene.tweens.add({ targets: t, y: t.y - 26, alpha: 0, duration: 500, onComplete: () => t.destroy() });
+        }
         v.sprite.setTintFill(0xffffff);
         this.scene.time.delayedCall(60, () => v.sprite.active && v.sprite.clearTint());
         break;
@@ -269,7 +276,7 @@ export class BoardView {
       g.fillStyle(COLORS.gold, 0.08).fillCircle(c.x, c.y, now.range * CELL);
       g.lineStyle(3, COLORS.gold, 0.8).strokeCircle(c.x, c.y, now.range * CELL);
     } else {
-      const range = ROLES.archer.base.range;
+      const range = this.sim.statsFor("archer").range;
       g.fillStyle(0xffffff, 0.06).fillCircle(c.x, c.y, range * CELL);
       g.lineStyle(2, 0xffffff, 0.5).strokeCircle(c.x, c.y, range * CELL);
     }

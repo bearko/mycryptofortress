@@ -1,4 +1,5 @@
 import type { RoleId } from "../data/balance/heroes";
+import type { RunModifiers } from "./modifiers";
 import { RunSim } from "./run";
 import type { LevelDef } from "./level";
 
@@ -14,6 +15,8 @@ export interface BotOptions {
   role?: RoleId;
   /** 判断間隔（秒） */
   thinkEvery?: number;
+  /** スキルツリーの補正 */
+  mods?: RunModifiers;
 }
 
 /**
@@ -21,7 +24,7 @@ export interface BotOptions {
  * 「空きスロットに配置 → 置き切ったら最も低レベルのヒーローを強化 → GUM は即回収」を繰り返す。
  */
 export function runBot(level: LevelDef, seed: number, opts: BotOptions = {}): RunSim {
-  const sim = new RunSim(level, seed);
+  const sim = new RunSim(level, seed, opts.mods);
   const role = opts.role ?? "archer";
   const order = opts.slotOrder ?? level.slots.map((_, i) => i);
   const maxHeroes = opts.maxHeroes ?? order.length;

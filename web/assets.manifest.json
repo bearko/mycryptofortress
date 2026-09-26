@@ -268,6 +268,158 @@
       "key": "jingle.lose",
       "type": "audio",
       "path": "Audio/SE/Jingles/lose.mp3"
+    },
+    {
+      "key": "enemy.101",
+      "type": "image",
+      "path": "Image/Enemies/101.png"
+    },
+    {
+      "key": "enemy.102",
+      "type": "image",
+      "path": "Image/Enemies/102.png"
+    },
+    {
+      "key": "enemy.448",
+      "type": "image",
+      "path": "Image/Enemies/448.png"
+    },
+    {
+      "key": "enemy.445",
+      "type": "image",
+      "path": "Image/Enemies/445.png"
+    },
+    {
+      "key": "bg.node.1038",
+      "type": "image",
+      "path": "Image/Backgrounds/1038.png",
+      "preload": false
+    },
+    {
+      "key": "bg.node.1023",
+      "type": "image",
+      "path": "Image/Backgrounds/1023.png",
+      "preload": false
+    },
+    {
+      "key": "chara.navi_ain_speak_00_talk",
+      "type": "image",
+      "path": "Image/Characters/navi_ain_speak_00_talk.png"
+    },
+    {
+      "key": "chara.navi_ain_speak_01_talk",
+      "type": "image",
+      "path": "Image/Characters/navi_ain_speak_01_talk.png"
+    },
+    {
+      "key": "chara.navi_ain_00_pointer_up",
+      "type": "image",
+      "path": "Image/Characters/navi_ain_00_pointer_up.png"
+    },
+    {
+      "key": "chara.navi_ain_06_smile",
+      "type": "image",
+      "path": "Image/Characters/navi_ain_06_smile.png"
+    },
+    {
+      "key": "chara.chris_09_idle",
+      "type": "image",
+      "path": "Image/Characters/chris_09_idle.png"
+    },
+    {
+      "key": "chara.chris_10_blink",
+      "type": "image",
+      "path": "Image/Characters/chris_10_blink.png"
+    },
+    {
+      "key": "chara.chris_11_blink",
+      "type": "image",
+      "path": "Image/Characters/chris_11_blink.png"
+    },
+    {
+      "key": "chara.chris_speak_02_talk",
+      "type": "image",
+      "path": "Image/Characters/chris_speak_02_talk.png"
+    },
+    {
+      "key": "chara.chris_speak_03_talk",
+      "type": "image",
+      "path": "Image/Characters/chris_speak_03_talk.png"
+    },
+    {
+      "key": "chara.chris_03_cheer",
+      "type": "image",
+      "path": "Image/Characters/chris_03_cheer.png"
+    },
+    {
+      "key": "chara.maycri_04_eyes_blank",
+      "type": "image",
+      "path": "Image/Characters/maycri_04_eyes_blank.png"
+    },
+    {
+      "key": "chara.maycri_05_blink",
+      "type": "image",
+      "path": "Image/Characters/maycri_05_blink.png"
+    },
+    {
+      "key": "chara.maycri_06_eyes_small",
+      "type": "image",
+      "path": "Image/Characters/maycri_06_eyes_small.png"
+    },
+    {
+      "key": "chara.maycri_02_eyes_wide",
+      "type": "image",
+      "path": "Image/Characters/maycri_02_eyes_wide.png"
+    },
+    {
+      "key": "icon.battle.hp",
+      "type": "image",
+      "path": "Image/BattleIcons/Parameters/hp.png"
+    },
+    {
+      "key": "icon.battle.phy",
+      "type": "image",
+      "path": "Image/BattleIcons/Parameters/phy.png"
+    },
+    {
+      "key": "icon.battle.buf_agi",
+      "type": "image",
+      "path": "Image/BattleIcons/Buffs/buf_agi.png"
+    },
+    {
+      "key": "icon.battle.buf_phy",
+      "type": "image",
+      "path": "Image/BattleIcons/Buffs/buf_phy.png"
+    },
+    {
+      "key": "icon.battle.buf_int",
+      "type": "image",
+      "path": "Image/BattleIcons/Buffs/buf_int.png"
+    },
+    {
+      "key": "icon.battle.dbf_phy",
+      "type": "image",
+      "path": "Image/BattleIcons/Buffs/dbf_phy.png"
+    },
+    {
+      "key": "icon.battle.fear",
+      "type": "image",
+      "path": "Image/BattleIcons/StatusEffects/fear.png"
+    },
+    {
+      "key": "icon.battle.resurrection",
+      "type": "image",
+      "path": "Image/BattleIcons/StatusEffects/resurrection.png"
+    },
+    {
+      "key": "icon.battle.decoy",
+      "type": "image",
+      "path": "Image/BattleIcons/StatusEffects/decoy.png"
+    },
+    {
+      "key": "se.heal",
+      "type": "audio",
+      "path": "Audio/SE/Battle/3_heal_resurrection.mp3"
     }
   ]
 }

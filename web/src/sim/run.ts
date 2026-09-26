@@ -1,6 +1,7 @@
 import { ENEMIES, type EnemyDef } from "../data/balance/enemies";
 import { ROLES, maxLevel, roleStats, type RoleId } from "../data/balance/heroes";
 import type { LevelDef } from "./level";
+import { BASE_CRIT_MUL, VOLLEY_DAMAGE, VOLLEY_TARGETS, WEALTH_CAP, emptyModifiers, type RunModifiers } from "./modifiers";
 import { PathGeom } from "./path";
 import { Rng } from "./rng";
 
@@ -31,6 +32,9 @@ export interface EnemyState {
   maxHp: number;
   /** 飛翔中の弾の予定ダメージ（撃ちすぎ防止） */
   pending: number;
+  /** 跳躍: 次の跳躍までの秒数 / 跳躍の残り秒数（跳躍中でなければ 0） */
+  leapCooldown: number;
+  leapRemaining: number;
 }
 
 export interface HeroState {
@@ -56,6 +60,7 @@ export interface ProjectileState {
   ty: number;
   damage: number;
   speed: number;
+  crit: boolean;
 }
 
 export interface DropState {
@@ -71,9 +76,13 @@ export type SimEvent =
   | { type: "waveClear"; wave: number; reward: number }
   | { type: "spawn"; enemyId: number }
   | { type: "attack"; heroId: number; targetId: number; tx: number; ty: number }
-  | { type: "hit"; enemyId: number; damage: number; x: number; y: number }
+  | { type: "hit"; enemyId: number; damage: number; x: number; y: number; crit: boolean }
   | { type: "kill"; enemyId: number; x: number; y: number; boss: boolean }
-  | { type: "leak"; enemyId: number; damage: number }
+  | { type: "leak"; enemyId: number; damage: number; blocked: boolean }
+  | { type: "lastStand" }
+  | { type: "leap"; enemyId: number }
+  | { type: "gumOnHit"; x: number; y: number }
+  | { type: "heal"; amount: number }
   | { type: "drop"; dropId: number }
   | { type: "collect"; dropId: number; value: number; x: number; y: number }
   | { type: "dropExpire"; dropId: number }
@@ -88,6 +97,8 @@ export interface RunStats {
   gumEarned: number;
   /** 到達した Wave 数（開始した Wave の数） */
   wavesReached: number;
+  /** クリアした Wave 数（SPEC-106 の CE 計算に使う） */
+  wavesCleared: number;
 }
 
 interface SpawnEntry {
@@ -114,7 +125,7 @@ export class RunSim {
   heroes: HeroState[] = [];
   projectiles: ProjectileState[] = [];
   drops: DropState[] = [];
-  readonly stats: RunStats = { kills: 0, leaks: 0, gumEarned: 0, wavesReached: 0 };
+  readonly stats: RunStats = { kills: 0, leaks: 0, gumEarned: 0, wavesReached: 0, wavesCleared: 0 };
   readonly paths: PathGeom[];
 
   private readonly rng: Rng;
@@ -122,14 +133,16 @@ export class RunSim {
   private waveTime = 0;
   private nextId = 1;
   private events: SimEvent[] = [];
+  private lastStandUsed = false;
 
   constructor(
     readonly level: LevelDef,
     seed: number,
+    readonly mods: RunModifiers = emptyModifiers(),
   ) {
     this.rng = new Rng(seed);
-    this.gum = level.startGum;
-    this.hp = this.maxHp = level.cryptidHp;
+    this.gum = level.startGum + mods.startGumAdd;
+    this.hp = this.maxHp = level.cryptidHp + mods.maxHpAdd;
     this.nextWaveIn = level.prepSeconds;
     this.paths = level.paths.map((p) => new PathGeom(p.id, p.points));
   }
@@ -152,20 +165,30 @@ export class RunSim {
     return this.heroes.find((h) => h.slotIndex === slotIndex);
   }
 
+  /** SPEC-108: ツリー補正込みの配置コスト */
+  placeCost(role: RoleId): number {
+    return Math.max(10, ROLES[role].placeCost - this.mods.placeCostFlat);
+  }
+
+  /** GUM の回収半径（マス） */
+  get collectRadius(): number {
+    return COLLECT_RADIUS + this.mods.collectRadiusAdd;
+  }
+
   canPlace(slotIndex: number, role: RoleId): boolean {
     return (
       !this.isOver &&
       slotIndex >= 0 &&
       slotIndex < this.level.slots.length &&
       !this.heroAt(slotIndex) &&
-      this.gum >= ROLES[role].placeCost
+      this.gum >= this.placeCost(role)
     );
   }
 
   placeHero(slotIndex: number, role: RoleId): HeroState | null {
     if (!this.canPlace(slotIndex, role)) return null;
     const slot = this.level.slots[slotIndex];
-    this.gum -= ROLES[role].placeCost;
+    this.gum -= this.placeCost(role);
     const hero: HeroState = {
       id: this.nextId++,
       slotIndex,
@@ -186,7 +209,8 @@ export class RunSim {
   /** 次レベルへの費用。最大レベルなら null */
   levelUpCost(hero: HeroState): number | null {
     const role = ROLES[hero.role];
-    return hero.level >= maxLevel(role) ? null : role.levelUpCosts[hero.level - 1];
+    if (hero.level >= maxLevel(role)) return null;
+    return Math.max(1, Math.round(role.levelUpCosts[hero.level - 1] * (1 - this.mods.levelCostPct)));
   }
 
   levelUp(heroId: number): boolean {
@@ -205,8 +229,20 @@ export class RunSim {
     if (hero) hero.targetMode = mode;
   }
 
+  /** ツリー補正込みの性能（ボス補正・会心・所持 GUM 補正は命中時に別途掛かる） */
   heroStats(hero: HeroState, level = hero.level): { damage: number; interval: number; range: number } {
-    return roleStats(ROLES[hero.role], level);
+    return this.statsFor(hero.role, level);
+  }
+
+  /** 配置前のプレビュー用: ロールとレベルから性能を出す */
+  statsFor(role: RoleId, level = 1): { damage: number; interval: number; range: number } {
+    const base = roleStats(ROLES[role], level);
+    const m = this.mods;
+    return {
+      damage: base.damage * (1 + m.damagePct),
+      interval: base.interval / Math.max(0.2, 1 + m.attackSpeedPct),
+      range: base.range + m.rangeAdd,
+    };
   }
 
   /** 開始前、または Wave 間の休憩中なら次の Wave を即開始できる */
@@ -221,7 +257,7 @@ export class RunSim {
   }
 
   /** (x, y) から半径 r 以内の GUM を回収し、回収額を返す */
-  collectDropsAt(x: number, y: number, r = COLLECT_RADIUS): number {
+  collectDropsAt(x: number, y: number, r = this.collectRadius): number {
     if (this.isOver) return 0;
     let total = 0;
     this.drops = this.drops.filter((d) => {
@@ -304,6 +340,8 @@ export class RunSim {
         hp,
         maxHp: hp,
         pending: 0,
+        leapCooldown: def.leap?.interval ?? 0,
+        leapRemaining: 0,
       };
       this.placeOnPath(enemy);
       this.enemies.push(enemy);
@@ -321,17 +359,31 @@ export class RunSim {
   private moveEnemies(): void {
     const survivors: EnemyState[] = [];
     for (const e of this.enemies) {
-      e.dist += e.def.speed * TICK;
+      let speed = e.def.speed;
+      const leap = e.def.leap;
+      if (leap) {
+        if (e.leapRemaining > 0) {
+          e.leapRemaining = Math.max(0, e.leapRemaining - TICK);
+          speed += leap.distance / leap.duration;
+        } else {
+          e.leapCooldown -= TICK;
+          if (e.leapCooldown <= 0) {
+            e.leapCooldown = leap.interval;
+            e.leapRemaining = leap.duration;
+            this.emit({ type: "leap", enemyId: e.id });
+          }
+        }
+      }
+      e.dist += speed * TICK;
       if (e.dist >= this.paths[e.pathIndex].length) {
-        this.hp -= e.def.leak;
-        this.stats.leaks += 1;
-        this.emit({ type: "leak", enemyId: e.id, damage: e.def.leak });
+        this.onLeak(e);
         continue;
       }
       this.placeOnPath(e);
       survivors.push(e);
     }
     this.enemies = survivors;
+    if (this.hp > 0 && this.mods.regenPerSec > 0) this.hp = Math.min(this.maxHp, this.hp + this.mods.regenPerSec * TICK);
     if (this.hp <= 0) {
       this.hp = 0;
       this.status = "lost";
@@ -346,27 +398,74 @@ export class RunSim {
       const stats = this.heroStats(h);
       const target = this.selectTarget(h, stats.range);
       if (!target) continue;
-      target.pending += stats.damage;
       h.cooldown = stats.interval;
       h.facing = target.x < h.x ? -1 : 1;
-      this.projectiles.push({
-        id: this.nextId++,
-        heroId: h.id,
-        targetId: target.id,
-        x: h.x,
-        y: h.y,
-        tx: target.x,
-        ty: target.y,
-        damage: stats.damage,
-        speed: ROLES[h.role].projectileSpeed,
-      });
+      if (this.mods.volley > 0) {
+        const targets = [target];
+        while (targets.length < VOLLEY_TARGETS) {
+          const next = this.selectTarget(h, stats.range, targets);
+          if (!next) break;
+          targets.push(next);
+        }
+        for (const t of targets) this.fire(h, t, stats.damage * VOLLEY_DAMAGE);
+      } else {
+        this.fire(h, target, stats.damage);
+        if (this.mods.extraShotChance > 0 && this.rng.chance(this.mods.extraShotChance)) {
+          const second = this.selectTarget(h, stats.range, [target]);
+          if (second) this.fire(h, second, stats.damage);
+        }
+      }
       this.emit({ type: "attack", heroId: h.id, targetId: target.id, tx: target.x, ty: target.y });
     }
   }
 
+  /** 1 本の弾を撃つ。会心・ボス補正・所持 GUM 補正は発射時に確定させ、予定ダメージに積む */
+  private fire(h: HeroState, target: EnemyState, baseDamage: number): void {
+    const m = this.mods;
+    const crit = m.critChance > 0 && this.rng.chance(m.critChance);
+    const wealth = Math.min(WEALTH_CAP, m.wealthDamagePct * Math.floor(this.gum / 100));
+    const damage =
+      baseDamage *
+      (crit ? BASE_CRIT_MUL + m.critMulAdd : 1) *
+      (target.def.boss ? 1 + m.bossDamagePct : 1) *
+      (1 + wealth);
+    target.pending += damage;
+    this.projectiles.push({
+      id: this.nextId++,
+      heroId: h.id,
+      targetId: target.id,
+      x: h.x,
+      y: h.y,
+      tx: target.x,
+      ty: target.y,
+      damage,
+      speed: ROLES[h.role].projectileSpeed,
+      crit,
+    });
+  }
+
+  private onLeak(e: EnemyState): void {
+    this.stats.leaks += 1;
+    if (!e.def.boss && this.mods.leakIgnoreChance > 0 && this.rng.chance(this.mods.leakIgnoreChance)) {
+      this.emit({ type: "leak", enemyId: e.id, damage: 0, blocked: true });
+      return;
+    }
+    if (e.def.boss && this.mods.lastStand > 0 && !this.lastStandUsed && this.hp - e.def.leak <= 0) {
+      this.lastStandUsed = true;
+      this.hp = 1;
+      this.emit({ type: "leak", enemyId: e.id, damage: 0, blocked: true });
+      this.emit({ type: "lastStand" });
+      return;
+    }
+    this.hp -= e.def.leak;
+    this.emit({ type: "leak", enemyId: e.id, damage: e.def.leak, blocked: false });
+  }
+
   /** SPEC-102 §2.4: 射程内から優先度に従って標的を選ぶ（撃ちすぎ防止つき） */
-  selectTarget(h: HeroState, range: number): EnemyState | null {
-    const inRange = this.enemies.filter((e) => e.hp > 0 && Math.hypot(e.x - h.x, e.y - h.y) <= range);
+  selectTarget(h: HeroState, range: number, exclude: readonly EnemyState[] = []): EnemyState | null {
+    const inRange = this.enemies.filter(
+      (e) => e.hp > 0 && !exclude.includes(e) && Math.hypot(e.x - h.x, e.y - h.y) <= range,
+    );
     if (inRange.length === 0) return null;
     const notDoomed = inRange.filter((e) => e.pending < e.hp);
     const pool = notDoomed.length > 0 ? notDoomed : inRange;
@@ -405,22 +504,33 @@ export class RunSim {
         alive.push(p);
         continue;
       }
-      if (target) this.damage(target, p.damage, p.heroId);
+      if (target) this.damage(target, p.damage, p.heroId, p.crit);
     }
     this.projectiles = alive;
   }
 
-  private damage(e: EnemyState, amount: number, heroId: number): void {
+  private damage(e: EnemyState, amount: number, heroId: number, crit: boolean): void {
     e.pending = Math.max(0, e.pending - amount);
     const dealt = Math.min(amount, e.hp);
     e.hp -= amount;
     const hero = this.findHero(heroId);
     if (hero) hero.totalDamage += dealt;
-    this.emit({ type: "hit", enemyId: e.id, damage: dealt, x: e.x, y: e.y });
+    this.emit({ type: "hit", enemyId: e.id, damage: dealt, x: e.x, y: e.y, crit });
+    if (this.mods.gumOnHitChance > 0 && this.rng.chance(this.mods.gumOnHitChance)) {
+      this.gum += 1;
+      this.stats.gumEarned += 1;
+      this.emit({ type: "gumOnHit", x: e.x, y: e.y });
+    }
     if (e.hp <= 0) {
       this.stats.kills += 1;
       this.emit({ type: "kill", enemyId: e.id, x: e.x, y: e.y, boss: !!e.def.boss });
-      const drop: DropState = { id: this.nextId++, x: e.x, y: e.y, value: e.def.reward, ttl: DROP_LIFETIME };
+      const drop: DropState = {
+        id: this.nextId++,
+        x: e.x,
+        y: e.y,
+        value: Math.round(e.def.reward * (1 + this.mods.dropValuePct)),
+        ttl: DROP_LIFETIME + this.mods.dropLifetimeAdd,
+      };
       this.drops.push(drop);
       this.emit({ type: "drop", dropId: drop.id });
     }
@@ -439,8 +549,15 @@ export class RunSim {
     if (this.waveIndex < 0 || this.nextWaveIn !== null) return;
     if (this.spawnQueue.length > 0 || this.enemies.length > 0) return;
     const wave = this.level.waves[this.waveIndex];
-    this.gum += wave.reward;
-    this.emit({ type: "waveClear", wave: this.waveIndex, reward: wave.reward });
+    const reward = Math.round(wave.reward * (1 + this.mods.waveRewardPct));
+    this.gum += reward;
+    this.stats.wavesCleared += 1;
+    this.emit({ type: "waveClear", wave: this.waveIndex, reward });
+    if (this.mods.healPerWave > 0 && this.hp < this.maxHp) {
+      const amount = Math.min(this.maxHp - this.hp, this.mods.healPerWave);
+      this.hp += amount;
+      this.emit({ type: "heal", amount });
+    }
     if (this.waveIndex >= this.level.waves.length - 1) {
       this.status = "won";
       this.emit({ type: "won" });

@@ -10,8 +10,12 @@
 | [SPEC-101](./SPEC-101-phase0-foundation.md) | Accepted | Phase 0: v1 撤去と v2 基盤（アセット同期・縦画面・入力・セーブ・CI） | 2026-09-26 |
 | [SPEC-102](./SPEC-102-sim-core.md) | Accepted | シミュレーションコア（決定的 RunSim・ターゲット優先度・イベント） | 2026-09-26 |
 | [SPEC-103](./SPEC-103-level-format.md) | Accepted | レベル定義フォーマットとバリデータ | 2026-09-26 |
-| [SPEC-104](./SPEC-104-cryptid-archer-gum.md) | Accepted | 幻獣・弓ヒーロー・エネミー・GUM（Lv1 の中身） | 2026-09-26 |
+| [SPEC-104](./SPEC-104-cryptid-archer-gum.md) | Accepted | 幻獣・弓ヒーロー・エネミー・GUM・Lv1〜3 の中身 | 2026-09-26 |
 | [SPEC-105](./SPEC-105-run-ui.md) | Accepted | ラン UI（スマホ縦画面） | 2026-09-26 |
+| [SPEC-106](./SPEC-106-results-and-tokens.md) | Accepted | リザルトとトークン（CE）・レベル進行・セーブ v2 | 2026-09-26 |
+| [SPEC-107](./SPEC-107-skill-tree.md) | Accepted | スキルツリー v0（25 ノード・MCH スキル名） | 2026-09-26 |
+| [SPEC-108](./SPEC-108-refund-and-modifiers.md) | Accepted | 無料返金とツリー効果のラン適用 | 2026-09-26 |
+| [SPEC-108a](./SPEC-108a-navi-npc.md) | Accepted | ナビ / NPC 会話基盤 | 2026-09-26 |
 
 ## v1 → v2 の切り替え
 

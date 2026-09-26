@@ -2,6 +2,7 @@ import {
   SAVE_SCHEMA_VERSION,
   SaveStore,
   createNewSave,
+  emptyMeta,
   exportSave,
   importSave,
   isValidSave,
@@ -63,20 +64,43 @@ describe("SaveStore (SPEC-101 §5.5)", () => {
 });
 
 describe("migrate", () => {
-  it("旧バージョンをマイグレーションで現行スキーマへ変換", () => {
+  it("旧バージョンをマイグレーションで現行スキーマへ変換（注入したマイグレーション）", () => {
     const current = createNewSave();
-    const v0 = { schemaVersion: SAVE_SCHEMA_VERSION - 1, createdAt: current.createdAt, updatedAt: current.updatedAt, land: "grape" };
+    const old = { schemaVersion: SAVE_SCHEMA_VERSION - 1, createdAt: current.createdAt, updatedAt: current.updatedAt, land: "grape" };
     const migrations: Migrations = {
       [SAVE_SCHEMA_VERSION - 1]: (d) => ({
         createdAt: d.createdAt,
         updatedAt: d.updatedAt,
         settings: { bgmVolume: 0.5, seVolume: 0.5 },
         profile: { cryptidId: d.land },
+        meta: emptyMeta(),
       }),
     };
-    const migrated = migrate(v0, migrations);
+    const migrated = migrate(old, migrations);
     expect(migrated?.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
     expect(migrated?.profile.cryptidId).toBe("grape");
+  });
+
+  it("v1（Phase 0〜1 のセーブ）は v2 に移行し、選んだ幻獣と設定を保つ", () => {
+    const v1 = {
+      schemaVersion: 1,
+      createdAt: "2026-09-26T00:00:00.000Z",
+      updatedAt: "2026-09-26T00:00:00.000Z",
+      settings: { bgmVolume: 0, seVolume: 0.8 },
+      profile: { cryptidId: "ruby" },
+    };
+    const migrated = migrate(v1);
+    expect(migrated).not.toBeNull();
+    expect(migrated!.profile.cryptidId).toBe("ruby");
+    expect(migrated!.settings.bgmVolume).toBe(0);
+    expect(migrated!.meta).toEqual(emptyMeta());
+  });
+
+  it("meta の破損（負のトークン・不正なツリー）は無効", () => {
+    const d = createNewSave();
+    expect(isValidSave({ ...d, meta: { ...d.meta, tokens: { ce: -1 } } })).toBe(false);
+    expect(isValidSave({ ...d, meta: { ...d.meta, tree: { root: 1.5 } } })).toBe(false);
+    expect(isValidSave({ ...d, meta: { ...d.meta, seenDialogs: [1] } })).toBe(false);
   });
 
   it("マイグレーションが無い旧バージョン・未来バージョン・非オブジェクトは null", () => {
