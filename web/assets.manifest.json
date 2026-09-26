@@ -558,6 +558,79 @@
       "key": "icon.battle.dbf_agi",
       "type": "image",
       "path": "Image/BattleIcons/Buffs/dbf_agi.png"
+    },
+    {
+      "key": "enemy.408",
+      "type": "image",
+      "path": "Image/Enemies/408.png"
+    },
+    {
+      "key": "enemy.409",
+      "type": "image",
+      "path": "Image/Enemies/409.png"
+    },
+    {
+      "key": "enemy.121",
+      "type": "image",
+      "path": "Image/Enemies/121.png"
+    },
+    {
+      "key": "enemy.122",
+      "type": "image",
+      "path": "Image/Enemies/122.png"
+    },
+    {
+      "key": "enemy.451",
+      "type": "image",
+      "path": "Image/Enemies/451.png"
+    },
+    {
+      "key": "enemy.171",
+      "type": "image",
+      "path": "Image/Enemies/171.png"
+    },
+    {
+      "key": "enemy.372",
+      "type": "image",
+      "path": "Image/Enemies/372.png"
+    },
+    {
+      "key": "bg.node.1003",
+      "type": "image",
+      "path": "Image/Backgrounds/1003.png",
+      "preload": false
+    },
+    {
+      "key": "bg.node.1004",
+      "type": "image",
+      "path": "Image/Backgrounds/1004.png",
+      "preload": false
+    },
+    {
+      "key": "bg.node.1010",
+      "type": "image",
+      "path": "Image/Backgrounds/1010.png",
+      "preload": false
+    },
+    {
+      "key": "stone.ifrit",
+      "type": "image",
+      "path": "Image/Materials/Gemstones/315.webp"
+    },
+    {
+      "key": "stone.leviathan",
+      "type": "image",
+      "path": "Image/Materials/Gemstones/325.webp"
+    },
+    {
+      "key": "stone.tiamat",
+      "type": "image",
+      "path": "Image/Materials/Gemstones/335.webp"
+    },
+    {
+      "key": "stone.garuda",
+      "type": "image",
+      "path": "Image/Materials/Gemstones/345.webp"
     }
   ]
 }

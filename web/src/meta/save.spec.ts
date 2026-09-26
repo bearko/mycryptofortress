@@ -1,4 +1,5 @@
 import {
+  BUILD_SET_SLOTS,
   SAVE_SCHEMA_VERSION,
   SaveStore,
   createNewSave,
@@ -71,7 +72,7 @@ describe("migrate", () => {
       [SAVE_SCHEMA_VERSION - 1]: (d) => ({
         createdAt: d.createdAt,
         updatedAt: d.updatedAt,
-        settings: { bgmVolume: 0.5, seVolume: 0.5 },
+        settings: { bgmVolume: 0.5, seVolume: 0.5, autoLevel: false },
         profile: { cryptidId: d.land },
         meta: emptyMeta(),
       }),
@@ -147,5 +148,31 @@ describe("export / import", () => {
   it("不正な文字列は null", () => {
     expect(importSave("これは不正")).toBeNull();
     expect(importSave(btoa("{}"))).toBeNull();
+  });
+});
+
+describe("v5（Phase 4）", () => {
+  it("v4 → v5 でクリア済みレベルのエンブレムが付き、ビルドセット枠とオートレベル設定が増える", () => {
+    const v4 = {
+      schemaVersion: 4,
+      createdAt: "2026-09-26T00:00:00.000Z",
+      updatedAt: "2026-09-26T00:00:00.000Z",
+      settings: { bgmVolume: 0.6, seVolume: 0.8 },
+      profile: { cryptidId: "ocean" },
+      meta: {
+        tokens: { ce: 10 },
+        tokensEarned: { ce: 500 },
+        tree: { root: 1 },
+        levels: { L1: { cleared: true, bestWave: 10, clears: 1, runs: 9 }, L2: { cleared: true, bestWave: 10, clears: 1, runs: 4 }, L3: { cleared: false, bestWave: 7, clears: 0, runs: 2 } },
+        seenDialogs: [],
+        treeVersion: 4,
+      },
+    };
+    const s = migrate(v4)!;
+    expect(s).not.toBeNull();
+    expect(s.meta.tokens.emblem).toBe(2); // L1 + L2
+    expect(s.meta.tokensEarned.emblem).toBe(2);
+    expect(s.meta.buildSets).toHaveLength(BUILD_SET_SLOTS);
+    expect(s.settings.autoLevel).toBe(false);
   });
 });

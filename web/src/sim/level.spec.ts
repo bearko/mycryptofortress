@@ -14,6 +14,10 @@ describe("validateLevel (SPEC-103)", () => {
     for (const lv of LEVELS) expect(lv.cryptidHp, lv.id).toBe(3);
   });
 
+  it("Lv7 以降には属性マスがある（SPEC-115）", () => {
+    for (const lv of LEVELS.slice(6)) expect(lv.slots.some((s) => s.element !== undefined), lv.id).toBe(true);
+  });
+
   it("Lv4 以降にはロックマスがある", () => {
     for (const lv of LEVELS.slice(3)) expect(lv.slots.some((s) => s.kind === "locked"), lv.id).toBe(true);
   });

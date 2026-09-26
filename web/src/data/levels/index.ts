@@ -5,9 +5,12 @@ import level03 from "./level03.json";
 import level04 from "./level04.json";
 import level05 from "./level05.json";
 import level06 from "./level06.json";
+import level07 from "./level07.json";
+import level08 from "./level08.json";
+import level09 from "./level09.json";
 
 /** SPEC-103: 収録レベル（この順で解放される） */
-export const LEVELS: readonly LevelDef[] = [level01, level02, level03, level04, level05, level06] as LevelDef[];
+export const LEVELS: readonly LevelDef[] = [level01, level02, level03, level04, level05, level06, level07, level08, level09] as LevelDef[];
 
 export function getLevel(id: string): LevelDef {
   const lv = LEVELS.find((l) => l.id === id);
