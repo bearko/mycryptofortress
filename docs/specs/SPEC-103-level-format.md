@@ -60,6 +60,8 @@
 
 - `slots[]` に `kind: "locked"` と `cost`（GUM）を書くと、ラン中に GUM を払って開放するマスになる（[SPEC-113](./SPEC-113-miner-economy.md)）。
 - バリデータ: `kind` は `normal` / `locked` のみ、`locked` は `cost > 0` 必須。
+- **属性マス**（Phase 4）: `slots[]` に `element`（`ifrit` / `leviathan` / `tiamat` / `garuda`）を書くと、置いたヒーローがその属性を得る（[SPEC-115](./SPEC-115-magic-stones.md)）。未知の属性はエラー。
+- `reward.emblems`: 初回クリアでもらえるエンブレム（任意、既定 0）。
 
 ## 5. 改訂履歴
 
@@ -67,3 +69,4 @@
 |------|-----|----------|
 | 2026-09-26 | 1.0 | 初版・実装 |
 | 2026-09-26 | 1.1 | ロックマス（`kind: "locked"` / `cost`）を追加 |
+| 2026-09-26 | 1.2 | 属性マス（`element`）と `reward.emblems` を追加 |
