@@ -116,7 +116,7 @@
   "waves": [
     {
       "reward": 18,
-      "hpMul": 5.4,
+      "hpMul": 2.97,
       "groups": [
         {
           "enemy": "love_t",
@@ -136,7 +136,7 @@
     },
     {
       "reward": 20,
-      "hpMul": 5.94,
+      "hpMul": 3.267,
       "groups": [
         {
           "enemy": "byte_g",
@@ -156,7 +156,7 @@
     },
     {
       "reward": 22,
-      "hpMul": 6.75,
+      "hpMul": 3.713,
       "groups": [
         {
           "enemy": "love_t",
@@ -171,12 +171,19 @@
           "interval": 1.1,
           "path": "east",
           "delay": 1
+        },
+        {
+          "enemy": "melissa_t",
+          "count": 4,
+          "interval": 1.3,
+          "path": "west",
+          "delay": 2
         }
       ]
     },
     {
       "reward": 24,
-      "hpMul": 7.56,
+      "hpMul": 4.158,
       "groups": [
         {
           "enemy": "love_g",
@@ -198,12 +205,19 @@
           "interval": 0.5,
           "path": "north",
           "delay": 4
+        },
+        {
+          "enemy": "elk_t",
+          "count": 4,
+          "interval": 1.3,
+          "path": "east",
+          "delay": 3
         }
       ]
     },
     {
       "reward": 26,
-      "hpMul": 8.37,
+      "hpMul": 4.604,
       "groups": [
         {
           "enemy": "bagle_t",
@@ -218,12 +232,19 @@
           "interval": 0.8,
           "path": "west",
           "delay": 1
+        },
+        {
+          "enemy": "melissa_t",
+          "count": 5,
+          "interval": 1.2,
+          "path": "north",
+          "delay": 3
         }
       ]
     },
     {
       "reward": 28,
-      "hpMul": 9.18,
+      "hpMul": 5.049,
       "groups": [
         {
           "enemy": "creeper_t",
@@ -250,7 +271,7 @@
     },
     {
       "reward": 30,
-      "hpMul": 10.26,
+      "hpMul": 5.643,
       "groups": [
         {
           "enemy": "love_g",
@@ -272,12 +293,19 @@
           "interval": 0.45,
           "path": "east",
           "delay": 5
+        },
+        {
+          "enemy": "melissa_t",
+          "count": 6,
+          "interval": 1.1,
+          "path": "west",
+          "delay": 2
         }
       ]
     },
     {
       "reward": 32,
-      "hpMul": 11.34,
+      "hpMul": 6.237,
       "groups": [
         {
           "enemy": "bagle_t",
@@ -299,12 +327,19 @@
           "interval": 1.4,
           "path": "north",
           "delay": 5
+        },
+        {
+          "enemy": "elk_t",
+          "count": 5,
+          "interval": 1.2,
+          "path": "east",
+          "delay": 4
         }
       ]
     },
     {
       "reward": 34,
-      "hpMul": 12.69,
+      "hpMul": 6.98,
       "groups": [
         {
           "enemy": "love_g",
@@ -326,12 +361,19 @@
           "interval": 0.8,
           "path": "north",
           "delay": 4
+        },
+        {
+          "enemy": "melissa_t",
+          "count": 6,
+          "interval": 1.0,
+          "path": "north",
+          "delay": 3
         }
       ]
     },
     {
       "reward": 36,
-      "hpMul": 0.85,
+      "hpMul": 0.468,
       "groups": [
         {
           "enemy": "love_g",

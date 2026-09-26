@@ -31,7 +31,16 @@ export interface EnemyDef {
   splitBoss?: { generations: number; childHpPct: number };
   /** SPEC-117 多節: 後ろに count 個の節（enemy）を連れ、全員で HP を共有する */
   segments?: { enemy: string; count: number; spacing: number };
+  /** SPEC-118 装甲: 1 発ごとのダメージをこの値だけ減らす（Wave の HP 倍率の平方根で増える。最低 20% は通る）。継続ダメージには効かない */
+  armor?: number;
+  /** SPEC-118 絶縁: 雷のダメージ ×INSULATED_LIGHTNING、感電しない（連鎖は通り抜ける） */
+  insulated?: boolean;
 }
+
+/** 装甲を抜けても最低これだけは通る */
+export const ARMOR_MIN_PCT = 0.2;
+/** 絶縁の敵が受ける雷のダメージ倍率 */
+export const INSULATED_LIGHTNING = 0.25;
 
 /** 隠密の敵が見えるようになるヒーローとの距離（マス） */
 export const REVEAL_RANGE = 1.2;
@@ -56,6 +65,10 @@ const defs: EnemyDef[] = [
   { id: "love_mini", name: "ラブレター ショート", imageKey: "enemy.397", hp: 8, speed: 1.3, reward: 1, leak: 1, scale: 0.8 },
   { id: "love_t", name: "ラブレター トール", imageKey: "enemy.398", hp: 30, speed: 0.9, reward: 4, leak: 1, split: { enemy: "love_mini", count: 2 } },
   { id: "love_g", name: "ラブレター グランデ", imageKey: "enemy.399", hp: 55, speed: 0.85, reward: 6, leak: 1, split: { enemy: "love_t", count: 2 }, scale: 1.15 },
+  { id: "elk_s", name: "エルククローナ ショート", imageKey: "enemy.111", hp: 30, speed: 0.8, reward: 6, leak: 1, armor: 3 },
+  { id: "elk_t", name: "エルククローナ トール", imageKey: "enemy.112", hp: 55, speed: 0.75, reward: 9, leak: 2, armor: 5, scale: 1.1 },
+  { id: "melissa_s", name: "メリッサ ショート", imageKey: "enemy.131", hp: 28, speed: 0.9, reward: 6, leak: 1, insulated: true },
+  { id: "melissa_t", name: "メリッサ トール", imageKey: "enemy.132", hp: 50, speed: 0.85, reward: 9, leak: 2, insulated: true, scale: 1.1 },
   { id: "chameleon_s", name: "カメレオン ショート", imageKey: "enemy.408", hp: 26, speed: 1.0, reward: 6, leak: 1, stealth: true },
   { id: "chameleon_t", name: "カメレオン トール", imageKey: "enemy.409", hp: 45, speed: 0.95, reward: 8, leak: 2, stealth: true, scale: 1.1 },
   { id: "heartbleed_s", name: "ハートブリード ショート", imageKey: "enemy.121", hp: 30, speed: 0.8, reward: 6, leak: 1, healer: { interval: 2.5, radius: 1.5, pct: 0.06 } },

@@ -1,9 +1,9 @@
 import Phaser from "phaser";
 import { DIALOGS } from "../../data/dialogs";
-import { getLevel } from "../../data/levels";
+import { LEVELS, getLevel } from "../../data/levels";
 import { MILESTONES, isMilestoneReached } from "../../data/milestones";
 import { STAT_LABEL, TOKEN_LABEL, TREE, TREE_BY_ID, nodeCost, type TreeBranch, type TreeNode } from "../../data/tree";
-import { buyBlock, buyNode, clearBuildSet, hasSeen, isReachable, loadBuildSet, markSeen, nodeLevel, refundAll, refundNode, saveBuildSet, totalSpent } from "../../meta/progress";
+import { buyBlock, buyNode, clearBuildSet, nextChallengeLevel, hasSeen, isReachable, loadBuildSet, markSeen, nodeLevel, refundAll, refundNode, saveBuildSet, totalSpent } from "../../meta/progress";
 import type { SaveData } from "../../meta/save";
 import { playBgm, playSe } from "../audio";
 import { bindPress } from "../input/press";
@@ -86,23 +86,29 @@ export class TreeScene extends Phaser.Scene {
     for (const n of TREE) this.buildNode(n);
     this.setupPanZoom();
 
-    this.header = new Header(this, "スキルツリー", () => goTo(this, "Home"));
+    // リザルトから来た場合、戻るはノード選択へ（ホームを経由しない）
+    this.header = new Header(this, "スキルツリー", () => goTo(this, this.retryLevelId ? "LevelSelect" : "Home"));
 
     this.add.rectangle(0, PANEL_TOP, GAME_WIDTH, GAME_HEIGHT - PANEL_TOP, COLORS.bg, 0.94).setOrigin(0).setDepth(80);
     this.add.rectangle(0, PANEL_TOP, GAME_WIDTH, 2, COLORS.line).setOrigin(0).setDepth(80);
     this.refresh();
 
-    // リザルトから来た場合は、強化したらそのまま再挑戦できるようにする
+    // リザルトから来た場合: 強化したらそのまま次へ。クリア済みなら次のノード、未クリアなら再挑戦
     if (this.retryLevelId) {
-      const level = getLevel(this.retryLevelId);
-      const retry = new Button(this, GAME_WIDTH - MARGIN - 160, PANEL_TOP - 66, {
-        width: 320,
-        label: "▶ 再挑戦",
-        sub: level.name,
+      const targetId = nextChallengeLevel(session.data, this.retryLevelId);
+      const level = getLevel(targetId);
+      const isNext = targetId !== this.retryLevelId;
+      const go = new Button(this, GAME_WIDTH - MARGIN - 170, PANEL_TOP - 66, {
+        width: 340,
+        label: isNext ? "▶ 次のノードへ" : "▶ 再挑戦",
+        sub: `Lv${LEVELS.findIndex((l) => l.id === targetId) + 1} ${level.name}`,
         kind: "primary",
         onTap: () => goTo(this, "Run", { levelId: level.id }),
       }).setDepth(82);
-      retry.setAlpha(0.97);
+      go.setAlpha(0.97);
+      new Button(this, MARGIN + 110, PANEL_TOP - 66, { width: 220, label: "ノード選択", onTap: () => goTo(this, "LevelSelect") })
+        .setDepth(82)
+        .setAlpha(0.97);
     }
 
     if (!hasSeen(session.data, "tree.first")) {
