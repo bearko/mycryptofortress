@@ -20,6 +20,7 @@ import {
   refundNode,
   saveBuildSet,
   totalSpent,
+  visibleNodes,
 } from "../../meta/progress";
 import type { SaveData } from "../../meta/save";
 import { playBgm, playSe } from "../audio";
@@ -37,6 +38,25 @@ const UNIT = 120;
 /** パネルの半径（四角は一辺 NODE_R × 2） */
 const NODE_R = 40;
 const SQUARE_RADIUS = 10;
+/** SPEC-119 §2a: 枠の色。強化できる = 緑、CE・エンブレム・条件が足りない = 赤 */
+const FRAME_OK = 0x5ee06b;
+const FRAME_NG = 0xff5a5a;
+/** 1 段広がるときの演出（線が伸びる → パネルが開く）の長さ（ms）と、兄弟ごとのずれ */
+const GROW_MS = 520;
+const POP_MS = 360;
+const STAGGER_MS = 110;
+/** 神経の信号（線を流れる光）が親 → 子を 1 往復する周期（ms） */
+const PULSE_MS = 2400;
+
+/** 前回ツリー画面で見えていたパネル（次に開いたとき、増えた分だけ広がる演出をする） */
+let lastShown: Set<string> | null = null;
+
+/** ID から決まる 0〜1 の値（線の曲がり方・信号のずれを毎回同じにする） */
+function hash01(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
+  return ((h >>> 0) % 1000) / 1000;
+}
 const PANEL_TOP = 1000;
 const ZOOM_MIN = 0.55;
 const ZOOM_MAX = 1.6;
@@ -56,6 +76,7 @@ const BRANCH_COLOR: Record<TreeBranch, number> = {
 
 interface NodeView {
   node: TreeNode;
+  box: Phaser.GameObjects.Container;
   ring: Phaser.GameObjects.Graphics;
   icon: Phaser.GameObjects.Image;
   level: Phaser.GameObjects.Text;
@@ -84,6 +105,12 @@ export class TreeScene extends Phaser.Scene {
   private selected: string | null = null;
   private pinch: { dist: number; scale: number } | null = null;
   private modal: Phaser.GameObjects.GameObject[] = [];
+  /** SPEC-119 §2a: いま表示しているパネル */
+  private shown = new Set<string>();
+  /** 広がる演出中の線（子 ID → 始まった時刻） */
+  private growing = new Map<string, number>();
+  /** 強化できるパネルの光（緑の枠の脈動） */
+  private halo!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super("Tree");
@@ -108,8 +135,14 @@ export class TreeScene extends Phaser.Scene {
 
     this.world = this.add.container(CENTER_X, 600).setDepth(10);
     this.edges = this.add.graphics();
-    this.world.add(this.edges);
+    this.halo = this.add.graphics();
+    this.world.add([this.edges, this.halo]);
+    // 前回見えていた分はそのまま出し、増えた分は refresh() で広がる演出をする
+    const visible = visibleNodes(session.data);
+    this.growing.clear();
+    this.shown = lastShown ? new Set([...visible].filter((id) => lastShown!.has(id) || !TREE_BY_ID.get(id)!.parent)) : visible;
     for (const n of TREE) this.buildNode(n);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => (lastShown = new Set(this.shown)));
     this.setupPanZoom();
 
     // リザルトから来た場合、戻るはノード選択へ（ホームを経由しない）
@@ -177,21 +210,15 @@ export class TreeScene extends Phaser.Scene {
       onTap: () => this.select(n.id),
     });
     this.world.add(c);
-    this.views.set(n.id, { node: n, ring, icon, level, label, badge });
+    c.setVisible(this.shown.has(n.id));
+    this.views.set(n.id, { node: n, box: c, ring, icon, level, label, badge });
   }
 
   private refresh(): void {
     const save = session.data;
     this.header.setTokens(save.meta.tokens.ce, save.meta.tokens.emblem, save.meta.tokensEarned.emblem > 0);
 
-    this.edges.clear();
-    for (const n of TREE) {
-      if (!n.parent) continue;
-      const p = TREE_BY_ID.get(n.parent)!;
-      const owned = nodeLevel(save, n.id) > 0;
-      this.edges.lineStyle(owned ? 6 : 3, owned ? BRANCH_COLOR[n.branch] : COLORS.line, owned ? 0.9 : 0.8);
-      this.edges.lineBetween(p.pos.x * UNIT, p.pos.y * UNIT, n.pos.x * UNIT, n.pos.y * UNIT);
-    }
+    this.syncVisible();
 
     for (const v of this.views.values()) {
       const n = v.node;
@@ -202,10 +229,13 @@ export class TreeScene extends Phaser.Scene {
       const maxed = lv >= n.maxLevel;
       const g = v.ring.clear();
       const selected = this.selected === n.id;
+      // 枠: 強化できる = 緑、まだ解放しておらず足りない = 赤、解放済み = 系統の色（最大は金）
+      const frame = maxed ? COLORS.gold : canBuy ? FRAME_OK : lv === 0 ? FRAME_NG : color;
+      const frameW = maxed || canBuy ? 5 : 3;
       if (n.condition) {
         // SPEC-119: 条件つきパネルは丸。次のしきい値までの進み具合を外周の弧で見せる
         g.fillStyle(lv > 0 ? color : COLORS.panelRaised, lv > 0 ? 0.3 : 0.9).fillCircle(0, 0, NODE_R);
-        g.lineStyle(maxed ? 5 : 3, maxed ? COLORS.gold : lv > 0 ? color : COLORS.line, 1).strokeCircle(0, 0, NODE_R);
+        g.lineStyle(frameW, frame, 1).strokeCircle(0, 0, NODE_R);
         const next = nextThreshold(save, n);
         if (next !== null) {
           const prev = lv > 0 ? n.condition.thresholds[lv - 1] : 0;
@@ -221,7 +251,7 @@ export class TreeScene extends Phaser.Scene {
         // 通常のパネルは四角
         const r = NODE_R;
         g.fillStyle(lv > 0 ? color : COLORS.panelRaised, lv > 0 ? 0.3 : reachable ? 0.95 : 0.6).fillRoundedRect(-r, -r, r * 2, r * 2, SQUARE_RADIUS);
-        g.lineStyle(maxed ? 5 : canBuy ? 4 : 2, maxed ? COLORS.gold : canBuy ? COLORS.gold : lv > 0 ? color : COLORS.line, 1).strokeRoundedRect(-r, -r, r * 2, r * 2, SQUARE_RADIUS);
+        g.lineStyle(frameW, frame, 1).strokeRoundedRect(-r, -r, r * 2, r * 2, SQUARE_RADIUS);
         if (selected) g.lineStyle(3, 0xffffff, 0.9).strokeRoundedRect(-r - 8, -r - 8, r * 2 + 16, r * 2 + 16, SQUARE_RADIUS + 6);
       }
       v.icon.setAlpha(reachable || lv > 0 ? 1 : 0.3);
@@ -230,6 +260,142 @@ export class TreeScene extends Phaser.Scene {
       v.label.setColor(`#${(lv > 0 ? COLORS.ink : reachable ? COLORS.inkDim : COLORS.inkMuted).toString(16).padStart(6, "0")}`);
     }
     this.renderPanel();
+  }
+
+  // ─── 神経網のように広がる演出（SPEC-119 §2a） ─────────────────
+
+  /** 表示すべきパネルと今の表示を合わせる。増えた分は線が伸びてから開き、減った分（返金）はしぼむ */
+  private syncVisible(): void {
+    const visible = visibleNodes(session.data);
+    const added = TREE.filter((n) => visible.has(n.id) && !this.shown.has(n.id));
+    const removed = TREE.filter((n) => !visible.has(n.id) && this.shown.has(n.id));
+    for (const n of removed) {
+      if (this.selected === n.id) this.selected = null;
+      this.shown.delete(n.id);
+      this.growing.delete(n.id);
+      const box = this.views.get(n.id)!.box;
+      this.tweens.killTweensOf(box);
+      this.tweens.add({ targets: box, scale: 0, alpha: 0, duration: 180, ease: "Quad.easeIn", onComplete: () => box.setVisible(false) });
+    }
+    if (added.length === 0) return;
+    // 親ごとに少しずつずらして、枝分かれしながら伸びていくように見せる
+    const order = new Map<string, number>();
+    const now = this.time.now;
+    for (const n of added) {
+      const k = order.get(n.parent ?? "") ?? 0;
+      order.set(n.parent ?? "", k + 1);
+      this.shown.add(n.id);
+      const start = now + k * STAGGER_MS;
+      this.growing.set(n.id, start);
+      const box = this.views.get(n.id)!.box;
+      this.tweens.killTweensOf(box);
+      box.setVisible(true).setScale(0).setAlpha(0);
+      this.tweens.add({ targets: box, scale: 1, alpha: 1, delay: k * STAGGER_MS + GROW_MS, duration: POP_MS, ease: "Back.easeOut", onStart: () => this.sparkAt(n) });
+    }
+    this.time.delayedCall(GROW_MS * 0.4, () => playSe(this, "se.production"));
+    this.revealAdded(added);
+  }
+
+  /** パネルが開く瞬間の光の輪 */
+  private sparkAt(n: TreeNode): void {
+    const ring = this.add.circle(n.pos.x * UNIT, n.pos.y * UNIT, NODE_R * 0.6, BRANCH_COLOR[n.branch], 0.25).setStrokeStyle(4, BRANCH_COLOR[n.branch], 0.9);
+    this.world.addAt(ring, 2);
+    this.tweens.add({ targets: ring, scale: 2.4, alpha: 0, duration: 520, ease: "Quad.easeOut", onComplete: () => ring.destroy() });
+  }
+
+  /** 新しく開いたパネルが画面の外なら、見える位置までゆっくり寄せる */
+  private revealAdded(added: TreeNode[]): void {
+    const s = this.world.scale;
+    const top = HEADER_H + 40;
+    const bottom = PANEL_TOP - 60;
+    const out = added.filter((n) => {
+      const x = this.world.x + n.pos.x * UNIT * s;
+      const y = this.world.y + n.pos.y * UNIT * s;
+      return x < 40 || x > GAME_WIDTH - 40 || y < top || y > bottom;
+    });
+    if (out.length === 0) return;
+    const cx = out.reduce((a, n) => a + n.pos.x, 0) / out.length;
+    const cy = out.reduce((a, n) => a + n.pos.y, 0) / out.length;
+    const parent = TREE_BY_ID.get(out[0].parent ?? "") ?? out[0];
+    const mx = (cx + parent.pos.x) / 2;
+    const my = (cy + parent.pos.y) / 2;
+    const target = { x: CENTER_X - mx * UNIT * s, y: (top + bottom) / 2 - my * UNIT * s };
+    this.tweens.add({ targets: this.world, x: target.x, y: target.y, duration: 600, ease: "Sine.easeInOut", onUpdate: () => this.clampWorld() });
+  }
+
+  /** 親 → 子の線（少し曲がった神経のような線）上の点。t = 0（親）〜 1（子） */
+  private edgePoint(n: TreeNode, t: number): { x: number; y: number } {
+    const p = TREE_BY_ID.get(n.parent!)!;
+    const ax = p.pos.x * UNIT;
+    const ay = p.pos.y * UNIT;
+    const bx = n.pos.x * UNIT;
+    const by = n.pos.y * UNIT;
+    const len = Math.hypot(bx - ax, by - ay) || 1;
+    const bend = (hash01(n.id) - 0.5) * 0.36 * len;
+    const cx = (ax + bx) / 2 + (-(by - ay) / len) * bend;
+    const cy = (ay + by) / 2 + ((bx - ax) / len) * bend;
+    const u = 1 - t;
+    return { x: u * u * ax + 2 * u * t * cx + t * t * bx, y: u * u * ay + 2 * u * t * cy + t * t * by };
+  }
+
+  private strokeEdge(n: TreeNode, t1: number, width: number, color: number, alpha: number): void {
+    const g = this.edges;
+    const steps = Math.max(2, Math.ceil(16 * t1));
+    g.lineStyle(width, color, alpha).beginPath();
+    for (let i = 0; i <= steps; i++) {
+      const q = this.edgePoint(n, (t1 * i) / steps);
+      if (i === 0) g.moveTo(q.x, q.y);
+      else g.lineTo(q.x, q.y);
+    }
+    g.strokePath();
+  }
+
+  /** 毎フレーム: 線（伸びている途中を含む）・流れる信号・強化できるパネルの脈動を描く */
+  update(time: number): void {
+    const save = session.data;
+    const g = this.edges.clear();
+    for (const id of this.shown) {
+      const n = TREE_BY_ID.get(id)!;
+      if (!n.parent) continue;
+      const color = BRANCH_COLOR[n.branch];
+      const start = this.growing.get(id);
+      const t = start === undefined ? 1 : Phaser.Math.Clamp((time - start) / GROW_MS, 0, 1);
+      if (start !== undefined && t >= 1) this.growing.delete(id);
+      if (t <= 0) continue;
+      const owned = nodeLevel(save, id) > 0;
+      if (owned) {
+        this.strokeEdge(n, t, 12, color, 0.14);
+        this.strokeEdge(n, t, 4, color, 0.9);
+      } else {
+        this.strokeEdge(n, t, 6, color, 0.08);
+        this.strokeEdge(n, t, 2.5, color, 0.55);
+      }
+      if (t < 1) {
+        // 伸びている先端の光
+        const tip = this.edgePoint(n, t);
+        g.fillStyle(0xffffff, 0.95).fillCircle(tip.x, tip.y, 6);
+        g.fillStyle(color, 0.35).fillCircle(tip.x, tip.y, 14);
+      } else if (owned || nodeLevel(save, n.parent) > 0) {
+        // 神経の信号: 親から子へ光が流れる（解放済みの線は明るく）
+        const phase = ((time / PULSE_MS + hash01(id)) % 1 + 1) % 1;
+        const q = this.edgePoint(n, phase);
+        g.fillStyle(color, owned ? 0.35 : 0.18).fillCircle(q.x, q.y, owned ? 10 : 7);
+        g.fillStyle(0xffffff, owned ? 0.9 : 0.45).fillCircle(q.x, q.y, owned ? 3.5 : 2.5);
+      }
+    }
+    // 強化できるパネルの緑の脈動
+    const h = this.halo.clear();
+    const a = 0.25 + 0.25 * Math.sin(time / 260);
+    for (const id of this.shown) {
+      const v = this.views.get(id)!;
+      if (!v.box.visible || v.box.scale < 0.99 || buyBlock(save, id) !== null) continue;
+      const n = v.node;
+      const x = n.pos.x * UNIT;
+      const y = n.pos.y * UNIT;
+      h.lineStyle(8, FRAME_OK, a);
+      if (n.condition) h.strokeCircle(x, y, NODE_R + 6);
+      else h.strokeRoundedRect(x - NODE_R - 6, y - NODE_R - 6, NODE_R * 2 + 12, NODE_R * 2 + 12, SQUARE_RADIUS + 4);
+    }
   }
 
   /** パネルを選んで画面の中央へ動かす */
@@ -263,15 +429,15 @@ export class TreeScene extends Phaser.Scene {
     if (!this.selected) {
       add(this.add.text(MARGIN, PANEL_TOP + 40, "スキルをタップすると詳細が表示されます", textStyle(22)).setOrigin(0, 0.5));
       add(this.add.text(MARGIN, PANEL_TOP + 80, "ドラッグで移動 ／ ピンチ・ホイールで拡大縮小 ／ 返金は無料", textStyle(18, { weight: 500, color: COLORS.inkDim })).setOrigin(0, 0.5));
-      add(this.add.text(MARGIN, PANEL_TOP + 118, `使用中: ${spentLabel(save)} ／ 累計 CE ${save.meta.tokensEarned.ce}`, textStyle(20, { color: COLORS.inkDim })).setOrigin(0, 0.5));
+      add(this.add.text(MARGIN, PANEL_TOP + 114, `使用中: ${spentLabel(save)} ／ 累計 CE ${save.meta.tokensEarned.ce}`, textStyle(20, { color: COLORS.inkDim })).setOrigin(0, 0.5));
       // SPEC-119: 次に届きそうな丸いパネル（タップでそのパネルを選ぶ）
-      const soon = closestUnlock(save);
+      const soon = closestUnlock(save, this.shown);
       if (soon) {
         const unit = CONDITION_LABEL[soon.node.condition!.stat];
         const lv = nodeLevel(save, soon.node.id);
         const hint = add(
           this.add
-            .text(MARGIN, PANEL_TOP + 154, `もうすぐ解放: ${soon.node.name}${soon.node.maxLevel > 1 ? ` Lv${lv + 1}` : ""}（${unit.name} あと ${fmt(soon.remaining)} ${unit.unit}）`, textStyle(19, { color: COLORS.gold }))
+            .text(MARGIN, PANEL_TOP + 148, `もうすぐ解放: ${soon.node.name}${soon.node.maxLevel > 1 ? ` Lv${lv + 1}` : ""}（${unit.name} あと ${fmt(soon.remaining)} ${unit.unit}）`, textStyle(18, { color: COLORS.gold }))
             .setOrigin(0, 0.5)
             .setInteractive({ useHandCursor: true }),
         );
@@ -371,7 +537,6 @@ export class TreeScene extends Phaser.Scene {
     if (block === "condition") return showToast(this, "丸いパネルは条件を満たすと自動で解放されます");
     if (block) return;
     session.update((d) => buyNode(d, id));
-    playSe(this, "se.buff");
     this.refresh();
   }
 
@@ -459,7 +624,6 @@ export class TreeScene extends Phaser.Scene {
           label: "保存",
           onTap: () => {
             session.update((d) => saveBuildSet(d, i, `ビルド ${i + 1}`));
-            playSe(this, "se.buff");
             close();
             this.showBuildSets();
           },
@@ -559,8 +723,9 @@ export class TreeScene extends Phaser.Scene {
   /** ツリーが画面外へ行き過ぎないようにする */
   private clampWorld(): void {
     const s = this.world.scale;
-    const xs = TREE.map((n) => n.pos.x * UNIT * s);
-    const ys = TREE.map((n) => n.pos.y * UNIT * s);
+    const vis = TREE.filter((n) => this.shown.has(n.id));
+    const xs = vis.map((n) => n.pos.x * UNIT * s);
+    const ys = vis.map((n) => n.pos.y * UNIT * s);
     const margin = 120;
     this.world.x = Phaser.Math.Clamp(this.world.x, margin - Math.max(...xs), GAME_WIDTH - margin - Math.min(...xs));
     this.world.y = Phaser.Math.Clamp(this.world.y, HEADER_H + margin - Math.max(...ys), PANEL_TOP - margin - Math.min(...ys));

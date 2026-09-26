@@ -52,11 +52,11 @@ export function newlyUnlocked(before: Record<string, number>, after: SaveData): 
 }
 
 /** SPEC-119: 次のしきい値に一番近い条件つきパネル（進み具合 0〜1 が最大のもの） */
-export function closestUnlock(save: SaveData): { node: TreeNode; remaining: number; progress: number } | null {
+export function closestUnlock(save: SaveData, only?: ReadonlySet<string>): { node: TreeNode; remaining: number; progress: number } | null {
   let best: { node: TreeNode; remaining: number; progress: number } | null = null;
   for (const n of TREE) {
     const next = nextThreshold(save, n);
-    if (!n.condition || next === null) continue;
+    if (!n.condition || next === null || (only && !only.has(n.id))) continue;
     const lv = nodeLevel(save, n.id);
     const prev = lv > 0 ? n.condition.thresholds[lv - 1] : 0;
     const v = conditionValue(save, n.condition.stat);
@@ -64,6 +64,21 @@ export function closestUnlock(save: SaveData): { node: TreeNode; remaining: numb
     if (!best || progress > best.progress) best = { node: n, remaining: next - v, progress };
   }
   return best;
+}
+
+/**
+ * SPEC-119 §2a: ツリーに表示するパネル。ルートと、「表示中で 1 レベル以上」のパネルの子だけを見せる
+ * （最初はルートだけ。解放するたびに 1 段ずつ広がる）。
+ */
+export function visibleNodes(save: SaveData): Set<string> {
+  const out = new Set<string>();
+  const walk = (id: string) => {
+    out.add(id);
+    if (nodeLevel(save, id) === 0) return;
+    for (const c of TREE) if (c.parent === id) walk(c.id);
+  };
+  for (const n of TREE) if (!n.parent) walk(n.id);
+  return out;
 }
 
 export type BuyBlock = "maxed" | "locked" | "tokens" | "condition" | "unknown";
