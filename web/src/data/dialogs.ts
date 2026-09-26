@@ -37,6 +37,14 @@ export const DIALOGS: Record<string, DialogLine[]> = {
     { speaker: "navi", text: "上は弓、左は雷と結界、右は炎と採掘。下は幻獣の守り・幻獣砲・GUM の稼ぎです。スキルをタップすると効果と必要な CE が見られます。" },
     { speaker: "navi", text: "ドラッグで移動、ピンチ（PC はホイール）で拡大縮小。返金は無料なので、気軽に試してください！" },
   ],
+  "emblem.first": [
+    { speaker: "navi", text: "初めてノードを守り切ると「エンブレム」がもらえます！" },
+    { speaker: "navi", text: "エンブレムは新しい力の解放に使います。新しいヒーロー、幻獣砲、それに「魔石」……どれから解放するかはあなた次第です！" },
+  ],
+  "stone.first": [
+    { speaker: "navi", text: "魔石を持ってきましたね！ヒーローをタップして「魔石」ボタンから装着できます。" },
+    { speaker: "navi", text: "同じ魔石でも、付けるヒーローによって効き方が変わります。長押しで効果を確かめてくださいね。幻獣をタップすると幻獣砲にも付けられます！" },
+  ],
   "levelSelect.first": [
     { speaker: "chris", text: "作戦参謀のクリスだ！出撃するノードを選んでくれ。" },
     { speaker: "chris", text: "ノードを守り切ると次のノードが解放される。初回クリアにはボーナス CE も出るぞ！" },
@@ -56,6 +64,18 @@ export const DIALOGS: Record<string, DialogLine[]> = {
   "level.L5.intro": [
     { speaker: "chris", text: "最後に来るのはゴースト・グリム兄弟とゴースト・ライト兄弟。左右から同時にやってくるぞ！" },
     { speaker: "chris", text: "片方を倒すと、もう片方が怒って速くなる。両方をバランスよく削れ！" },
+  ],
+  "level.L7.intro": [
+    { speaker: "chris", text: "カメレオンは姿を消して進んでくる。ヒーローのすぐ近くか、ガルーダの魔石を持つヒーローの射程に入るまで狙えないぞ！" },
+    { speaker: "chris", text: "ハートブリードは周りの敵を回復する。先に倒してしまおう。最後はゴースト・チンギス・ハン……手下を呼びながら進んでくる！" },
+  ],
+  "level.L8.intro": [
+    { speaker: "chris", text: "ここのボスはディープ・ヨシュカ。HP が半分を切るたびに 2 体に分かれて、最大 4 体になる！" },
+    { speaker: "chris", text: "1 体でも幻獣にたどり着いたら終わりだ。範囲攻撃で分身ごとまとめて削れ！" },
+  ],
+  "level.L9.intro": [
+    { speaker: "chris", text: "最後の相手はプーリー・ビースト。長い胴体の節すべてで HP を共有している。" },
+    { speaker: "chris", text: "節の数だけ当たる範囲攻撃が決め手だ。雷の連鎖、炎、結界、幻獣砲……全部の力を合わせろ！" },
   ],
   "level.L6.intro": [
     { speaker: "chris", text: "ラブレターは倒すと分裂する。グランデ → トール → ショートと、3 段階だ！" },

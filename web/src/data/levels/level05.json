@@ -15,7 +15,8 @@
   "reward": {
     "perWave": 9,
     "clear": 60,
-    "firstClear": 70
+    "firstClear": 70,
+    "emblems": 2
   },
   "paths": [
     {

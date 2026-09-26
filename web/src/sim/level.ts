@@ -1,4 +1,5 @@
 import { ENEMIES } from "../data/balance/enemies";
+import { STONE_IDS, type StoneId } from "../data/balance/stones";
 
 /** SPEC-103: レベル定義（web/src/data/levels/*.json） */
 export interface Cell {
@@ -12,6 +13,8 @@ export interface SlotDef extends Cell {
   kind?: SlotKind;
   /** SPEC-113: locked の開放費用（GUM） */
   cost?: number;
+  /** SPEC-115: 属性マス。置いたヒーローが魔石なしでこの属性を得る */
+  element?: StoneId;
 }
 
 export interface PathDef {
@@ -46,7 +49,8 @@ export interface LevelDef {
   prepSeconds: number;
   intermissionSeconds: number;
   /** SPEC-106: ラン終了時の CE（クリアした Wave ごと / クリア / 初回クリアの追加分） */
-  reward: { perWave: number; clear: number; firstClear: number };
+  /** CE 報酬。emblems は初回クリアでもらえるエンブレム（SPEC-116a） */
+  reward: { perWave: number; clear: number; firstClear: number; emblems?: number };
   paths: PathDef[];
   slots: SlotDef[];
   waves: WaveDef[];
@@ -79,7 +83,7 @@ export function validateLevel(lv: LevelDef): string[] {
   if (!(lv.cols > 0 && lv.rows > 0)) errs.push("cols / rows は正の数");
   if (!inBoard(lv.cryptid.col, lv.cryptid.row)) errs.push("cryptid が盤面外");
   if (lv.startGum < 0 || lv.cryptidHp <= 0) errs.push("startGum / cryptidHp が不正");
-  if (!lv.reward || [lv.reward.perWave, lv.reward.clear, lv.reward.firstClear].some((v) => !(v >= 0))) errs.push("reward が不正");
+  if (!lv.reward || [lv.reward.perWave, lv.reward.clear, lv.reward.firstClear, lv.reward.emblems ?? 0].some((v) => !(v >= 0))) errs.push("reward が不正");
 
   const pathIds = new Set<string>();
   const onPath = new Set<string>();
@@ -110,6 +114,7 @@ export function validateLevel(lv: LevelDef): string[] {
     if (s.col === lv.cryptid.col && s.row === lv.cryptid.row) errs.push(`slots[${i}]: 幻獣と重なる`);
     if (s.kind !== undefined && s.kind !== "normal" && s.kind !== "locked") errs.push(`slots[${i}]: kind ${s.kind} は未対応`);
     if (s.kind === "locked" && !(s.cost !== undefined && s.cost > 0)) errs.push(`slots[${i}]: locked には cost > 0 が必要`);
+    if (s.element !== undefined && !(STONE_IDS as readonly string[]).includes(s.element)) errs.push(`slots[${i}]: 未知の属性 ${s.element}`);
     slotSeen.add(k);
   });
 

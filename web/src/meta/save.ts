@@ -1,4 +1,5 @@
 import { DEFAULT_CRYPTID_ID, isCryptidId, type CryptidId } from "../data/cryptids";
+import { LEVELS } from "../data/levels";
 import { TREE_VERSION } from "../data/tree";
 import type { StorageLike } from "./storage";
 
@@ -6,13 +7,16 @@ import type { StorageLike } from "./storage";
  * SPEC-101 §5.5: セーブデータ。スキーマを変える時は SAVE_SCHEMA_VERSION を上げ、
  * MIGRATIONS[旧バージョン] に 1 段分の変換を追加する。
  */
-export const SAVE_SCHEMA_VERSION = 4;
+export const SAVE_SCHEMA_VERSION = 5;
+
+/** SPEC-116: ビルドセットの枠数 */
+export const BUILD_SET_SLOTS = 5;
 
 export interface SaveData {
   schemaVersion: typeof SAVE_SCHEMA_VERSION;
   createdAt: string;
   updatedAt: string;
-  settings: { bgmVolume: number; seVolume: number };
+  settings: { bgmVolume: number; seVolume: number; /** SPEC-116: オートレベル（マイルストーン解放後に有効） */ autoLevel: boolean };
   profile: { cryptidId: CryptidId };
   /** SPEC-106 / 107: メタ進行 */
   meta: MetaState;
@@ -27,10 +31,10 @@ export interface LevelProgress {
 }
 
 export interface MetaState {
-  /** 所持トークン */
-  tokens: { ce: number };
-  /** 累計獲得トークン（統計） */
-  tokensEarned: { ce: number };
+  /** 所持トークン（SPEC-116a: CE とエンブレム） */
+  tokens: { ce: number; emblem: number };
+  /** 累計獲得トークン（マイルストーンの判定にも使う） */
+  tokensEarned: { ce: number; emblem: number };
   /** スキルツリー: ノード ID → レベル */
   tree: Record<string, number>;
   levels: Record<string, LevelProgress>;
@@ -38,10 +42,25 @@ export interface MetaState {
   seenDialogs: string[];
   /** 最後に合わせたスキルツリーの版（TREE_VERSION と違えば全返金する） */
   treeVersion: number;
+  /** SPEC-116: ビルドセット（スキルツリーの配置の保存。空き枠は null） */
+  buildSets: (BuildSet | null)[];
+}
+
+export interface BuildSet {
+  name: string;
+  tree: Record<string, number>;
 }
 
 export function emptyMeta(): MetaState {
-  return { tokens: { ce: 0 }, tokensEarned: { ce: 0 }, tree: {}, levels: {}, seenDialogs: [], treeVersion: TREE_VERSION };
+  return {
+    tokens: { ce: 0, emblem: 0 },
+    tokensEarned: { ce: 0, emblem: 0 },
+    tree: {},
+    levels: {},
+    seenDialogs: [],
+    treeVersion: TREE_VERSION,
+    buildSets: Array.from({ length: BUILD_SET_SLOTS }, () => null),
+  };
 }
 
 export const SLOT_IDS = [1, 2, 3] as const;
@@ -63,6 +82,21 @@ export const MIGRATIONS: Migrations = {
   },
   // v3 → v4: ツリーの版を記録する（0 = 不明 → 読み込み時に syncTreeVersion で全返金される）
   3: (d) => ({ ...d, meta: { ...(d.meta as MetaState), treeVersion: 0 } }),
+  // v4 → v5: エンブレム（クリア済みレベルの分を付与）・ビルドセット・オートレベル設定
+  4: (d) => {
+    const meta = d.meta as MetaState;
+    const emblem = LEVELS.filter((l) => meta.levels[l.id]?.cleared).reduce((s, l) => s + (l.reward.emblems ?? 0), 0);
+    return {
+      ...d,
+      settings: { ...(d.settings as object), autoLevel: false },
+      meta: {
+        ...meta,
+        tokens: { ...meta.tokens, emblem },
+        tokensEarned: { ...meta.tokensEarned, emblem },
+        buildSets: Array.from({ length: BUILD_SET_SLOTS }, () => null),
+      },
+    };
+  },
 };
 
 export function createNewSave(now: Date = new Date()): SaveData {
@@ -71,7 +105,7 @@ export function createNewSave(now: Date = new Date()): SaveData {
     schemaVersion: SAVE_SCHEMA_VERSION,
     createdAt: iso,
     updatedAt: iso,
-    settings: { bgmVolume: 0.6, seVolume: 0.8 },
+    settings: { bgmVolume: 0.6, seVolume: 0.8, autoLevel: false },
     profile: { cryptidId: DEFAULT_CRYPTID_ID },
     meta: emptyMeta(),
   };
@@ -85,7 +119,7 @@ export function isValidSave(v: unknown): v is SaveData {
   if (!isObj(v) || v.schemaVersion !== SAVE_SCHEMA_VERSION) return false;
   if (typeof v.createdAt !== "string" || typeof v.updatedAt !== "string") return false;
   const { settings, profile } = v;
-  if (!isObj(settings) || !isVolume(settings.bgmVolume) || !isVolume(settings.seVolume)) return false;
+  if (!isObj(settings) || !isVolume(settings.bgmVolume) || !isVolume(settings.seVolume) || typeof settings.autoLevel !== "boolean") return false;
   if (!isObj(profile) || !isCryptidId(profile.cryptidId)) return false;
   return isValidMeta(v.meta);
 }
@@ -94,8 +128,10 @@ const isCount = (v: unknown): v is number => typeof v === "number" && Number.isF
 
 function isValidMeta(m: unknown): m is MetaState {
   if (!isObj(m)) return false;
-  if (!isObj(m.tokens) || !isCount(m.tokens.ce)) return false;
-  if (!isObj(m.tokensEarned) || !isCount(m.tokensEarned.ce)) return false;
+  if (!isObj(m.tokens) || !isCount(m.tokens.ce) || !isCount(m.tokens.emblem)) return false;
+  if (!isObj(m.tokensEarned) || !isCount(m.tokensEarned.ce) || !isCount(m.tokensEarned.emblem)) return false;
+  if (!Array.isArray(m.buildSets) || m.buildSets.length !== BUILD_SET_SLOTS) return false;
+  if (!m.buildSets.every((b) => b === null || (isObj(b) && typeof b.name === "string" && isObj(b.tree)))) return false;
   if (!isObj(m.tree) || !Object.values(m.tree).every((lv) => Number.isInteger(lv) && (lv as number) >= 0)) return false;
   if (!isObj(m.levels)) return false;
   for (const p of Object.values(m.levels)) {

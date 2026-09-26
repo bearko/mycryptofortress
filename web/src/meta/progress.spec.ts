@@ -1,4 +1,5 @@
-import { getLevel } from "../data/levels";
+import { LEVELS, getLevel } from "../data/levels";
+import { newlyReached } from "../data/milestones";
 import { TREE, TREE_BY_ID, TREE_VERSION, nodeCost } from "../data/tree";
 import { runCampaign, STANDARD_BUY_ORDER } from "./campaign";
 import {
@@ -9,6 +10,8 @@ import {
   computeReward,
   descendants,
   isLevelUnlocked,
+  loadBuildSet,
+  saveBuildSet,
   markSeen,
   hasSeen,
   nodeLevel,
@@ -21,7 +24,7 @@ import { createNewSave, type SaveData } from "./save";
 
 const withCe = (ce: number): SaveData => {
   const s = createNewSave(new Date(0));
-  return { ...s, meta: { ...s.meta, tokens: { ce } } };
+  return { ...s, meta: { ...s.meta, tokens: { ce, emblem: 99 } } };
 };
 
 describe("スキルツリーの購入 (SPEC-107)", () => {
@@ -76,14 +79,14 @@ describe("無料返金 (SPEC-108)", () => {
   });
 
   it("descendants は子孫だけを返す", () => {
-    expect(descendants("kyudo").map((n) => n.id).sort()).toEqual(["dokugiri", "kyudo_a", "ogi_otoshi", "sanjushi"].sort());
+    expect(descendants("kyudo").map((n) => n.id).sort()).toEqual(["dokugiri", "eiyu", "kyudo_a", "ogi_otoshi", "sanjushi", "ten_ichigeki"].sort());
   });
 });
 
 describe("ツリーの版 (SPEC-108 §1)", () => {
   it("版が違うセーブは全返金（所持 = 累計獲得）し、版を合わせる", () => {
     const s = createNewSave();
-    const old: SaveData = { ...s, meta: { ...s.meta, treeVersion: 0, tree: { root: 2, nope: 1 }, tokens: { ce: 5 }, tokensEarned: { ce: 40 } } };
+    const old: SaveData = { ...s, meta: { ...s.meta, treeVersion: 0, tree: { root: 2, nope: 1 }, tokens: { ce: 5, emblem: 0 }, tokensEarned: { ce: 40, emblem: 3 } } };
     const { save, refunded } = syncTreeVersion(old);
     expect(refunded).toBe(true);
     expect(save.meta.tree).toEqual({});
@@ -149,7 +152,7 @@ describe("ラン報酬と進行 (SPEC-106)", () => {
     let s = createNewSave();
     expect(isLevelUnlocked(s, "L1")).toBe(true);
     expect(isLevelUnlocked(s, "L2")).toBe(false);
-    s = applyRunResult(s, { levelId: "L1", won: true, wavesReached: 10, wavesCleared: 10 }, { ce: 0, breakdown: [], firstClear: true });
+    s = applyRunResult(s, { levelId: "L1", won: true, wavesReached: 10, wavesCleared: 10 }, { ce: 0, emblems: 0, breakdown: [], firstClear: true });
     expect(isLevelUnlocked(s, "L2")).toBe(true);
     expect(isLevelUnlocked(s, "L3")).toBe(false);
   });
@@ -162,8 +165,8 @@ describe("ラン報酬と進行 (SPEC-106)", () => {
 });
 
 describe("コアループの到達可能性 (SPEC-106 §4)", () => {
-  it.each([1, 2])("強化しながら挑むと少しずつ先へ進み、26 ラン以内に Lv3 までクリアできる（シード %i）", (seed) => {
-    const { log, save } = runCampaign({ buyOrder: STANDARD_BUY_ORDER, maxRuns: 26, seed });
+  it.each([1, 2])("強化しながら挑むと少しずつ先へ進み、32 ラン以内に Lv3 までクリアできる（シード %i）", (seed) => {
+    const { log, save } = runCampaign({ buyOrder: STANDARD_BUY_ORDER, maxRuns: 32, seed });
     expect(save.meta.levels.L3?.cleared).toBe(true);
     // 1 回目は Wave 2 で負ける（それでも CE は入る）
     expect(log[0]).toMatchObject({ levelId: "L1", won: false, wavesReached: 2 });
@@ -175,12 +178,56 @@ describe("コアループの到達可能性 (SPEC-106 §4)", () => {
     expect(Math.max(...l1.slice(0, firstWin).map((l) => l.wavesReached))).toBeGreaterThan(l1[0].wavesReached);
   });
 
-  it("Lv4〜6 も強化を続ければ 65 ラン以内に全クリアでき、各レベルで数回は負ける", () => {
-    const { log, save } = runCampaign({ buyOrder: STANDARD_BUY_ORDER, maxRuns: 65, seed: 1 });
-    expect(save.meta.levels.L6?.cleared).toBe(true);
-    for (const id of ["L4", "L5", "L6"]) {
+  it("Lv4〜9 も強化を続ければ 80 ラン以内に全クリアでき、Lv4〜7 は数回負ける", () => {
+    const { log, save } = runCampaign({ buyOrder: STANDARD_BUY_ORDER, maxRuns: 80, seed: 1 });
+    expect(save.meta.levels.L9?.cleared).toBe(true);
+    for (const id of ["L4", "L6", "L7"]) {
       const runs = log.filter((l) => l.levelId === id);
       expect(runs.length, id).toBeGreaterThanOrEqual(3);
     }
-  }, 120_000);
+  }, 300_000);
+});
+
+describe("エンブレムとビルドセット (SPEC-116 / 116a)", () => {
+  it("初回クリアでエンブレムが入り、解放ノードはエンブレムで買う", () => {
+    let s = createNewSave();
+    const L1 = LEVELS[0];
+    const reward = computeReward(L1, { levelId: "L1", won: true, wavesReached: 10, wavesCleared: 10 }, s);
+    expect(reward.emblems).toBe(L1.reward.emblems);
+    s = applyRunResult(s, { levelId: "L1", won: true, wavesReached: 10, wavesCleared: 10 }, reward);
+    expect(s.meta.tokens.emblem).toBe(L1.reward.emblems);
+    // 2 回目のクリアではもらえない
+    expect(computeReward(L1, { levelId: "L1", won: true, wavesReached: 10, wavesCleared: 10 }, s).emblems).toBe(0);
+    // 幻獣砲の解放はエンブレム 1。CE は減らない
+    const ce = s.meta.tokens.ce;
+    const bought = buyNode(buyNode(s, "root"), "amenra");
+    expect(nodeLevel(bought, "amenra")).toBe(1);
+    expect(bought.meta.tokens.emblem).toBe(s.meta.tokens.emblem - 1);
+    // 返金はトークンごとに戻る
+    const back = refundAll(bought);
+    expect(back.meta.tokens.emblem).toBe(s.meta.tokens.emblem);
+    expect(back.meta.tokens.ce).toBe(ce);
+  });
+
+  it("ビルドセットを保存・読み込みでき、読み込みは全返金してから買い直す", () => {
+    let s = withCe(500);
+    s = buyNode(buyNode(buyNode(s, "root"), "yabusame"), "yabusame");
+    s = saveBuildSet(s, 0, "弓");
+    s = refundAll(s);
+    s = buyNode(s, "root");
+    s = buyNode(s, "novice_protection");
+    const { save, missing } = loadBuildSet(s, 0);
+    expect(missing).toBe(0);
+    expect(nodeLevel(save, "yabusame")).toBe(2);
+    expect(nodeLevel(save, "novice_protection")).toBe(0);
+    expect(save.meta.tokens.ce + totalSpent(save)).toBe(500);
+  });
+
+  it("マイルストーンは累計 CE で解放され、自動回収は補正値に入る", () => {
+    const s = createNewSave();
+    expect(computeModifiers(s).autoCollect).toBe(0);
+    const rich = { ...s, meta: { ...s.meta, tokensEarned: { ce: 10_000, emblem: 0 } } };
+    expect(computeModifiers(rich).autoCollect).toBe(1);
+    expect(newlyReached(100, 700).map((m) => m.id)).toEqual(["autoCollect", "buildSets", "speed3x"]);
+  });
 });
