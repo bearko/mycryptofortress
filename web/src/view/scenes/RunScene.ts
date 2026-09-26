@@ -3,7 +3,9 @@ import { ENEMIES } from "../../data/balance/enemies";
 import { ROLES } from "../../data/balance/heroes";
 import { getAsset } from "../../data/assets";
 import { getLevel } from "../../data/levels";
-import { COLLECT_RADIUS, RunSim, TARGET_MODES, TICK, type SimEvent } from "../../sim/run";
+import { DIALOGS, maycriComment } from "../../data/dialogs";
+import { applyRunResult, computeModifiers, computeReward, hasSeen, markSeen } from "../../meta/progress";
+import { RunSim, TARGET_MODES, TICK, type SimEvent } from "../../sim/run";
 import { queueAsset } from "../assetLoader";
 import { playBgm, playSe } from "../audio";
 import { bindPress } from "../input/press";
@@ -12,6 +14,8 @@ import { BOARD_BOTTOM, BOARD_TOP, BoardView, CELL, toCell } from "../run/board";
 import { Hud } from "../run/hud";
 import { Panel, TARGET_LABEL } from "../run/panel";
 import { session } from "../session";
+import { playDialog, speechBubble } from "../ui/dialog";
+import { goTo } from "../ui/header";
 import { COLORS, textStyle } from "../ui/theme";
 import { Button, showToast, showTooltip } from "../ui/widgets";
 
@@ -72,7 +76,7 @@ export class RunScene extends Phaser.Scene {
     this.cameras.main.fadeIn(200, 11, 13, 18);
     const level = getLevel(this.levelId);
     const cryptidId = session.data.profile.cryptidId;
-    this.sim = new RunSim(level, (Date.now() ^ 0x5eed) >>> 0);
+    this.sim = new RunSim(level, (Date.now() ^ 0x5eed) >>> 0, computeModifiers(session.data));
 
     if (!this.anims.exists("fx.kill")) {
       this.anims.create({
@@ -101,6 +105,21 @@ export class RunScene extends Phaser.Scene {
     this.setupBoardInput();
     playBgm(this, "bgm.pve");
     this.banner(level.name, "準備して「Wave 開始」", COLORS.ink);
+    this.playIntroDialog(level.id);
+  }
+
+  /** SPEC-108a: 初回のチュートリアル（マインちゃん）/ ステージ紹介（クリスくん）。再生中は一時停止 */
+  private playIntroDialog(levelId: string): void {
+    const id = levelId === "L1" ? "run.tutorial" : `level.${levelId}.intro`;
+    const lines = DIALOGS[id];
+    if (!lines || hasSeen(session.data, id)) return;
+    this.paused = true;
+    this.time.delayedCall(400, () => {
+      void playDialog(this, lines).then(() => {
+        session.update((d) => markSeen(d, id));
+        this.paused = false;
+      });
+    });
   }
 
   update(time: number, delta: number): void {
@@ -136,7 +155,7 @@ export class RunScene extends Phaser.Scene {
       if (this.paused || p.y < BOARD_TOP || p.y > BOARD_BOTTOM) return;
       if (p.wasTouch && !p.isDown) return;
       const c = toCell(p.x, p.y);
-      this.sim.collectDropsAt(c.x, c.y, COLLECT_RADIUS);
+      this.sim.collectDropsAt(c.x, c.y);
     };
     this.input.on(Phaser.Input.Events.POINTER_MOVE, collect);
     this.input.on(Phaser.Input.Events.POINTER_DOWN, collect);
@@ -188,8 +207,8 @@ export class RunScene extends Phaser.Scene {
   }
 
   private place(slotIndex: number): void {
-    const role = ROLES.archer;
-    if (this.sim.gum < role.placeCost) return showToast(this, `GUM が足りません（${role.placeCost} 必要）`);
+    const cost = this.sim.placeCost("archer");
+    if (this.sim.gum < cost) return showToast(this, `GUM が足りません（${cost} 必要）`);
     if (this.sim.placeHero(slotIndex, "archer")) this.select(slotIndex);
   }
 
@@ -245,13 +264,31 @@ export class RunScene extends Phaser.Scene {
         this.se("se.buff");
         break;
       case "leak":
-        this.se("se.crash");
+        if (e.blocked) this.floatText("防いだ！", 0x5aa9ff);
+        else this.se("se.crash");
+        break;
+      case "lastStand":
+        this.se("se.buff");
+        this.banner("聖女の祈り", "幻獣がボスの一撃を耐えた！", COLORS.gold);
+        break;
+      case "heal":
+        this.se("se.heal");
+        this.floatText(`+${e.amount} HP`, 0x6be675);
+        break;
+      case "gumOnHit":
+        this.board.flyGum(e.x, e.y, 1, this.hud.gumTarget.x, this.hud.gumTarget.y);
         break;
       case "won":
       case "lost":
         this.time.delayedCall(900, () => this.showResult());
         break;
     }
+  }
+
+  /** 幻獣の上に浮かぶ短いテキスト */
+  private floatText(text: string, color: number): void {
+    const t = this.add.text(this.board.cryptid.x, this.board.cryptid.y - 70, text, textStyle(26, { color })).setOrigin(0.5).setDepth(65);
+    this.tweens.add({ targets: t, y: t.y - 40, alpha: 0, duration: 900, onComplete: () => t.destroy() });
   }
 
   private se(key: string): void {
@@ -292,7 +329,7 @@ export class RunScene extends Phaser.Scene {
     const add = <T extends Phaser.GameObjects.GameObject>(o: T) => (this.overlay.push(o), o);
     add(this.add.text(CENTER_X, 470, "一時停止中", textStyle(44)).setOrigin(0.5).setDepth(201));
     add(new Button(this, CENTER_X, 600, { width: 420, label: "再開", kind: "primary", onTap: () => this.closeMenu() }).setDepth(201));
-    add(new Button(this, CENTER_X, 720, { width: 420, label: "撤退してホームへ", onTap: () => this.goHome() }).setDepth(201));
+    add(new Button(this, CENTER_X, 720, { width: 420, label: "撤退する", sub: "ここまでの CE を受け取る", onTap: () => this.showResult(true) }).setDepth(201));
   }
 
   private closeMenu(): void {
@@ -300,30 +337,35 @@ export class RunScene extends Phaser.Scene {
     this.paused = false;
   }
 
-  private goHome(): void {
-    this.cameras.main.fadeOut(200, 11, 13, 18);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start("Home"));
-  }
-
-  private showResult(): void {
+  private showResult(retreated = false): void {
     if (this.resultShown) return;
     this.resultShown = true;
+    this.paused = true;
+    this.clearOverlay();
     const won = this.sim.status === "won";
     playSe(this, won ? "jingle.win" : "jingle.lose");
+
+    // SPEC-106: 報酬を計算してセーブに反映（負け・撤退でもクリアした Wave 分は入る）
+    const level = this.sim.level;
+    const result = { levelId: level.id, won, wavesReached: this.sim.stats.wavesReached, wavesCleared: this.sim.stats.wavesCleared };
+    const reward = computeReward(level, result, session.data);
+    session.update((d) => applyRunResult(d, result, reward));
+
     this.dim();
     const add = <T extends Phaser.GameObjects.GameObject>(o: T) => {
       this.overlay.push(o);
       (o as unknown as Phaser.GameObjects.Components.Depth).setDepth(201);
       return o;
     };
-    const panelTop = 230;
-    const panelH = 860;
+    const top = 130;
+    const panelH = 1020;
     const g = this.add.graphics();
-    g.fillStyle(COLORS.panel, 0.98).fillRoundedRect(40, panelTop, GAME_WIDTH - 80, panelH, 24);
-    g.lineStyle(3, won ? COLORS.gold : COLORS.danger, 1).strokeRoundedRect(40, panelTop, GAME_WIDTH - 80, panelH, 24);
+    g.fillStyle(COLORS.panel, 0.98).fillRoundedRect(40, top, GAME_WIDTH - 80, panelH, 24);
+    g.lineStyle(3, won ? COLORS.gold : COLORS.danger, 1).strokeRoundedRect(40, top, GAME_WIDTH - 80, panelH, 24);
     add(g);
-    add(this.add.text(CENTER_X, panelTop + 70, won ? "防衛成功！" : "幻獣が倒れた…", textStyle(52, { color: won ? COLORS.gold : COLORS.danger })).setOrigin(0.5));
-    add(this.add.text(CENTER_X, panelTop + 128, this.sim.level.name, textStyle(22, { color: COLORS.inkDim })).setOrigin(0.5));
+    const title = won ? "防衛成功！" : retreated ? "撤退しました" : "幻獣が倒れた…";
+    add(this.add.text(CENTER_X, top + 58, title, textStyle(50, { color: won ? COLORS.gold : COLORS.danger })).setOrigin(0.5));
+    add(this.add.text(CENTER_X, top + 110, level.name, textStyle(22, { color: COLORS.inkDim })).setOrigin(0.5));
 
     const st = this.sim.stats;
     const rows: [string, string][] = [
@@ -333,16 +375,35 @@ export class RunScene extends Phaser.Scene {
       ["残り HP", `${Math.ceil(this.sim.hp)} / ${this.sim.maxHp}`],
     ];
     rows.forEach(([k, v], i) => {
-      const y = panelTop + 190 + i * 44;
-      add(this.add.text(90, y, k, textStyle(24, { weight: 500, color: COLORS.inkDim })).setOrigin(0, 0.5));
-      add(this.add.text(GAME_WIDTH - 90, y, v, textStyle(26)).setOrigin(1, 0.5));
+      const y = top + 160 + i * 40;
+      add(this.add.text(90, y, k, textStyle(22, { weight: 500, color: COLORS.inkDim })).setOrigin(0, 0.5));
+      add(this.add.text(GAME_WIDTH - 90, y, v, textStyle(24)).setOrigin(1, 0.5));
     });
 
-    add(this.add.text(90, panelTop + 390, "ヒーロー別ダメージ", textStyle(22, { color: COLORS.inkDim })).setOrigin(0, 0.5));
-    const heroes = [...this.sim.heroes].sort((a, b) => b.totalDamage - a.totalDamage).slice(0, 5);
+    // 獲得 CE
+    const rt = top + 330;
+    const box = this.add.graphics();
+    const lines = reward.breakdown.length > 0 ? reward.breakdown : [{ label: "クリアした Wave なし", ce: 0 }];
+    const boxH = 96 + lines.length * 28;
+    box.fillStyle(COLORS.bg, 0.8).fillRoundedRect(70, rt, GAME_WIDTH - 140, boxH, 16);
+    box.lineStyle(2, COLORS.gold, 0.6).strokeRoundedRect(70, rt, GAME_WIDTH - 140, boxH, 16);
+    add(box);
+    add(this.add.text(96, rt + 34, "獲得 CE", textStyle(22, { color: COLORS.inkDim })).setOrigin(0, 0.5));
+    add(this.add.image(GAME_WIDTH - 250, rt + 38, "icon.ce").setScale(0.7));
+    add(this.add.text(GAME_WIDTH - 96, rt + 38, `+${reward.ce}`, textStyle(44, { display: true, color: COLORS.gold })).setOrigin(1, 0.5));
+    lines.forEach((b, i) => {
+      const y = rt + 84 + i * 28;
+      add(this.add.text(96, y, b.label, textStyle(19, { weight: 500, color: COLORS.inkDim })).setOrigin(0, 0.5));
+      add(this.add.text(GAME_WIDTH - 96, y, `+${b.ce}`, textStyle(19, { color: b.label === "初回クリア" ? COLORS.gold : COLORS.ink })).setOrigin(1, 0.5));
+    });
+
+    // ヒーロー別ダメージ（上位 3）
+    const ht = rt + boxH + 36;
+    add(this.add.text(90, ht, "ヒーロー別ダメージ", textStyle(20, { color: COLORS.inkDim })).setOrigin(0, 0.5));
+    const heroes = [...this.sim.heroes].sort((a, b) => b.totalDamage - a.totalDamage).slice(0, 3);
     const maxDmg = Math.max(1, ...heroes.map((h) => h.totalDamage));
     heroes.forEach((h, i) => {
-      const y = panelTop + 436 + i * 46;
+      const y = ht + 44 + i * 44;
       add(this.add.image(110, y, ROLES[h.role].imageKey).setScale(0.6));
       add(this.add.text(150, y, `Lv${h.level}`, textStyle(20)).setOrigin(0, 0.5));
       const bar = this.add.graphics();
@@ -350,10 +411,23 @@ export class RunScene extends Phaser.Scene {
       add(bar);
       add(this.add.text(GAME_WIDTH - 90, y, String(Math.floor(h.totalDamage)), textStyle(20)).setOrigin(1, 0.5));
     });
-    if (heroes.length === 0) add(this.add.text(90, panelTop + 436, "（ヒーローを配置しませんでした）", textStyle(20, { color: COLORS.inkMuted })).setOrigin(0, 0.5));
+    if (heroes.length === 0) add(this.add.text(90, ht + 44, "（ヒーローを配置しませんでした）", textStyle(20, { color: COLORS.inkMuted })).setOrigin(0, 0.5));
 
-    add(this.add.text(CENTER_X, panelTop + 680, "トークン報酬は Phase 2 で追加予定", textStyle(18, { weight: 500, color: COLORS.inkMuted })).setOrigin(0.5));
-    add(new Button(this, 40 + 160, panelTop + 770, { width: 290, label: "もう一度", kind: "primary", onTap: () => this.scene.restart({ levelId: this.levelId }) }));
-    add(new Button(this, GAME_WIDTH - 40 - 160, panelTop + 770, { width: 290, label: "ホームへ", onTap: () => this.goHome() }));
+    // マイクリくんの実況（SPEC-108a）
+    add(speechBubble(this, "maycri", 120, top + 895, maycriComment(won, st.wavesReached, reward.ce), { width: 440, depth: 201 }));
+
+    const by = top + 950;
+    const bw = 196;
+    const gap = (GAME_WIDTH - 80 - 32 - bw * 3) / 2;
+    const bx = (i: number) => 40 + 16 + bw / 2 + i * (bw + gap);
+    add(new Button(this, bx(0), by, { width: bw, label: "ツリー", onTap: () => goTo(this, "Tree") }));
+    add(new Button(this, bx(1), by, { width: bw, label: "もう一度", kind: "primary", onTap: () => this.scene.restart({ levelId: this.levelId }) }));
+    add(new Button(this, bx(2), by, { width: bw, label: "ホーム", onTap: () => goTo(this, "Home") }));
+
+    if (!hasSeen(session.data, "result.first")) {
+      this.time.delayedCall(700, () => {
+        void playDialog(this, DIALOGS["result.first"]).then(() => session.update((d) => markSeen(d, "result.first")));
+      });
+    }
   }
 }

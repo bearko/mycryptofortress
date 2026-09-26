@@ -116,13 +116,13 @@ export class Panel {
 
   private buildPlacement(slotIndex: number): void {
     const role = ROLES.archer;
-    const stats = { ...role.base };
+    const stats = this.sim.statsFor("archer");
     this.portrait(role.imageKey, `${role.heroName}（${role.roleName}）`, [this.statLine(stats), "単体を狙う基本のヒーロー"]);
     const y = PANEL_TOP + 150;
     const btn = this.add(
-      new Button(this.scene, MARGIN + 240, y, { width: 480, label: `配置  ${role.placeCost} GUM`, kind: "primary", onTap: () => this.actions.place(slotIndex) }),
+      new Button(this.scene, MARGIN + 240, y, { width: 480, label: `配置  ${this.sim.placeCost("archer")} GUM`, kind: "primary", onTap: () => this.actions.place(slotIndex) }),
     );
-    this.actionBtn = { btn, cost: () => role.placeCost };
+    this.actionBtn = { btn, cost: () => this.sim.placeCost("archer") };
     this.add(new Button(this.scene, GAME_WIDTH - MARGIN - 80, y, { width: 160, label: "閉じる", onTap: () => this.actions.deselect() }));
   }
 

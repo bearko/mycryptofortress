@@ -1,12 +1,13 @@
 import Phaser from "phaser";
 import { CRYPTIDS, getCryptid, type CryptidId } from "../../data/cryptids";
-import { getLevel } from "../../data/levels";
+import { LEVELS } from "../../data/levels";
+import { goTo } from "../ui/header";
 import { DEFAULT_BGM_VOLUME, DEFAULT_SE_VOLUME, playBgm, playSe } from "../audio";
 import { bindPress } from "../input/press";
 import { CENTER_X, GAME_WIDTH, MARGIN } from "../layout";
 import { session } from "../session";
 import { COLORS, css, textStyle } from "../ui/theme";
-import { Button, CryptidDisplay, LandBackground, showToast, showTooltip } from "../ui/widgets";
+import { Button, CryptidDisplay, LandBackground, showTooltip } from "../ui/widgets";
 
 const GRID_COLS = 3;
 const CELL_GAP = 16;
@@ -79,17 +80,14 @@ export class HomeScene extends Phaser.Scene {
 
   private buildMenu(): void {
     const fullW = GAME_WIDTH - MARGIN * 2;
-    const level = getLevel("L1");
+    const cleared = LEVELS.filter((l) => session.data.meta.levels[l.id]?.cleared).length;
     new Button(this, CENTER_X, 1100, {
       width: fullW,
       height: 96,
       label: "出撃",
-      sub: `Lv1 ${level.name}`,
+      sub: `ノードを選ぶ（クリア ${cleared} / ${LEVELS.length}）`,
       kind: "primary",
-      onTap: () => {
-        this.cameras.main.fadeOut(200, 11, 13, 18);
-        this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start("Run", { levelId: level.id }));
-      },
+      onTap: () => goTo(this, "LevelSelect"),
     });
 
     const y = 1210;
@@ -98,8 +96,8 @@ export class HomeScene extends Phaser.Scene {
     new Button(this, MARGIN + treeW / 2, y, {
       width: treeW,
       label: "スキルツリー",
-      kind: "locked",
-      onTap: () => showToast(this, "スキルツリーは Phase 2 で解放されます"),
+      sub: `CE ${session.data.meta.tokens.ce}`,
+      onTap: () => goTo(this, "Tree"),
     });
 
     const bgmX = MARGIN + treeW + CELL_GAP + smallW / 2;

@@ -2,6 +2,7 @@ import { ROLES } from "../data/balance/heroes";
 import { getLevel } from "../data/levels";
 import type { LevelDef } from "./level";
 import { runBot } from "./bot";
+import { emptyModifiers, type RunModifiers } from "./modifiers";
 import { DROP_LIFETIME, RunSim, TICK, type SimEvent } from "./run";
 
 const L1 = getLevel("L1");
@@ -19,6 +20,7 @@ function miniLevel(overrides: Partial<LevelDef> = {}): LevelDef {
     cryptidHp: 5,
     prepSeconds: 1,
     intermissionSeconds: 1,
+    reward: { perWave: 1, clear: 5, firstClear: 5 },
     paths: [{ id: "a", points: [[-1, 2], [4, 2]] }],
     slots: [{ col: 2, row: 1 }, { col: 2, row: 3 }],
     waves: [{ reward: 7, hpMul: 1, groups: [{ enemy: "byte_s", count: 3, interval: 0.5, path: "a", delay: 0 }] }],
@@ -74,6 +76,10 @@ describe("RunSim: レベル 1 の到達可能性 (SPEC-104 §6)", () => {
     const sim = runBot(L1, seed);
     expect(sim.status).toBe("won");
     expect(sim.stats.wavesReached).toBe(L1.waves.length);
+  });
+
+  it("Lv2 / Lv3 は強化なしでは突破できない（スキルツリー前提）", () => {
+    for (const id of ["L2", "L3"]) expect(runBot(getLevel(id), 1).status).toBe("lost");
   });
 
   it("何もしないと陥落する", () => {
@@ -242,5 +248,127 @@ describe("RunSim: GUM ドロップ (SPEC-104 §5)", () => {
     const id = sim.drops[0].id;
     for (let t = 0; t < DROP_LIFETIME / TICK + 2; t++) sim.step();
     expect(sim.drops.find((d) => d.id === id)).toBeUndefined();
+  });
+});
+
+describe("RunSim: ツリー補正 (SPEC-108)", () => {
+  const mods = (patch: Partial<RunModifiers>): RunModifiers => ({ ...emptyModifiers(), ...patch });
+  const runUntil = (sim: RunSim, pred: (e: SimEvent) => boolean, seconds = 60): SimEvent[] => {
+    const out: SimEvent[] = [];
+    while (!sim.isOver && sim.time < seconds) {
+      sim.step();
+      const evs = sim.drainEvents();
+      out.push(...evs);
+      if (evs.some(pred)) break;
+    }
+    return out;
+  };
+
+  it("開始 GUM・最大 HP・配置 / 強化コスト", () => {
+    const sim = new RunSim(miniLevel({ startGum: 100 }), 1, mods({ startGumAdd: 20, maxHpAdd: 3, placeCostFlat: 10, levelCostPct: 0.5 }));
+    expect(sim.gum).toBe(120);
+    expect(sim.maxHp).toBe(8);
+    expect(sim.placeCost("archer")).toBe(ROLES.archer.placeCost - 10);
+    const h = sim.placeHero(0, "archer")!;
+    expect(sim.levelUpCost(h)).toBe(Math.round(ROLES.archer.levelUpCosts[0] * 0.5));
+  });
+
+  it("攻撃力・攻撃速度・射程の補正が性能に反映される", () => {
+    const base = new RunSim(miniLevel(), 1);
+    const up = new RunSim(miniLevel(), 1, mods({ damagePct: 0.5, attackSpeedPct: 1, rangeAdd: 1 }));
+    const hb = base.placeHero(0, "archer")!;
+    const hu = up.placeHero(0, "archer")!;
+    expect(up.heroStats(hu).damage).toBeCloseTo(base.heroStats(hb).damage * 1.5);
+    expect(up.heroStats(hu).interval).toBeCloseTo(base.heroStats(hb).interval / 2);
+    expect(up.heroStats(hu).range).toBeCloseTo(base.heroStats(hb).range + 1);
+  });
+
+  it("会心率 100% なら全弾が会心（×2 + 会心ダメージ補正）", () => {
+    const sim = new RunSim(miniLevel(), 1, mods({ critChance: 1, critMulAdd: 0.5 }));
+    const h = sim.placeHero(0, "archer")!;
+    sim.startNextWave();
+    const hit = runUntil(sim, (e) => e.type === "hit").find((e) => e.type === "hit");
+    expect(hit).toMatchObject({ crit: true });
+    expect(h.totalDamage).toBeGreaterThan(0);
+    expect(sim.heroStats(h).damage * 2.5).toBeGreaterThanOrEqual(h.totalDamage - 1e-9);
+  });
+
+  it("一斉射撃は複数の敵に同時に撃つ", () => {
+    const sim = new RunSim(miniLevel(), 1, mods({ volley: 1 }));
+    sim.placeHero(0, "archer");
+    sim.startNextWave();
+    sim.advance(1.2);
+    sim.drainEvents();
+    // 次の攻撃で 2 本以上の弾が同時に出る
+    let maxProjectiles = 0;
+    for (let i = 0; i < 60; i++) {
+      sim.step();
+      maxProjectiles = Math.max(maxProjectiles, new Set(sim.projectiles.map((p) => p.targetId)).size);
+    }
+    expect(maxProjectiles).toBeGreaterThanOrEqual(2);
+  });
+
+  it("撃破 GUM・Wave 報酬・消滅時間・回収半径の補正", () => {
+    const sim = new RunSim(miniLevel(), 1, mods({ dropValuePct: 1, waveRewardPct: 1, dropLifetimeAdd: 5, collectRadiusAdd: 0.3 }));
+    sim.placeHero(0, "archer");
+    sim.placeHero(1, "archer");
+    sim.startNextWave();
+    const evs = runUntil(sim, (e) => e.type === "won");
+    const drop = sim.drops[0];
+    expect(drop.value).toBe(6); // byte_s 3 GUM × 2
+    expect(evs.find((e) => e.type === "waveClear")).toMatchObject({ reward: 14 });
+    expect(sim.collectRadius).toBeCloseTo(1.0);
+    expect(drop.ttl).toBeGreaterThan(DROP_LIFETIME);
+  });
+
+  it("到達無効化 100% ならボス以外の到達でHPが減らない", () => {
+    const sim = new RunSim(miniLevel(), 1, mods({ leakIgnoreChance: 1 }));
+    sim.startNextWave();
+    const evs = runUntil(sim, (e) => e.type === "won", 60);
+    expect(sim.status).toBe("won");
+    expect(sim.hp).toBe(sim.maxHp);
+    expect(evs.filter((e) => e.type === "leak").every((e) => e.type === "leak" && e.blocked)).toBe(true);
+  });
+
+  it("聖女の祈り: ボスの到達を 1 度だけ HP 1 で耐える", () => {
+    const boss = { reward: 0, hpMul: 1, groups: [{ enemy: "boss_nobunaga", count: 2, interval: 3, path: "a", delay: 0 }] };
+    const lv = miniLevel({ cryptidHp: 50, waves: [boss] });
+    const sim = new RunSim(lv, 1, mods({ lastStand: 1 }));
+    sim.startNextWave();
+    const evs = runUntil(sim, (e) => e.type === "lost", 120);
+    expect(evs.some((e) => e.type === "lastStand")).toBe(true);
+    expect(sim.status).toBe("lost"); // 2 体目は耐えられない
+  });
+
+  it("Wave クリア回復と自然回復は最大 HP を超えない", () => {
+    const sim = new RunSim(miniLevel({ cryptidHp: 10 }), 1, mods({ healPerWave: 3, regenPerSec: 0.5 }));
+    sim.hp = 4;
+    sim.startNextWave();
+    sim.advance(3);
+    expect(sim.hp).toBeGreaterThan(4);
+    sim.advance(60);
+    expect(sim.hp).toBeLessThanOrEqual(sim.maxHp);
+  });
+});
+
+describe("RunSim: 跳躍する敵（クリーパー）", () => {
+  it("一定間隔で跳び、同じ時間で通常の敵より先へ進む", () => {
+    const lv = miniLevel({
+      cols: 20,
+      cryptid: { col: 19, row: 2 },
+      paths: [{ id: "a", points: [[-1, 2], [19, 2]] }],
+      slots: [],
+      waves: [{ reward: 0, hpMul: 1, groups: [{ enemy: "creeper_s", count: 1, interval: 1, path: "a", delay: 0 }, { enemy: "byte_s", count: 1, interval: 1, path: "a", delay: 0 }] }],
+    });
+    const sim = new RunSim(lv, 1);
+    sim.startNextWave();
+    const evs: SimEvent[] = [];
+    for (let i = 0; i < 30 * 9; i++) {
+      sim.step();
+      evs.push(...sim.drainEvents());
+    }
+    const [creeper, byte] = sim.enemies;
+    expect(evs.filter((e) => e.type === "leap").length).toBeGreaterThanOrEqual(2);
+    expect(creeper.dist).toBeGreaterThan(byte.dist);
   });
 });

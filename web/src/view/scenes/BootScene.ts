@@ -42,6 +42,13 @@ export class BootScene extends Phaser.Scene {
       repeat: -1,
     });
 
+    const anim = (key: string, frames: [string, number][]) =>
+      this.anims.create({ key, frames: frames.map(([k, d]) => ({ key: `chara.${k}`, duration: d })), repeat: -1 });
+    anim("navi.speak", [["navi_ain_speak_00_talk", 200], ["navi_ain_speak_01_talk", 200]]);
+    anim("chris.idle", [["chris_09_idle", 600], ["chris_10_blink", 150], ["chris_11_blink", 150]]);
+    anim("chris.speak", [["chris_speak_02_talk", 200], ["chris_speak_03_talk", 200]]);
+    anim("maycri.idle", [["maycri_04_eyes_blank", 600], ["maycri_05_blink", 100], ["maycri_06_eyes_small", 100]]);
+
     this.scene.start("Title");
   }
 }

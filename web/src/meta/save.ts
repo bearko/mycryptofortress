@@ -5,7 +5,7 @@ import type { StorageLike } from "./storage";
  * SPEC-101 §5.5: セーブデータ。スキーマを変える時は SAVE_SCHEMA_VERSION を上げ、
  * MIGRATIONS[旧バージョン] に 1 段分の変換を追加する。
  */
-export const SAVE_SCHEMA_VERSION = 1;
+export const SAVE_SCHEMA_VERSION = 2;
 
 export interface SaveData {
   schemaVersion: typeof SAVE_SCHEMA_VERSION;
@@ -13,6 +13,32 @@ export interface SaveData {
   updatedAt: string;
   settings: { bgmVolume: number; seVolume: number };
   profile: { cryptidId: CryptidId };
+  /** SPEC-106 / 107: メタ進行 */
+  meta: MetaState;
+}
+
+export interface LevelProgress {
+  cleared: boolean;
+  /** 到達した最高 Wave（1 始まり） */
+  bestWave: number;
+  clears: number;
+  runs: number;
+}
+
+export interface MetaState {
+  /** 所持トークン */
+  tokens: { ce: number };
+  /** 累計獲得トークン（統計） */
+  tokensEarned: { ce: number };
+  /** スキルツリー: ノード ID → レベル */
+  tree: Record<string, number>;
+  levels: Record<string, LevelProgress>;
+  /** 一度だけ見せる会話の既読 ID */
+  seenDialogs: string[];
+}
+
+export function emptyMeta(): MetaState {
+  return { tokens: { ce: 0 }, tokensEarned: { ce: 0 }, tree: {}, levels: {}, seenDialogs: [] };
 }
 
 export const SLOT_IDS = [1, 2, 3] as const;
@@ -23,7 +49,10 @@ const ACTIVE_SLOT_KEY = "mcf.v2.activeSlot";
 
 /** 旧バージョン n のデータを n+1 に変換する関数群 */
 export type Migrations = Record<number, (data: Record<string, unknown>) => Record<string, unknown>>;
-export const MIGRATIONS: Migrations = {};
+export const MIGRATIONS: Migrations = {
+  // v1 → v2: メタ進行（トークン・ツリー・レベル進行・既読会話）を追加
+  1: (d) => ({ ...d, meta: emptyMeta() }),
+};
 
 export function createNewSave(now: Date = new Date()): SaveData {
   const iso = now.toISOString();
@@ -33,6 +62,7 @@ export function createNewSave(now: Date = new Date()): SaveData {
     updatedAt: iso,
     settings: { bgmVolume: 0.6, seVolume: 0.8 },
     profile: { cryptidId: DEFAULT_CRYPTID_ID },
+    meta: emptyMeta(),
   };
 }
 
@@ -46,7 +76,21 @@ export function isValidSave(v: unknown): v is SaveData {
   const { settings, profile } = v;
   if (!isObj(settings) || !isVolume(settings.bgmVolume) || !isVolume(settings.seVolume)) return false;
   if (!isObj(profile) || !isCryptidId(profile.cryptidId)) return false;
-  return true;
+  return isValidMeta(v.meta);
+}
+
+const isCount = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0;
+
+function isValidMeta(m: unknown): m is MetaState {
+  if (!isObj(m)) return false;
+  if (!isObj(m.tokens) || !isCount(m.tokens.ce)) return false;
+  if (!isObj(m.tokensEarned) || !isCount(m.tokensEarned.ce)) return false;
+  if (!isObj(m.tree) || !Object.values(m.tree).every((lv) => Number.isInteger(lv) && (lv as number) >= 0)) return false;
+  if (!isObj(m.levels)) return false;
+  for (const p of Object.values(m.levels)) {
+    if (!isObj(p) || typeof p.cleared !== "boolean" || !isCount(p.bestWave) || !isCount(p.clears) || !isCount(p.runs)) return false;
+  }
+  return Array.isArray(m.seenDialogs) && m.seenDialogs.every((x) => typeof x === "string");
 }
 
 /**

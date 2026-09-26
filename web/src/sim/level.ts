@@ -43,6 +43,8 @@ export interface LevelDef {
   cryptidHp: number;
   prepSeconds: number;
   intermissionSeconds: number;
+  /** SPEC-106: ラン終了時の CE（クリアした Wave ごと / クリア / 初回クリアの追加分） */
+  reward: { perWave: number; clear: number; firstClear: number };
   paths: PathDef[];
   slots: SlotDef[];
   waves: WaveDef[];
@@ -75,6 +77,7 @@ export function validateLevel(lv: LevelDef): string[] {
   if (!(lv.cols > 0 && lv.rows > 0)) errs.push("cols / rows は正の数");
   if (!inBoard(lv.cryptid.col, lv.cryptid.row)) errs.push("cryptid が盤面外");
   if (lv.startGum < 0 || lv.cryptidHp <= 0) errs.push("startGum / cryptidHp が不正");
+  if (!lv.reward || [lv.reward.perWave, lv.reward.clear, lv.reward.firstClear].some((v) => !(v >= 0))) errs.push("reward が不正");
 
   const pathIds = new Set<string>();
   const onPath = new Set<string>();

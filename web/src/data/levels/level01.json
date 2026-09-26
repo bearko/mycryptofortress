@@ -12,6 +12,11 @@
   "cryptidHp": 20,
   "prepSeconds": 15,
   "intermissionSeconds": 6,
+  "reward": {
+    "perWave": 2,
+    "clear": 15,
+    "firstClear": 20
+  },
   "paths": [
     {
       "id": "west",
