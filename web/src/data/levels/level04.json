@@ -98,7 +98,7 @@
   "waves": [
     {
       "reward": 14,
-      "hpMul": 4.7,
+      "hpMul": 3.196,
       "groups": [
         {
           "enemy": "byte_t",
@@ -118,7 +118,7 @@
     },
     {
       "reward": 16,
-      "hpMul": 5.17,
+      "hpMul": 3.516,
       "groups": [
         {
           "enemy": "bagle_s",
@@ -138,7 +138,7 @@
     },
     {
       "reward": 18,
-      "hpMul": 5.64,
+      "hpMul": 3.835,
       "groups": [
         {
           "enemy": "creeper_t",
@@ -153,12 +153,19 @@
           "interval": 2.0,
           "path": "west",
           "delay": 1
+        },
+        {
+          "enemy": "elk_s",
+          "count": 5,
+          "interval": 1.2,
+          "path": "west",
+          "delay": 2
         }
       ]
     },
     {
       "reward": 20,
-      "hpMul": 6.345,
+      "hpMul": 4.315,
       "groups": [
         {
           "enemy": "byte_g",
@@ -185,7 +192,7 @@
     },
     {
       "reward": 22,
-      "hpMul": 7.05,
+      "hpMul": 4.794,
       "groups": [
         {
           "enemy": "bagle_t",
@@ -200,12 +207,19 @@
           "interval": 2.4,
           "path": "east",
           "delay": 1
+        },
+        {
+          "enemy": "elk_t",
+          "count": 3,
+          "interval": 1.6,
+          "path": "east",
+          "delay": 3
         }
       ]
     },
     {
       "reward": 24,
-      "hpMul": 7.755,
+      "hpMul": 5.273,
       "groups": [
         {
           "enemy": "creeper_t",
@@ -232,7 +246,7 @@
     },
     {
       "reward": 26,
-      "hpMul": 8.46,
+      "hpMul": 5.753,
       "groups": [
         {
           "enemy": "bagle_t",
@@ -247,12 +261,19 @@
           "interval": 1.0,
           "path": "west",
           "delay": 1
+        },
+        {
+          "enemy": "elk_t",
+          "count": 4,
+          "interval": 1.4,
+          "path": "west",
+          "delay": 2
         }
       ]
     },
     {
       "reward": 28,
-      "hpMul": 9.4,
+      "hpMul": 6.392,
       "groups": [
         {
           "enemy": "byte_g",
@@ -279,7 +300,7 @@
     },
     {
       "reward": 30,
-      "hpMul": 10.34,
+      "hpMul": 7.031,
       "groups": [
         {
           "enemy": "bagle_t",
@@ -301,12 +322,19 @@
           "interval": 0.9,
           "path": "west",
           "delay": 6
+        },
+        {
+          "enemy": "elk_t",
+          "count": 5,
+          "interval": 1.3,
+          "path": "east",
+          "delay": 4
         }
       ]
     },
     {
       "reward": 32,
-      "hpMul": 0.9,
+      "hpMul": 0.612,
       "groups": [
         {
           "enemy": "bagle_s",

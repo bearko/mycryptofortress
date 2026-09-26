@@ -217,6 +217,17 @@ export function isLevelUnlocked(save: SaveData, levelId: string): boolean {
   return !!save.meta.levels[LEVELS[i - 1].id]?.cleared;
 }
 
+/**
+ * 次に挑むノード: from がまだ未クリアならそのまま（再挑戦）、クリア済みなら
+ * その先で最初の未クリア（解放済み）のノード。すべてクリア済みなら from。
+ */
+export function nextChallengeLevel(save: SaveData, fromId: string): string {
+  if (!save.meta.levels[fromId]?.cleared) return fromId;
+  const i = LEVELS.findIndex((l) => l.id === fromId);
+  const next = LEVELS.slice(i + 1).find((l) => isLevelUnlocked(save, l.id) && !save.meta.levels[l.id]?.cleared);
+  return next?.id ?? fromId;
+}
+
 // ─── 会話の既読 ───────────────────────────────────────────
 
 export function hasSeen(save: SaveData, dialogId: string): boolean {

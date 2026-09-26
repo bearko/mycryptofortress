@@ -7,7 +7,7 @@ import { getAsset } from "../../data/assets";
 import { getLevel } from "../../data/levels";
 import { DIALOGS, maycriComment } from "../../data/dialogs";
 import { TREE } from "../../data/tree";
-import { applyRunResult, buyBlock, computeModifiers, computeReward, hasSeen, markSeen } from "../../meta/progress";
+import { applyRunResult, buyBlock, computeModifiers, computeReward, hasSeen, markSeen, nextChallengeLevel } from "../../meta/progress";
 import { RunSim, TARGET_MODES, TICK, type SimEvent } from "../../sim/run";
 import { queueAsset } from "../assetLoader";
 import { playBgm, playSe } from "../audio";
@@ -603,7 +603,15 @@ export class RunScene extends Phaser.Scene {
     const ce = session.data.meta.tokens.ce;
     const retryW = 210;
     const treeW = GAME_WIDTH - 80 - 32 - retryW - 16;
-    add(new Button(this, 56 + retryW / 2, by, { width: retryW, label: "もう一度", onTap: () => this.scene.restart({ levelId: this.levelId }) }));
+    // クリア済みなら「次のノードへ」、未クリアなら「もう一度」
+    const nextId = nextChallengeLevel(session.data, this.levelId);
+    add(
+      new Button(this, 56 + retryW / 2, by, {
+        width: retryW,
+        label: nextId !== this.levelId ? "次のノードへ" : "もう一度",
+        onTap: () => this.scene.restart({ levelId: nextId }),
+      }),
+    );
     const treeBtn = add(
       new Button(this, 56 + retryW + 16 + treeW / 2, by, {
         width: treeW,
@@ -639,5 +647,7 @@ function gimmickLines(def: (typeof ENEMIES)[string]): string[] {
   if (def.twinGroup) out.push("双子: 片方が倒れるともう片方が加速する");
   if (def.split) out.push("分裂: 倒すと小さな敵に分かれる");
   if (def.resist) out.push(`状態異常耐性 ${Math.round(def.resist * 100)}%`);
+  if (def.armor) out.push("装甲: 1 発ごとのダメージを減らす。弓の矢と幻獣砲は半分貫通、炎上・毒は素通り");
+  if (def.insulated) out.push("絶縁: 雷がほとんど効かず、感電もしない");
   return out;
 }

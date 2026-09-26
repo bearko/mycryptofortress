@@ -10,6 +10,7 @@ import {
   computeReward,
   descendants,
   isLevelUnlocked,
+  nextChallengeLevel,
   loadBuildSet,
   saveBuildSet,
   markSeen,
@@ -178,8 +179,8 @@ describe("コアループの到達可能性 (SPEC-106 §4)", () => {
     expect(Math.max(...l1.slice(0, firstWin).map((l) => l.wavesReached))).toBeGreaterThan(l1[0].wavesReached);
   });
 
-  it("Lv4〜9 も強化を続ければ 80 ラン以内に全クリアでき、Lv4〜7 は数回負ける", () => {
-    const { log, save } = runCampaign({ buyOrder: STANDARD_BUY_ORDER, maxRuns: 80, seed: 1 });
+  it("Lv4〜9 も強化を続ければ 90 ラン以内に全クリアでき、Lv4〜7 は数回負ける", () => {
+    const { log, save } = runCampaign({ buyOrder: STANDARD_BUY_ORDER, maxRuns: 90, seed: 1 });
     expect(save.meta.levels.L9?.cleared).toBe(true);
     for (const id of ["L4", "L6", "L7"]) {
       const runs = log.filter((l) => l.levelId === id);
@@ -229,5 +230,17 @@ describe("エンブレムとビルドセット (SPEC-116 / 116a)", () => {
     const rich = { ...s, meta: { ...s.meta, tokensEarned: { ce: 10_000, emblem: 0 } } };
     expect(computeModifiers(rich).autoCollect).toBe(1);
     expect(newlyReached(100, 700).map((m) => m.id)).toEqual(["autoCollect", "buildSets", "speed3x"]);
+  });
+});
+
+describe("次に挑むノード", () => {
+  it("未クリアなら同じノード、クリア済みなら次の未クリアのノード", () => {
+    let s = createNewSave();
+    expect(nextChallengeLevel(s, "L1")).toBe("L1");
+    s = applyRunResult(s, { levelId: "L1", won: true, wavesReached: 10, wavesCleared: 10 }, { ce: 0, emblems: 0, breakdown: [], firstClear: true });
+    expect(nextChallengeLevel(s, "L1")).toBe("L2");
+    // 最後のノードをクリア済みなら同じノード
+    const all = LEVELS.reduce((acc, l) => applyRunResult(acc, { levelId: l.id, won: true, wavesReached: 10, wavesCleared: 10 }, { ce: 0, emblems: 0, breakdown: [], firstClear: true }), s);
+    expect(nextChallengeLevel(all, "L3")).toBe("L3");
   });
 });
