@@ -24,6 +24,14 @@ export interface RunModifiers {
   poisonChance: number;
   /** 一撃特化（フラグ）: 弓の攻撃力 ×HEAVY_SHOT_DAMAGE・攻撃間隔 ×HEAVY_SHOT_INTERVAL */
   heavyShot: number;
+  /** SPEC-119 印: 矢が当たった敵に MARK_DURATION 秒の印。印の敵はヒーローから受けるダメージ +この割合 */
+  markPct: number;
+  /** SPEC-119 自動マーク（フラグ）: ボスとトール級（到達 2 以上）に常に印 */
+  autoMark: number;
+  /** SPEC-119 弱点を突く: 敵の状態異常 1 種類ごとにヒーローからのダメージ +この割合 */
+  weaknessPct: number;
+  /** SPEC-119 多重会心: 会心がもう一度会心になる確率 */
+  multiCritChance: number;
   // 雷（SPEC-110）
   unlockLightning: number;
   lightningTesla: number;
@@ -82,6 +90,8 @@ export interface RunModifiers {
   lostHpDamagePct: number;
   /** 敵の到達で受けたダメージ 1 あたりに得る GUM */
   gumOnLeak: number;
+  /** SPEC-119 報復の炎: 到達されたとき、幻獣の周りの敵に最大 HP × この割合（ボスは ×VENGEANCE_BOSS） */
+  vengeancePct: number;
   // GUM
   startGumAdd: number;
   /** 撃破時の GUM に加算（小さな報酬でも効くよう固定値） */
@@ -90,7 +100,9 @@ export interface RunModifiers {
   dropLifetimeAdd: number;
   waveRewardPct: number;
   gumOnHitChance: number;
-  /** SPEC-116: マイルストーン「GUM 自動回収」 */
+  /** SPEC-119 利息: Wave クリア時に所持 GUM × この割合（上限 INTEREST_CAP） */
+  interestPct: number;
+  /** SPEC-119: 丸パネル「世に盗人の種は尽くまじ」（GUM 自動回収、旧マイルストーン） */
   autoCollect: number;
   /** SPEC-115: 魔石の解放（フラグ） */
   stoneIfrit: number;
@@ -112,6 +124,11 @@ export const HASTE_CAP = 0.5;
 export const BLAST_PCT = 0.4;
 export const BLAST_RADIUS = 1.2;
 export const LOST_HP_CAP = 1;
+export const MARK_DURATION = 4;
+export const WEAKNESS_MAX_STATUS = 5;
+export const VENGEANCE_RADIUS = 2.5;
+export const VENGEANCE_BOSS = 0.2;
+export const INTEREST_CAP = 60;
 
 export function emptyModifiers(): RunModifiers {
   // 型で網羅を強制する（キーを足し忘れるとコンパイルエラー）
@@ -130,6 +147,10 @@ export function emptyModifiers(): RunModifiers {
     wealthDamagePct: 0,
     poisonChance: 0,
     heavyShot: 0,
+    markPct: 0,
+    autoMark: 0,
+    weaknessPct: 0,
+    multiCritChance: 0,
     unlockLightning: 0,
     lightningTesla: 0,
     lightningDamagePct: 0,
@@ -174,12 +195,14 @@ export function emptyModifiers(): RunModifiers {
     lastStand: 0,
     lostHpDamagePct: 0,
     gumOnLeak: 0,
+    vengeancePct: 0,
     startGumAdd: 0,
     dropValueFlat: 0,
     collectRadiusAdd: 0,
     dropLifetimeAdd: 0,
     waveRewardPct: 0,
     gumOnHitChance: 0,
+    interestPct: 0,
     autoCollect: 0,
     stoneIfrit: 0,
     stoneLeviathan: 0,

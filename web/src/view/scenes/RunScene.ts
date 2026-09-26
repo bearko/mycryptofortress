@@ -2,12 +2,11 @@ import Phaser from "phaser";
 import { ENEMIES } from "../../data/balance/enemies";
 import { ROLES, roleStats, type RoleId } from "../../data/balance/heroes";
 import { STONES, type StoneId } from "../../data/balance/stones";
-import { isMilestoneReached, newlyReached } from "../../data/milestones";
 import { getAsset } from "../../data/assets";
 import { getLevel } from "../../data/levels";
 import { DIALOGS, maycriComment } from "../../data/dialogs";
 import { TREE } from "../../data/tree";
-import { applyRunResult, buyBlock, computeModifiers, computeReward, hasSeen, markSeen, nextChallengeLevel } from "../../meta/progress";
+import { applyRunResult, buyBlock, computeModifiers, computeReward, conditionalLevels, hasSeen, isFeatureUnlocked, markSeen, newlyUnlocked, nextChallengeLevel, runResultOf } from "../../meta/progress";
 import { RunSim, TARGET_MODES, TICK, type SimEvent } from "../../sim/run";
 import { queueAsset } from "../assetLoader";
 import { playBgm, playSe } from "../audio";
@@ -22,7 +21,7 @@ import { goTo } from "../ui/header";
 import { COLORS, textStyle } from "../ui/theme";
 import { Button, showToast, showTooltip } from "../ui/widgets";
 
-/** 倍速。3x はマイルストーンで解放（SPEC-116）、5x はテストプレイ用（一時停止メニューで ON） */
+/** 倍速。3x は丸パネルで解放（SPEC-119）、5x はテストプレイ用（一時停止メニューで ON） */
 const TEST_SPEED = 5;
 /** オートレベルの判断間隔（秒） */
 const AUTO_LEVEL_EVERY = 0.5;
@@ -189,10 +188,10 @@ export class RunScene extends Phaser.Scene {
     this.input.on(Phaser.Input.Events.POINTER_DOWN, collect);
   }
 
-  /** 選べる倍速: 1x / 2x（最初から）、3x（マイルストーン）、5x（テストプレイ用の設定） */
+  /** 選べる倍速: 1x / 2x（最初から）、3x（丸パネル）、5x（テストプレイ用の設定） */
   private get speeds(): number[] {
     const out = [1, 2];
-    if (isMilestoneReached(session.data, "speed3x")) out.push(3);
+    if (isFeatureUnlocked(session.data, "speed3x")) out.push(3);
     if (session.data.settings.testSpeed) out.push(TEST_SPEED);
     return out;
   }
@@ -202,9 +201,9 @@ export class RunScene extends Phaser.Scene {
     return list[Math.min(this.speedIndex, list.length - 1)];
   }
 
-  /** SPEC-116: オートレベル（マイルストーン + 設定 ON）。一番低いレベルのヒーローを GUM が足りれば強化 */
+  /** SPEC-119: オートレベル（丸パネル + 設定 ON）。一番低いレベルのヒーローを GUM が足りれば強化 */
   private get autoLevelOn(): boolean {
-    return isMilestoneReached(session.data, "autoLevel") && session.data.settings.autoLevel;
+    return isFeatureUnlocked(session.data, "autoLevel") && session.data.settings.autoLevel;
   }
 
   private updateAutoLevel(delta: number): void {
@@ -388,7 +387,11 @@ export class RunScene extends Phaser.Scene {
         break;
       case "combust":
       case "blast":
+      case "vengeance":
         this.se("se.area");
+        break;
+      case "interest":
+        this.se("se.treasure");
         break;
       case "payout":
         this.se("se.treasure");
@@ -468,8 +471,8 @@ export class RunScene extends Phaser.Scene {
     add(this.add.text(CENTER_X, 470, "一時停止中", textStyle(44)).setOrigin(0.5).setDepth(201));
     add(new Button(this, CENTER_X, 600, { width: 420, label: "再開", kind: "primary", onTap: () => this.closeMenu() }).setDepth(201));
     add(new Button(this, CENTER_X, 720, { width: 420, label: "撤退する", sub: "ここまでの CE を受け取る", onTap: () => this.showResult(true) }).setDepth(201));
-    // SPEC-116: オートレベルの切り替え（マイルストーン解放後）
-    if (isMilestoneReached(session.data, "autoLevel")) {
+    // SPEC-116: オートレベルの切り替え（丸パネル解放後）
+    if (isFeatureUnlocked(session.data, "autoLevel")) {
       const btn = add(
         new Button(this, CENTER_X, 840, {
           width: 420,
@@ -484,7 +487,7 @@ export class RunScene extends Phaser.Scene {
     // テストプレイ用: 5 倍速を速度ボタンに加える
     const testOn = () => !!session.data.settings.testSpeed;
     const testBtn = add(
-      new Button(this, CENTER_X, isMilestoneReached(session.data, "autoLevel") ? 960 : 840, {
+      new Button(this, CENTER_X, isFeatureUnlocked(session.data, "autoLevel") ? 960 : 840, {
         width: 420,
         label: `5 倍速（テスト用）: ${testOn() ? "ON" : "OFF"}`,
         sub: "速度ボタンに 5x が加わります",
@@ -513,13 +516,14 @@ export class RunScene extends Phaser.Scene {
 
     // SPEC-106: 報酬を計算してセーブに反映（負け・撤退でもクリアした Wave 分は入る）
     const level = this.sim.level;
-    const result = { levelId: level.id, won, wavesReached: this.sim.stats.wavesReached, wavesCleared: this.sim.stats.wavesCleared };
+    const result = runResultOf(level.id, won, this.sim.stats);
     const reward = computeReward(level, result, session.data);
-    const ceBefore = session.data.meta.tokensEarned.ce;
+    const before = conditionalLevels(session.data);
     session.update((d) => applyRunResult(d, result, reward));
-    // SPEC-116: 新しく届いたマイルストーン
-    const reached = newlyReached(ceBefore, session.data.meta.tokensEarned.ce);
-    if (reached.length > 0) this.time.delayedCall(1200, () => showToast(this, `マイルストーン解放: ${reached.map((m) => m.name).join("・")}`));
+    // SPEC-119: 記録で新しく解放された条件つきパネル
+    const unlocked = newlyUnlocked(before, session.data);
+    if (unlocked.length > 0)
+      this.time.delayedCall(1200, () => showToast(this, `パネル解放: ${unlocked.map((u) => (u.node.maxLevel > 1 ? `${u.node.name} Lv${u.level}` : u.node.name)).join("・")}`));
 
     this.dim();
     const add = <T extends Phaser.GameObjects.GameObject>(o: T) => {

@@ -174,5 +174,7 @@ describe("v5（Phase 4）", () => {
     expect(s.meta.tokensEarned.emblem).toBe(2);
     expect(s.meta.buildSets).toHaveLength(BUILD_SET_SLOTS);
     expect(s.settings.autoLevel).toBe(false);
+    // v5 → v6: 累計記録。挑戦回数はレベルごとの記録から復元する（SPEC-119）
+    expect(s.meta.stats).toEqual({ kills: 0, bossKills: 0, gumCollected: 0, wavesCleared: 0, flawlessClears: 0, runs: 15 });
   });
 });

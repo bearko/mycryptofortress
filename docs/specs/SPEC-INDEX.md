@@ -13,7 +13,7 @@
 | [SPEC-104](./SPEC-104-cryptid-archer-gum.md) | Accepted | 幻獣（初期 HP 3）・弓ヒーロー・エネミー・GUM・Lv1〜6 の中身 | 2026-09-26 |
 | [SPEC-105](./SPEC-105-run-ui.md) | Accepted | ラン UI（スマホ縦画面） | 2026-09-26 |
 | [SPEC-106](./SPEC-106-results-and-tokens.md) | Accepted | リザルトとトークン（CE）・レベル進行・セーブ v2 | 2026-09-26 |
-| [SPEC-107](./SPEC-107-skill-tree.md) | Accepted | スキルツリー（86 ノード・MCH スキル名・CE / エンブレム・ツリー版の自動返金） | 2026-09-26 |
+| [SPEC-107](./SPEC-107-skill-tree.md) | Accepted | スキルツリー（103 パネル・MCH スキル名・CE / エンブレム・ツリー版の自動返金） | 2026-09-26 |
 | [SPEC-108](./SPEC-108-refund-and-modifiers.md) | Accepted | 無料返金とツリー効果のラン適用 | 2026-09-26 |
 | [SPEC-108a](./SPEC-108a-navi-npc.md) | Accepted | ナビ / NPC 会話基盤 | 2026-09-26 |
 | [SPEC-109](./SPEC-109-status-effects.md) | Accepted | 状態異常フレームワーク（炎上・毒・鈍足・感電/放電・スタン・脆弱・加速・耐性） | 2026-09-26 |
@@ -23,9 +23,10 @@
 | [SPEC-113](./SPEC-113-miner-economy.md) | Accepted | 採掘ヒーロー（サトシ・ナカモト）と経済: 通行料・配当・ロックマス・Wave 繰り上げ | 2026-09-26 |
 | [SPEC-114](./SPEC-114-cryptid-cannon.md) | Accepted | 幻獣砲 | 2026-09-26 |
 | [SPEC-115](./SPEC-115-magic-stones.md) | Accepted | 魔石（MCH の 4 属性）と属性マス: ロールごとの挙動変化 | 2026-09-26 |
-| [SPEC-116 / 116a](./SPEC-116-milestones-and-emblems.md) | Accepted | マイルストーン・ビルドセット / エンブレム（トークンの多層化）・セーブ v5 | 2026-09-26 |
+| [SPEC-116 / 116a](./SPEC-116-milestones-and-emblems.md) | Accepted | マイルストーン（→ SPEC-119 の丸パネルに統合）・ビルドセット / エンブレム（トークンの多層化）・セーブ v5 | 2026-09-26 |
 | [SPEC-117](./SPEC-117-gimmick-enemies.md) | Accepted | ギミック敵（隠密・回復）・ギミックボス（召喚・分裂・多節）と Lv7〜9 | 2026-09-26 |
 | [SPEC-118](./SPEC-118-armor-insulation.md) | Accepted | 装甲・絶縁と雷の調整（弓の装甲貫通、雷一辺倒を防ぐギミック） | 2026-09-26 |
+| [SPEC-119](./SPEC-119-tree-panels-and-records.md) | Accepted | スキルツリーのパネル形状（四角・丸・上辺の紋章）・条件つきパネルと累計記録（セーブ v6）・印 / 弱点 / 多重会心 / 報復の炎 / 利息 | 2026-09-26 |
 
 ## v1 → v2 の切り替え
 
