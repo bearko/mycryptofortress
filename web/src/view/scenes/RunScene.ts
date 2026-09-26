@@ -520,10 +520,10 @@ export class RunScene extends Phaser.Scene {
     const reward = computeReward(level, result, session.data);
     const before = conditionalLevels(session.data);
     session.update((d) => applyRunResult(d, result, reward));
-    // SPEC-119: 記録で新しく解放された条件つきパネル
+    // SPEC-119: 記録で新しく解放できるようになった条件つきパネル（ツリーで手動で解放する）
     const unlocked = newlyUnlocked(before, session.data);
     if (unlocked.length > 0)
-      this.time.delayedCall(1200, () => showToast(this, `パネル解放: ${unlocked.map((u) => (u.node.maxLevel > 1 ? `${u.node.name} Lv${u.level}` : u.node.name)).join("・")}`));
+      this.time.delayedCall(1200, () => showToast(this, `スキルツリーで解放できます: ${unlocked.map((u) => (u.node.maxLevel > 1 ? `${u.node.name} Lv${u.level}` : u.node.name)).join("・")}`));
 
     this.dim();
     const add = <T extends Phaser.GameObjects.GameObject>(o: T) => {
