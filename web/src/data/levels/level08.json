@@ -1,0 +1,363 @@
+{
+  "id": "L8",
+  "name": "ノイマン・ノード",
+  "background": "bg.node.1004",
+  "cols": 9,
+  "rows": 12,
+  "cryptid": {
+    "col": 4,
+    "row": 11
+  },
+  "startGum": 250,
+  "cryptidHp": 3,
+  "prepSeconds": 15,
+  "intermissionSeconds": 6,
+  "reward": {
+    "perWave": 15,
+    "clear": 110,
+    "firstClear": 130,
+    "emblems": 3
+  },
+  "paths": [
+    {
+      "id": "west",
+      "points": [
+        [-1, 1],
+        [1, 1],
+        [1, 9],
+        [3, 9],
+        [3, 11],
+        [4, 11]
+      ]
+    },
+    {
+      "id": "north",
+      "points": [
+        [4, -1],
+        [4, 3],
+        [6, 3],
+        [6, 7],
+        [4, 7],
+        [4, 11]
+      ]
+    },
+    {
+      "id": "east",
+      "points": [
+        [9, 2],
+        [8, 2],
+        [8, 10],
+        [5, 10],
+        [5, 11],
+        [4, 11]
+      ]
+    }
+  ],
+  "slots": [
+    {
+      "col": 2,
+      "row": 2
+    },
+    {
+      "col": 3,
+      "row": 5,
+      "element": "leviathan"
+    },
+    {
+      "col": 5,
+      "row": 5,
+      "element": "ifrit"
+    },
+    {
+      "col": 2,
+      "row": 7
+    },
+    {
+      "col": 7,
+      "row": 5
+    },
+    {
+      "col": 3,
+      "row": 8
+    },
+    {
+      "col": 5,
+      "row": 8
+    },
+    {
+      "col": 7,
+      "row": 9
+    },
+    {
+      "col": 2,
+      "row": 10
+    },
+    {
+      "col": 6,
+      "row": 1
+    },
+    {
+      "col": 0,
+      "row": 5,
+      "kind": "locked",
+      "cost": 200
+    },
+    {
+      "col": 6,
+      "row": 9,
+      "kind": "locked",
+      "cost": 200
+    }
+  ],
+  "waves": [
+    {
+      "reward": 22,
+      "hpMul": 24.0,
+      "groups": [
+        {
+          "enemy": "love_t",
+          "count": 6,
+          "interval": 1.0,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "love_t",
+          "count": 6,
+          "interval": 1.0,
+          "path": "east",
+          "delay": 0.5
+        }
+      ]
+    },
+    {
+      "reward": 24,
+      "hpMul": 26.4,
+      "groups": [
+        {
+          "enemy": "chameleon_s",
+          "count": 6,
+          "interval": 1.0,
+          "path": "north",
+          "delay": 0
+        },
+        {
+          "enemy": "byte_g",
+          "count": 6,
+          "interval": 1.0,
+          "path": "west",
+          "delay": 1
+        }
+      ]
+    },
+    {
+      "reward": 26,
+      "hpMul": 30.0,
+      "groups": [
+        {
+          "enemy": "love_g",
+          "count": 4,
+          "interval": 1.6,
+          "path": "north",
+          "delay": 0
+        },
+        {
+          "enemy": "heartbleed_s",
+          "count": 3,
+          "interval": 1.8,
+          "path": "east",
+          "delay": 1
+        },
+        {
+          "enemy": "creeper_t",
+          "count": 6,
+          "interval": 1.0,
+          "path": "east",
+          "delay": 2
+        }
+      ]
+    },
+    {
+      "reward": 28,
+      "hpMul": 33.6,
+      "groups": [
+        {
+          "enemy": "bagle_t",
+          "count": 5,
+          "interval": 1.5,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "chameleon_t",
+          "count": 5,
+          "interval": 1.1,
+          "path": "north",
+          "delay": 1
+        }
+      ]
+    },
+    {
+      "reward": 30,
+      "hpMul": 37.2,
+      "groups": [
+        {
+          "enemy": "love_g",
+          "count": 5,
+          "interval": 1.3,
+          "path": "east",
+          "delay": 0
+        },
+        {
+          "enemy": "love_g",
+          "count": 5,
+          "interval": 1.3,
+          "path": "west",
+          "delay": 0.6
+        },
+        {
+          "enemy": "heartbleed_t",
+          "count": 2,
+          "interval": 2.0,
+          "path": "north",
+          "delay": 3
+        }
+      ]
+    },
+    {
+      "reward": 32,
+      "hpMul": 40.8,
+      "groups": [
+        {
+          "enemy": "chameleon_t",
+          "count": 7,
+          "interval": 0.9,
+          "path": "north",
+          "delay": 0
+        },
+        {
+          "enemy": "rabbit_t",
+          "count": 10,
+          "interval": 0.45,
+          "path": "east",
+          "delay": 1
+        },
+        {
+          "enemy": "bagle_t",
+          "count": 4,
+          "interval": 1.5,
+          "path": "west",
+          "delay": 3
+        }
+      ]
+    },
+    {
+      "reward": 34,
+      "hpMul": 45.6,
+      "groups": [
+        {
+          "enemy": "love_g",
+          "count": 6,
+          "interval": 1.2,
+          "path": "north",
+          "delay": 0
+        },
+        {
+          "enemy": "heartbleed_t",
+          "count": 3,
+          "interval": 1.6,
+          "path": "north",
+          "delay": 3
+        },
+        {
+          "enemy": "creeper_t",
+          "count": 8,
+          "interval": 0.8,
+          "path": "west",
+          "delay": 1
+        }
+      ]
+    },
+    {
+      "reward": 36,
+      "hpMul": 50.4,
+      "groups": [
+        {
+          "enemy": "bagle_t",
+          "count": 6,
+          "interval": 1.3,
+          "path": "east",
+          "delay": 0
+        },
+        {
+          "enemy": "chameleon_t",
+          "count": 6,
+          "interval": 1.0,
+          "path": "west",
+          "delay": 0.5
+        },
+        {
+          "enemy": "love_g",
+          "count": 5,
+          "interval": 1.2,
+          "path": "north",
+          "delay": 4
+        }
+      ]
+    },
+    {
+      "reward": 38,
+      "hpMul": 56.4,
+      "groups": [
+        {
+          "enemy": "love_g",
+          "count": 8,
+          "interval": 1.0,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "love_g",
+          "count": 8,
+          "interval": 1.0,
+          "path": "east",
+          "delay": 0.5
+        },
+        {
+          "enemy": "heartbleed_t",
+          "count": 4,
+          "interval": 1.4,
+          "path": "north",
+          "delay": 4
+        }
+      ]
+    },
+    {
+      "reward": 40,
+      "hpMul": 1.8,
+      "groups": [
+        {
+          "enemy": "love_g",
+          "count": 5,
+          "interval": 1.2,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "chameleon_t",
+          "count": 5,
+          "interval": 1.0,
+          "path": "east",
+          "delay": 0
+        },
+        {
+          "enemy": "boss_yoshka",
+          "count": 1,
+          "interval": 1,
+          "path": "north",
+          "delay": 6
+        }
+      ]
+    }
+  ]
+}

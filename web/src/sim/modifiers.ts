@@ -90,6 +90,13 @@ export interface RunModifiers {
   dropLifetimeAdd: number;
   waveRewardPct: number;
   gumOnHitChance: number;
+  /** SPEC-116: マイルストーン「GUM 自動回収」 */
+  autoCollect: number;
+  /** SPEC-115: 魔石の解放（フラグ） */
+  stoneIfrit: number;
+  stoneLeviathan: number;
+  stoneTiamat: number;
+  stoneGaruda: number;
 }
 
 export type ModifierKey = keyof RunModifiers;
@@ -173,6 +180,11 @@ export function emptyModifiers(): RunModifiers {
     dropLifetimeAdd: 0,
     waveRewardPct: 0,
     gumOnHitChance: 0,
+    autoCollect: 0,
+    stoneIfrit: 0,
+    stoneLeviathan: 0,
+    stoneTiamat: 0,
+    stoneGaruda: 0,
   };
   return zero;
 }

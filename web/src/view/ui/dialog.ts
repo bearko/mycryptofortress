@@ -3,6 +3,7 @@ import { SPEAKER_NAME, type DialogLine, type Speaker } from "../../data/dialogs"
 import { playSe } from "../audio";
 import { GAME_HEIGHT, GAME_WIDTH } from "../layout";
 import { COLORS, textStyle } from "./theme";
+import { jaWrap } from "./jaWrap";
 
 /** 立ち絵の表示設定（アニメーションは BootScene で登録） */
 const PORTRAIT: Record<Speaker, { texture: string; idle: string; speak: string; scale: number }> = {
@@ -40,7 +41,7 @@ export function playDialog(scene: Phaser.Scene, lines: DialogLine[]): Promise<vo
         .setOrigin(0, 1),
     );
     const body = add(
-      scene.add.text(BOX.x + 28, BOX.y + 26, "", { ...textStyle(26, { weight: 500 }), wordWrap: { width: BOX.w - 56, useAdvancedWrap: true }, lineSpacing: 8 }),
+      scene.add.text(BOX.x + 28, BOX.y + 26, "", { ...textStyle(26, { weight: 500 }), wordWrap: jaWrap(BOX.w - 56), lineSpacing: 8 }),
     );
     const next = add(scene.add.text(BOX.x + BOX.w - 30, BOX.y + BOX.h - 22, "▼", textStyle(22, { color: COLORS.gold })).setOrigin(0.5));
     scene.tweens.add({ targets: next, y: next.y + 6, duration: 400, yoyo: true, repeat: -1 });
@@ -66,7 +67,8 @@ export function playDialog(scene: Phaser.Scene, lines: DialogLine[]): Promise<vo
       const p = PORTRAIT[line.speaker];
       portrait.setScale(p.scale).play(p.speak, true);
       nameTag.setText(SPEAKER_NAME[line.speaker]);
-      full = line.text;
+      // 全文で折り返し位置を先に決め、1 文字ずつ出しても行が途中で組み変わらないようにする
+      full = body.runWordWrap(line.text);
       shown = 0;
       body.setText("");
       next.setVisible(false);
@@ -106,7 +108,7 @@ export function speechBubble(
   const p = PORTRAIT[speaker];
   const width = opts.width ?? 440;
   const sprite = scene.add.sprite(0, 0, p.texture).setOrigin(0.5, 1).setScale(p.scale).play(p.idle);
-  const body = scene.add.text(0, 0, text, { ...textStyle(22, { weight: 500, color: COLORS.bg }), wordWrap: { width: width - 40, useAdvancedWrap: true }, lineSpacing: 4 });
+  const body = scene.add.text(0, 0, text, { ...textStyle(22, { weight: 500, color: COLORS.bg }), wordWrap: jaWrap(width - 40), lineSpacing: 4 });
   const bw = width;
   const bh = body.height + 32;
   const bx = sprite.displayWidth / 2 + 24;

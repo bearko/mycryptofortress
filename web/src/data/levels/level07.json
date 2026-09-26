@@ -1,0 +1,350 @@
+{
+  "id": "L7",
+  "name": "ジャカード・ノード",
+  "background": "bg.node.1003",
+  "cols": 9,
+  "rows": 12,
+  "cryptid": {
+    "col": 4,
+    "row": 10
+  },
+  "startGum": 230,
+  "cryptidHp": 3,
+  "prepSeconds": 15,
+  "intermissionSeconds": 6,
+  "reward": {
+    "perWave": 13,
+    "clear": 90,
+    "firstClear": 110,
+    "emblems": 3
+  },
+  "paths": [
+    {
+      "id": "west",
+      "points": [
+        [-1, 2],
+        [2, 2],
+        [2, 7],
+        [4, 7],
+        [4, 10]
+      ]
+    },
+    {
+      "id": "east",
+      "points": [
+        [9, 4],
+        [6, 4],
+        [6, 9],
+        [4, 9],
+        [4, 10]
+      ]
+    }
+  ],
+  "slots": [
+    {
+      "col": 1,
+      "row": 4
+    },
+    {
+      "col": 3,
+      "row": 3
+    },
+    {
+      "col": 3,
+      "row": 5,
+      "element": "garuda"
+    },
+    {
+      "col": 1,
+      "row": 8
+    },
+    {
+      "col": 3,
+      "row": 8
+    },
+    {
+      "col": 5,
+      "row": 5
+    },
+    {
+      "col": 5,
+      "row": 7,
+      "element": "ifrit"
+    },
+    {
+      "col": 7,
+      "row": 6
+    },
+    {
+      "col": 7,
+      "row": 2
+    },
+    {
+      "col": 5,
+      "row": 2
+    },
+    {
+      "col": 8,
+      "row": 8,
+      "kind": "locked",
+      "cost": 180
+    },
+    {
+      "col": 3,
+      "row": 11,
+      "kind": "locked",
+      "cost": 180
+    }
+  ],
+  "waves": [
+    {
+      "reward": 20,
+      "hpMul": 11.0,
+      "groups": [
+        {
+          "enemy": "chameleon_s",
+          "count": 5,
+          "interval": 1.3,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "byte_g",
+          "count": 4,
+          "interval": 1.4,
+          "path": "east",
+          "delay": 1
+        }
+      ]
+    },
+    {
+      "reward": 22,
+      "hpMul": 12.1,
+      "groups": [
+        {
+          "enemy": "heartbleed_s",
+          "count": 3,
+          "interval": 2.0,
+          "path": "east",
+          "delay": 0
+        },
+        {
+          "enemy": "byte_g",
+          "count": 6,
+          "interval": 1.0,
+          "path": "east",
+          "delay": 0.5
+        },
+        {
+          "enemy": "rabbit_t",
+          "count": 6,
+          "interval": 0.6,
+          "path": "west",
+          "delay": 1
+        }
+      ]
+    },
+    {
+      "reward": 24,
+      "hpMul": 13.75,
+      "groups": [
+        {
+          "enemy": "chameleon_s",
+          "count": 6,
+          "interval": 1.0,
+          "path": "east",
+          "delay": 0
+        },
+        {
+          "enemy": "creeper_t",
+          "count": 6,
+          "interval": 1.1,
+          "path": "west",
+          "delay": 1
+        }
+      ]
+    },
+    {
+      "reward": 26,
+      "hpMul": 15.4,
+      "groups": [
+        {
+          "enemy": "bagle_t",
+          "count": 4,
+          "interval": 1.8,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "heartbleed_s",
+          "count": 3,
+          "interval": 1.8,
+          "path": "west",
+          "delay": 2
+        },
+        {
+          "enemy": "chameleon_s",
+          "count": 5,
+          "interval": 1.0,
+          "path": "east",
+          "delay": 1
+        }
+      ]
+    },
+    {
+      "reward": 28,
+      "hpMul": 17.05,
+      "groups": [
+        {
+          "enemy": "chameleon_t",
+          "count": 5,
+          "interval": 1.2,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "chameleon_t",
+          "count": 5,
+          "interval": 1.2,
+          "path": "east",
+          "delay": 0.6
+        }
+      ]
+    },
+    {
+      "reward": 30,
+      "hpMul": 18.7,
+      "groups": [
+        {
+          "enemy": "heartbleed_t",
+          "count": 3,
+          "interval": 2.0,
+          "path": "east",
+          "delay": 0
+        },
+        {
+          "enemy": "bagle_t",
+          "count": 5,
+          "interval": 1.5,
+          "path": "east",
+          "delay": 0.8
+        },
+        {
+          "enemy": "rabbit_t",
+          "count": 8,
+          "interval": 0.5,
+          "path": "west",
+          "delay": 2
+        }
+      ]
+    },
+    {
+      "reward": 32,
+      "hpMul": 20.9,
+      "groups": [
+        {
+          "enemy": "chameleon_t",
+          "count": 6,
+          "interval": 1.0,
+          "path": "east",
+          "delay": 0
+        },
+        {
+          "enemy": "creeper_t",
+          "count": 8,
+          "interval": 0.9,
+          "path": "west",
+          "delay": 1
+        },
+        {
+          "enemy": "heartbleed_s",
+          "count": 3,
+          "interval": 1.6,
+          "path": "west",
+          "delay": 4
+        }
+      ]
+    },
+    {
+      "reward": 34,
+      "hpMul": 23.1,
+      "groups": [
+        {
+          "enemy": "byte_g",
+          "count": 8,
+          "interval": 0.9,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "chameleon_t",
+          "count": 6,
+          "interval": 1.0,
+          "path": "east",
+          "delay": 1
+        },
+        {
+          "enemy": "heartbleed_t",
+          "count": 3,
+          "interval": 1.8,
+          "path": "west",
+          "delay": 5
+        }
+      ]
+    },
+    {
+      "reward": 36,
+      "hpMul": 25.85,
+      "groups": [
+        {
+          "enemy": "bagle_t",
+          "count": 6,
+          "interval": 1.3,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "chameleon_t",
+          "count": 8,
+          "interval": 0.8,
+          "path": "east",
+          "delay": 0.5
+        },
+        {
+          "enemy": "heartbleed_t",
+          "count": 4,
+          "interval": 1.5,
+          "path": "east",
+          "delay": 5
+        }
+      ]
+    },
+    {
+      "reward": 38,
+      "hpMul": 1.2,
+      "groups": [
+        {
+          "enemy": "chameleon_t",
+          "count": 5,
+          "interval": 1.0,
+          "path": "east",
+          "delay": 0
+        },
+        {
+          "enemy": "heartbleed_t",
+          "count": 3,
+          "interval": 1.6,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "boss_genghis",
+          "count": 1,
+          "interval": 1,
+          "path": "west",
+          "delay": 6
+        }
+      ]
+    }
+  ]
+}
