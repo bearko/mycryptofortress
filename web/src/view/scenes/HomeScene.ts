@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { CRYPTIDS, getCryptid, type CryptidId } from "../../data/cryptids";
+import { getLevel } from "../../data/levels";
 import { DEFAULT_BGM_VOLUME, DEFAULT_SE_VOLUME, playBgm, playSe } from "../audio";
 import { bindPress } from "../input/press";
 import { CENTER_X, GAME_WIDTH, MARGIN } from "../layout";
@@ -27,6 +28,7 @@ export class HomeScene extends Phaser.Scene {
   create(): void {
     this.cells.clear();
     this.cameras.main.fadeIn(250, 11, 13, 18);
+    playBgm(this, "bgm.land");
     const selected = session.data.profile.cryptidId;
     this.background = new LandBackground(this, 0.62);
     void this.background.show(selected);
@@ -77,13 +79,17 @@ export class HomeScene extends Phaser.Scene {
 
   private buildMenu(): void {
     const fullW = GAME_WIDTH - MARGIN * 2;
+    const level = getLevel("L1");
     new Button(this, CENTER_X, 1100, {
       width: fullW,
       height: 96,
       label: "出撃",
-      sub: "Phase 1 で解放",
-      kind: "locked",
-      onTap: () => showToast(this, "出撃は Phase 1 で解放されます"),
+      sub: `Lv1 ${level.name}`,
+      kind: "primary",
+      onTap: () => {
+        this.cameras.main.fadeOut(200, 11, 13, 18);
+        this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start("Run", { levelId: level.id }));
+      },
     });
 
     const y = 1210;
@@ -127,7 +133,7 @@ export class HomeScene extends Phaser.Scene {
     if (byUser) {
       if (session.data.profile.cryptidId === id) return;
       session.update((d) => ({ ...d, profile: { ...d.profile, cryptidId: id } }));
-      playSe(this, "se.ui.select");
+      playSe(this, "se.treasure");
       void this.background.show(id);
     }
     this.showcase.setCryptid(id);

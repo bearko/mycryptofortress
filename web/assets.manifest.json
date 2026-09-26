@@ -165,14 +165,109 @@
       "path": "Audio/BGM/land.mp3"
     },
     {
-      "key": "se.ui.tap",
+      "key": "se.buff",
       "type": "audio",
       "path": "Audio/SE/Battle/4_buff.mp3"
     },
     {
-      "key": "se.ui.select",
+      "key": "se.treasure",
       "type": "audio",
       "path": "Audio/SE/Actions/open_treasure.mp3"
+    },
+    {
+      "key": "hero.3026",
+      "type": "image",
+      "path": "Image/Heroes/3026.png"
+    },
+    {
+      "key": "enemy.161",
+      "type": "image",
+      "path": "Image/Enemies/161.png"
+    },
+    {
+      "key": "enemy.162",
+      "type": "image",
+      "path": "Image/Enemies/162.png"
+    },
+    {
+      "key": "enemy.163",
+      "type": "image",
+      "path": "Image/Enemies/163.png"
+    },
+    {
+      "key": "enemy.386",
+      "type": "image",
+      "path": "Image/Enemies/386.png"
+    },
+    {
+      "key": "enemy.387",
+      "type": "image",
+      "path": "Image/Enemies/387.png"
+    },
+    {
+      "key": "enemy.450",
+      "type": "image",
+      "path": "Image/Enemies/450.png"
+    },
+    {
+      "key": "bg.node.1037",
+      "type": "image",
+      "path": "Image/Backgrounds/1037.png",
+      "preload": false
+    },
+    {
+      "key": "fx.single_damage",
+      "type": "spritesheet",
+      "path": "Image/Effects/Battle/01_single_damage.png",
+      "frameWidth": 100,
+      "frameHeight": 100
+    },
+    {
+      "key": "bgm.pve",
+      "type": "audio",
+      "path": "Audio/BGM/pve.mp3",
+      "preload": false
+    },
+    {
+      "key": "bgm.raid",
+      "type": "audio",
+      "path": "Audio/BGM/raid.mp3",
+      "preload": false
+    },
+    {
+      "key": "se.hit",
+      "type": "audio",
+      "path": "Audio/SE/Battle/1_single_damage.mp3"
+    },
+    {
+      "key": "se.area",
+      "type": "audio",
+      "path": "Audio/SE/Battle/2_area_damage.mp3"
+    },
+    {
+      "key": "se.debuff",
+      "type": "audio",
+      "path": "Audio/SE/Battle/5_debuff_status_effect.mp3"
+    },
+    {
+      "key": "se.crash",
+      "type": "audio",
+      "path": "Audio/SE/Actions/crash.mp3"
+    },
+    {
+      "key": "se.production",
+      "type": "audio",
+      "path": "Audio/SE/Actions/production.mp3"
+    },
+    {
+      "key": "jingle.win",
+      "type": "audio",
+      "path": "Audio/SE/Jingles/win.mp3"
+    },
+    {
+      "key": "jingle.lose",
+      "type": "audio",
+      "path": "Audio/SE/Jingles/lose.mp3"
     }
   ]
 }

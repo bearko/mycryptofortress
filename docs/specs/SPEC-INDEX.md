@@ -8,6 +8,10 @@
 | [SPEC-004](./SPEC-004-skills.md) | Deprecated（→ SPEC-100） | スキルシステム（ゲージ・タップ発動・カットイン・SE・職業別エフェクト） | 2026-05-07 |
 | [SPEC-100](./SPEC-100-v2-game-design.md) | Draft | v2 ゲームデザイン（Outhold 型 TD × インクリメンタル / MCH アセット）v0.2 | 2026-09-26 |
 | [SPEC-101](./SPEC-101-phase0-foundation.md) | Accepted | Phase 0: v1 撤去と v2 基盤（アセット同期・縦画面・入力・セーブ・CI） | 2026-09-26 |
+| [SPEC-102](./SPEC-102-sim-core.md) | Accepted | シミュレーションコア（決定的 RunSim・ターゲット優先度・イベント） | 2026-09-26 |
+| [SPEC-103](./SPEC-103-level-format.md) | Accepted | レベル定義フォーマットとバリデータ | 2026-09-26 |
+| [SPEC-104](./SPEC-104-cryptid-archer-gum.md) | Accepted | 幻獣・弓ヒーロー・エネミー・GUM（Lv1 の中身） | 2026-09-26 |
+| [SPEC-105](./SPEC-105-run-ui.md) | Accepted | ラン UI（スマホ縦画面） | 2026-09-26 |
 
 ## v1 → v2 の切り替え
 

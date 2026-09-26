@@ -36,7 +36,7 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.input.once(Phaser.Input.Events.POINTER_UP, () => {
-      playSe(this, "se.ui.tap");
+      playSe(this, "se.buff");
       playBgm(this, "bgm.land");
       this.cameras.main.fadeOut(250, 11, 13, 18);
       this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start("Home"));

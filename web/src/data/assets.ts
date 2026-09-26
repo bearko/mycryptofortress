@@ -4,7 +4,7 @@ import manifest from "../../assets.manifest.json";
  * SPEC-101 §5.2: `web/assets.manifest.json` を唯一の登録先とする MCH アセット一覧。
  * 実体は `npm run assets:sync` で `public/assets/mch/<path>` に同梱される。
  */
-export type AssetType = "image" | "audio";
+export type AssetType = "image" | "audio" | "spritesheet";
 
 export interface AssetEntry {
   /** ゲーム内の論理キー（一意） */
@@ -14,6 +14,9 @@ export interface AssetEntry {
   path: string;
   /** false の場合は Boot で読まず、必要になった時点で読む（大きい背景など） */
   preload?: boolean;
+  /** spritesheet のみ: 1 コマのサイズ（px） */
+  frameWidth?: number;
+  frameHeight?: number;
 }
 
 export const ASSET_BASE_URL = "assets/mch/";

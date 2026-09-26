@@ -37,9 +37,9 @@ export class Button extends Phaser.GameObjects.Container {
     };
     const h = Math.max(MIN_TAP, this.opts.height);
     this.bg = scene.add.graphics();
-    this.labelText = scene.add.text(0, this.opts.sub ? -12 : 0, this.opts.label, textStyle(30)).setOrigin(0.5);
+    this.labelText = scene.add.text(0, this.opts.sub !== undefined ? -12 : 0, this.opts.label, textStyle(30)).setOrigin(0.5);
     this.add([this.bg, this.labelText]);
-    if (this.opts.sub) {
+    if (this.opts.sub !== undefined) {
       this.subText = scene.add.text(0, 22, this.opts.sub, textStyle(18, { weight: 500 })).setOrigin(0.5);
       this.add(this.subText);
     }
@@ -48,7 +48,7 @@ export class Button extends Phaser.GameObjects.Container {
     bindPress(this, {
       onPressChange: (pressed) => this.setScale(pressed ? 0.96 : 1),
       onTap: () => {
-        playSe(scene, "se.ui.tap");
+        playSe(scene, "se.buff");
         this.opts.onTap?.();
       },
     });
@@ -57,13 +57,19 @@ export class Button extends Phaser.GameObjects.Container {
   }
 
   setLabel(label: string): this {
-    this.labelText.setText(label);
+    if (this.labelText.text !== label) this.labelText.setText(label);
     return this;
   }
 
   setKind(kind: ButtonKind): this {
+    if (this.opts.kind === kind) return this;
     this.opts.kind = kind;
     this.redraw();
+    return this;
+  }
+
+  setSub(sub: string): this {
+    if (this.subText && this.subText.text !== sub) this.subText.setText(sub);
     return this;
   }
 
@@ -175,6 +181,12 @@ export class CryptidDisplay extends Phaser.GameObjects.Container {
     scene.tweens.add({ targets: this.sprite, y: -14, duration: 1600, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
     scene.tweens.add({ targets: this.aura, scale: 1.08, alpha: 0.7, duration: 1600, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
     scene.add.existing(this);
+  }
+
+  /** 被弾演出: 赤く光らせる */
+  flash(): void {
+    this.sprite.setTint(0xff6070);
+    this.scene.time.delayedCall(160, () => this.sprite.active && this.sprite.clearTint());
   }
 
   setCryptid(id: CryptidId): void {
