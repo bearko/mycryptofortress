@@ -1,11 +1,12 @@
 import { DEFAULT_CRYPTID_ID, isCryptidId, type CryptidId } from "../data/cryptids";
+import { TREE_VERSION } from "../data/tree";
 import type { StorageLike } from "./storage";
 
 /**
  * SPEC-101 §5.5: セーブデータ。スキーマを変える時は SAVE_SCHEMA_VERSION を上げ、
  * MIGRATIONS[旧バージョン] に 1 段分の変換を追加する。
  */
-export const SAVE_SCHEMA_VERSION = 3;
+export const SAVE_SCHEMA_VERSION = 4;
 
 export interface SaveData {
   schemaVersion: typeof SAVE_SCHEMA_VERSION;
@@ -35,10 +36,12 @@ export interface MetaState {
   levels: Record<string, LevelProgress>;
   /** 一度だけ見せる会話の既読 ID */
   seenDialogs: string[];
+  /** 最後に合わせたスキルツリーの版（TREE_VERSION と違えば全返金する） */
+  treeVersion: number;
 }
 
 export function emptyMeta(): MetaState {
-  return { tokens: { ce: 0 }, tokensEarned: { ce: 0 }, tree: {}, levels: {}, seenDialogs: [] };
+  return { tokens: { ce: 0 }, tokensEarned: { ce: 0 }, tree: {}, levels: {}, seenDialogs: [], treeVersion: TREE_VERSION };
 }
 
 export const SLOT_IDS = [1, 2, 3] as const;
@@ -58,6 +61,8 @@ export const MIGRATIONS: Migrations = {
     const meta = d.meta as MetaState;
     return { ...d, meta: { ...meta, tree: {}, tokens: { ...meta.tokens, ce: meta.tokensEarned.ce } } };
   },
+  // v3 → v4: ツリーの版を記録する（0 = 不明 → 読み込み時に syncTreeVersion で全返金される）
+  3: (d) => ({ ...d, meta: { ...(d.meta as MetaState), treeVersion: 0 } }),
 };
 
 export function createNewSave(now: Date = new Date()): SaveData {
@@ -96,6 +101,7 @@ function isValidMeta(m: unknown): m is MetaState {
   for (const p of Object.values(m.levels)) {
     if (!isObj(p) || typeof p.cleared !== "boolean" || !isCount(p.bestWave) || !isCount(p.clears) || !isCount(p.runs)) return false;
   }
+  if (!Number.isInteger(m.treeVersion)) return false;
   return Array.isArray(m.seenDialogs) && m.seenDialogs.every((x) => typeof x === "string");
 }
 

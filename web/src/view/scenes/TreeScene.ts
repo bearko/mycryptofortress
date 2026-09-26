@@ -22,6 +22,11 @@ const ZOOM_MAX = 1.6;
 const BRANCH_COLOR: Record<TreeBranch, number> = {
   core: COLORS.gold,
   archer: 0x6be675,
+  lightning: 0xffe066,
+  pulse: 0xb48cff,
+  fire: 0xff7043,
+  miner: 0xe8c07a,
+  cannon: 0x5ee0ff,
   defense: 0x5aa9ff,
   economy: 0xf5a142,
 };
