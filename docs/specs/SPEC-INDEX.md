@@ -6,7 +6,7 @@
 | [SPEC-002](./SPEC-002-battle-screen-polish.md) | Deprecated（→ SPEC-100） | バトル画面ブラッシュアップ（タイル攻撃範囲・向き選択・描画調整・残 Unity 要素） | 2026-05-07 |
 | [SPEC-003](./SPEC-003-battle-systems.md) | Deprecated（→ SPEC-100） | バトル戦域システム（職業・多経路マップ・配置ルール・ブロック・ターゲティング） | 2026-05-07 |
 | [SPEC-004](./SPEC-004-skills.md) | Deprecated（→ SPEC-100） | スキルシステム（ゲージ・タップ発動・カットイン・SE・職業別エフェクト） | 2026-05-07 |
-| [SPEC-100](./SPEC-100-v2-game-design.md) | Draft | v2 ゲームデザイン（Outhold 型 TD × インクリメンタル / MCH アセット） | 2026-09-26 |
+| [SPEC-100](./SPEC-100-v2-game-design.md) | Draft | v2 ゲームデザイン（Outhold 型 TD × インクリメンタル / MCH アセット）v0.2 | 2026-09-26 |
 
 ## v1 → v2 の切り替え
 

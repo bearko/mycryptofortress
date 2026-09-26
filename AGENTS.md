@@ -16,7 +16,8 @@
 
 - **ゲーム実装は `web/` ディレクトリ配下に置く**（Vite + TypeScript + Phaser 3）。
 - **アセット参照**: ヒーロー画像・敵画像・SE/BGM は [bearko/mycryptoheroes](https://github.com/bearko/mycryptoheroes) から `raw.githubusercontent.com` 経由で取得するか、`web/public/assets/` 配下にローカルコピーを置く。重い画像をリポジトリにコミットせず、必要なものだけサブセット化する方針。
-- **由来 Unity プロジェクト**: `C:\Users\beark\UnityProject\MCHTowerDefence` のスクリプト群（`Assets/Scripts/5_Stage/*.cs`）が一次資料。ダメージ式・コスト・Wave 構造はここに沿う。差分は SPEC で明示する。
+- **v2（作り直し中）の一次資料**: [docs/research/OUTHOLD_ANALYSIS.md](docs/research/OUTHOLD_ANALYSIS.md)（Outhold のゲームシステム解析）と [docs/specs/SPEC-100-v2-game-design.md](docs/specs/SPEC-100-v2-game-design.md)（v2 親仕様）。進め方は [docs/ROADMAP.md](docs/ROADMAP.md)。v1 の由来だった Unity `MCHTowerDefence` は参照しない。
+- **MCH アセット原則**: 画面に出るキャラクター・アイコン・SE・BGM・背景・スキル名は原則 `mycryptoheroes` の素材を使う。オリジナルキャラクター（マインちゃん / クリスくん / マイクリくん）はナビゲーター / NPC 用。
 - **PR は完走させる**: テスト追加・型チェック・ビルド成功まで。論点は PR 本文の「マージ前確認事項（HITL）」に書く。
 
 ## 作業時のルール（要約）
