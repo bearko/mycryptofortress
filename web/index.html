@@ -4,16 +4,31 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
-    <title>MyCryptoFortress</title>
-    <!-- SPEC-018: Visual Refresh — Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap"
-      rel="stylesheet"
-    />
+    <meta name="theme-color" content="#0b0d12" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>MyCryptoFortress ─ 幻獣防衛戦</title>
+    <meta name="description" content="マイクリプトヒーローズのヒーローを配置して幻獣を守るタワーディフェンス × インクリメンタル。負けても CE でスキルツリーを強化し、次こそ突破！" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <!-- OGP / X（Twitter）カード: サムネイルは design/thumbnail/ から生成 -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="MyCryptoFortress" />
+    <meta property="og:title" content="MyCryptoFortress ─ 幻獣防衛戦" />
+    <meta property="og:description" content="ヒーローを配置して幻獣を守れ。負けても CE でスキルツリーを強化し、次こそ突破！（タワーディフェンス × インクリメンタル）" />
+    <meta property="og:url" content="%SITE_URL%/" />
+    <meta property="og:image" content="%SITE_URL%/og-image.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="ja_JP" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="MyCryptoFortress ─ 幻獣防衛戦" />
+    <meta name="twitter:description" content="ヒーローを配置して幻獣を守れ。負けても CE でスキルツリーを強化し、次こそ突破！" />
+    <meta name="twitter:image" content="%SITE_URL%/og-image.jpg" />
     <style>
       html,
       body {
@@ -21,27 +36,25 @@
         padding: 0;
         background: #0b0d12;
         color: #e7eaf0;
-        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-family: "Meiryo UI", Meiryo, "Yu Gothic UI", YuGothic, "Yu Gothic", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Noto Sans CJK JP", IPAPGothic, sans-serif;
         overflow: hidden;
         width: 100%;
         height: 100%;
+        /* SPEC-101 §5.3: スマホでのスクロール・ダブルタップ拡大・長押しメニューを抑止 */
+        touch-action: none;
+        overscroll-behavior: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
       }
-      /* SPEC-016: canvas をビューポート全体に広げる。dvh はモバイルブラウザの URL バー
-         自動隠しに追従し、100vh の余白問題を避ける。 */
       #app {
         position: fixed;
         inset: 0;
         width: 100vw;
         height: 100dvh;
-      }
-      /* SPEC-023: image-rendering: pixelated はブラウザの canvas 全体 NEAREST
-         アップスケールを強制する。Retina 環境で日本語テキストを潰す原因なので
-         撤廃。ヒーロー/敵スプライトのドット感は Phaser の NEAREST フィルタで
-         保つので不要。 */
-      #app canvas {
-        display: block;
-        width: 100% !important;
-        height: 100% !important;
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+        box-sizing: border-box;
       }
       .loader {
         position: absolute;

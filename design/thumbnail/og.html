@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<!-- OGP サムネイル（1200×630）の原稿。make-thumbnails.mjs が Playwright で PNG に書き出す。素材は MCH アセットのみ -->
+<style>
+@font-face { font-family: Orbitron; font-weight: 900; src: url(../../web/node_modules/@fontsource/orbitron/files/orbitron-latin-900-normal.woff2); }
+@font-face { font-family: Orbitron; font-weight: 700; src: url(../../web/node_modules/@fontsource/orbitron/files/orbitron-latin-700-normal.woff2); }
+* { margin: 0; box-sizing: border-box; }
+body { width: 1200px; height: 630px; overflow: hidden; background: #0b0d12; font-family: "Meiryo UI", "Hiragino Sans", IPAPGothic, sans-serif; color: #e7eaf0; }
+.stage { position: relative; width: 1200px; height: 630px; }
+.bg { position: absolute; inset: 0; background: url(../../web/public/assets/mch/Image/Backgrounds/1037.png) center 35% / cover; filter: saturate(1.1); }
+.shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(11,13,18,.97) 0%, rgba(11,13,18,.9) 38%, rgba(11,13,18,.35) 70%, rgba(11,13,18,.55) 100%); }
+.glow { position: absolute; right: 180px; top: 150px; width: 460px; height: 460px; border-radius: 50%; background: radial-gradient(circle, rgba(84,214,196,.35), rgba(84,214,196,0) 65%); }
+.path { position: absolute; left: 620px; right: -20px; top: 430px; height: 64px; background: rgba(11,13,18,.55); border-top: 3px solid rgba(84,214,196,.45); border-bottom: 3px solid rgba(84,214,196,.45); }
+img.px { image-rendering: pixelated; position: absolute; }
+.cryptid { width: 256px; left: 650px; top: 262px; filter: drop-shadow(0 0 24px rgba(84,214,196,.8)); }
+.hero { width: 128px; filter: drop-shadow(0 6px 6px rgba(0,0,0,.7)); }
+.enemy { width: 112px; filter: drop-shadow(0 6px 6px rgba(0,0,0,.7)); }
+.boss { width: 176px; filter: drop-shadow(0 0 18px rgba(224,72,90,.9)); }
+.beam { position: absolute; z-index: 2; left: 830px; top: 318px; width: 290px; height: 22px; border-radius: 11px; background: linear-gradient(90deg, #fffbe0, rgba(255,241,168,.85) 70%, rgba(255,241,168,0)); box-shadow: 0 0 26px 12px rgba(84,214,196,.6); transform: rotate(-4deg); transform-origin: left center; }
+.boss { z-index: 3; }
+.left { position: absolute; left: 64px; top: 70px; width: 560px; }
+.kicker { font-family: Orbitron; font-weight: 700; letter-spacing: 4px; font-size: 20px; color: #54d6c4; }
+h1 { font-family: Orbitron; font-weight: 900; font-size: 64px; line-height: 1.05; margin-top: 14px; color: #f5c542; text-shadow: 0 4px 0 #6b4d00, 0 0 30px rgba(245,197,66,.35); }
+.ja { font-size: 58px; font-weight: 700; margin-top: 22px; letter-spacing: 6px; }
+.lead { font-size: 25px; line-height: 1.6; margin-top: 18px; color: #c9cfdb; }
+.tags { display: flex; gap: 10px; margin-top: 26px; flex-wrap: wrap; }
+.tag { font-size: 19px; padding: 6px 14px; border-radius: 999px; border: 2px solid #2c3548; background: rgba(29,36,51,.9); }
+.credit { position: absolute; left: 64px; bottom: 34px; display: flex; align-items: center; gap: 14px; font-size: 16px; color: #9aa3b5; }
+.credit img { height: 30px; }
+</style></head><body><div class="stage">
+<div class="bg"></div><div class="shade"></div><div class="glow"></div><div class="path"></div>
+<!-- 幻獣と、それを囲むヒーロー（5 ロール） -->
+<img class="px hero" src="../../web/public/assets/mch/Image/Heroes/3026.png" style="left:600px; top:150px">
+<img class="px hero" src="../../web/public/assets/mch/Image/Heroes/4041.png" style="left:770px; top:110px">
+<img class="px hero" src="../../web/public/assets/mch/Image/Heroes/5015.png" style="left:930px; top:160px">
+<img class="px hero" src="../../web/public/assets/mch/Image/Heroes/3007.png" style="left:600px; top:470px">
+<img class="px hero" src="../../web/public/assets/mch/Image/Heroes/2025.png" style="left:900px; top:490px">
+<img class="px cryptid" src="../../web/public/assets/mch/Image/Cryptids/01_Ocean.png">
+<div class="beam"></div>
+<!-- 攻め込むエネミー -->
+<img class="px enemy" src="../../web/public/assets/mch/Image/Enemies/161.png" style="left:1010px; top:352px">
+<img class="px enemy" src="../../web/public/assets/mch/Image/Enemies/387.png" style="left:1090px; top:392px">
+<img class="px boss" src="../../web/public/assets/mch/Image/Enemies/450.png" style="left:1060px; top:230px">
+<div class="left">
+  <div class="kicker">TOWER DEFENSE × INCREMENTAL</div>
+  <h1>MyCrypto<br>Fortress</h1>
+  <div class="ja">幻獣防衛戦</div>
+  <div class="lead">ヒーローを配置して幻獣を守れ。<br>負けても CE でスキルツリーを強化し、次こそ突破！</div>
+  <div class="tags"><span class="tag">弓</span><span class="tag">雷</span><span class="tag">結界</span><span class="tag">炎</span><span class="tag">採掘</span><span class="tag">幻獣砲</span></div>
+</div>
+<div class="credit"><img src="../../web/public/assets/mch/Image/Icons/mch_logo_horizontal.png"> Assets © My Crypto Heroes</div>
+</div></body></html>

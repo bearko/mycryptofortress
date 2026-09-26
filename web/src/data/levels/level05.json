@@ -1,0 +1,341 @@
+{
+  "id": "L5",
+  "name": "バベッジ・ノード",
+  "background": "bg.node.1039",
+  "cols": 9,
+  "rows": 12,
+  "cryptid": {
+    "col": 4,
+    "row": 11
+  },
+  "startGum": 190,
+  "cryptidHp": 3,
+  "prepSeconds": 15,
+  "intermissionSeconds": 6,
+  "reward": {
+    "perWave": 9,
+    "clear": 60,
+    "firstClear": 70
+  },
+  "paths": [
+    {
+      "id": "west",
+      "points": [
+        [-1, 1],
+        [2, 1],
+        [2, 5],
+        [1, 5],
+        [1, 9],
+        [3, 9],
+        [3, 11],
+        [4, 11]
+      ]
+    },
+    {
+      "id": "east",
+      "points": [
+        [9, 1],
+        [6, 1],
+        [6, 5],
+        [7, 5],
+        [7, 9],
+        [5, 9],
+        [5, 11],
+        [4, 11]
+      ]
+    }
+  ],
+  "slots": [
+    {
+      "col": 4,
+      "row": 2
+    },
+    {
+      "col": 3,
+      "row": 3
+    },
+    {
+      "col": 5,
+      "row": 3
+    },
+    {
+      "col": 4,
+      "row": 4
+    },
+    {
+      "col": 3,
+      "row": 6
+    },
+    {
+      "col": 5,
+      "row": 6
+    },
+    {
+      "col": 2,
+      "row": 7
+    },
+    {
+      "col": 6,
+      "row": 7
+    },
+    {
+      "col": 4,
+      "row": 8
+    },
+    {
+      "col": 0,
+      "row": 7,
+      "kind": "locked",
+      "cost": 140
+    },
+    {
+      "col": 8,
+      "row": 7,
+      "kind": "locked",
+      "cost": 140
+    },
+    {
+      "col": 4,
+      "row": 10,
+      "kind": "locked",
+      "cost": 140
+    }
+  ],
+  "waves": [
+    {
+      "reward": 16,
+      "hpMul": 3.9,
+      "groups": [
+        {
+          "enemy": "byte_g",
+          "count": 4,
+          "interval": 1.4,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "byte_g",
+          "count": 4,
+          "interval": 1.4,
+          "path": "east",
+          "delay": 0.7
+        }
+      ]
+    },
+    {
+      "reward": 18,
+      "hpMul": 4.29,
+      "groups": [
+        {
+          "enemy": "rabbit_t",
+          "count": 8,
+          "interval": 0.6,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "creeper_t",
+          "count": 5,
+          "interval": 1.2,
+          "path": "east",
+          "delay": 1
+        }
+      ]
+    },
+    {
+      "reward": 20,
+      "hpMul": 4.875,
+      "groups": [
+        {
+          "enemy": "bagle_s",
+          "count": 4,
+          "interval": 1.8,
+          "path": "east",
+          "delay": 0
+        },
+        {
+          "enemy": "rabbit_t",
+          "count": 7,
+          "interval": 0.6,
+          "path": "west",
+          "delay": 1
+        }
+      ]
+    },
+    {
+      "reward": 22,
+      "hpMul": 5.46,
+      "groups": [
+        {
+          "enemy": "creeper_t",
+          "count": 7,
+          "interval": 1.0,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "creeper_t",
+          "count": 7,
+          "interval": 1.0,
+          "path": "east",
+          "delay": 0.5
+        }
+      ]
+    },
+    {
+      "reward": 24,
+      "hpMul": 6.045,
+      "groups": [
+        {
+          "enemy": "bagle_t",
+          "count": 4,
+          "interval": 2.0,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "byte_g",
+          "count": 6,
+          "interval": 1.1,
+          "path": "east",
+          "delay": 1
+        }
+      ]
+    },
+    {
+      "reward": 26,
+      "hpMul": 6.63,
+      "groups": [
+        {
+          "enemy": "rabbit_t",
+          "count": 10,
+          "interval": 0.45,
+          "path": "east",
+          "delay": 0
+        },
+        {
+          "enemy": "bagle_s",
+          "count": 4,
+          "interval": 1.6,
+          "path": "west",
+          "delay": 1
+        },
+        {
+          "enemy": "creeper_t",
+          "count": 6,
+          "interval": 0.9,
+          "path": "east",
+          "delay": 6
+        }
+      ]
+    },
+    {
+      "reward": 28,
+      "hpMul": 7.41,
+      "groups": [
+        {
+          "enemy": "bagle_t",
+          "count": 4,
+          "interval": 1.8,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "bagle_t",
+          "count": 4,
+          "interval": 1.8,
+          "path": "east",
+          "delay": 0.9
+        }
+      ]
+    },
+    {
+      "reward": 30,
+      "hpMul": 8.19,
+      "groups": [
+        {
+          "enemy": "byte_g",
+          "count": 7,
+          "interval": 1.0,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "creeper_t",
+          "count": 8,
+          "interval": 0.8,
+          "path": "east",
+          "delay": 0
+        },
+        {
+          "enemy": "rabbit_t",
+          "count": 8,
+          "interval": 0.45,
+          "path": "west",
+          "delay": 6
+        }
+      ]
+    },
+    {
+      "reward": 32,
+      "hpMul": 8.97,
+      "groups": [
+        {
+          "enemy": "bagle_t",
+          "count": 5,
+          "interval": 1.5,
+          "path": "east",
+          "delay": 0
+        },
+        {
+          "enemy": "creeper_t",
+          "count": 8,
+          "interval": 0.8,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "byte_g",
+          "count": 6,
+          "interval": 1.0,
+          "path": "east",
+          "delay": 7
+        }
+      ]
+    },
+    {
+      "reward": 34,
+      "hpMul": 0.8,
+      "groups": [
+        {
+          "enemy": "byte_g",
+          "count": 6,
+          "interval": 1.0,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "byte_g",
+          "count": 6,
+          "interval": 1.0,
+          "path": "east",
+          "delay": 0
+        },
+        {
+          "enemy": "boss_grimm",
+          "count": 1,
+          "interval": 1,
+          "path": "west",
+          "delay": 6
+        },
+        {
+          "enemy": "boss_wright",
+          "count": 1,
+          "interval": 1,
+          "path": "east",
+          "delay": 6
+        }
+      ]
+    }
+  ]
+}
