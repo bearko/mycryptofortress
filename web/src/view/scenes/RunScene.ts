@@ -4,7 +4,8 @@ import { ROLES } from "../../data/balance/heroes";
 import { getAsset } from "../../data/assets";
 import { getLevel } from "../../data/levels";
 import { DIALOGS, maycriComment } from "../../data/dialogs";
-import { applyRunResult, computeModifiers, computeReward, hasSeen, markSeen } from "../../meta/progress";
+import { TREE } from "../../data/tree";
+import { applyRunResult, buyBlock, computeModifiers, computeReward, hasSeen, markSeen } from "../../meta/progress";
 import { RunSim, TARGET_MODES, TICK, type SimEvent } from "../../sim/run";
 import { queueAsset } from "../assetLoader";
 import { playBgm, playSe } from "../audio";
@@ -209,7 +210,8 @@ export class RunScene extends Phaser.Scene {
   private place(slotIndex: number): void {
     const cost = this.sim.placeCost("archer");
     if (this.sim.gum < cost) return showToast(this, `GUM が足りません（${cost} 必要）`);
-    if (this.sim.placeHero(slotIndex, "archer")) this.select(slotIndex);
+    // 配置後は未選択に戻し、続けて別のマスをタップできるようにする
+    if (this.sim.placeHero(slotIndex, "archer")) this.select(null);
   }
 
   private levelUp(heroId: number): void {
@@ -416,13 +418,24 @@ export class RunScene extends Phaser.Scene {
     // マイクリくんの実況（SPEC-108a）
     add(speechBubble(this, "maycri", 120, top + 895, maycriComment(won, st.wavesReached, reward.ce), { width: 440, depth: 201 }));
 
+    // SPEC-106 §2: 強化せずに再挑戦して同じ負け方をしないよう、スキルツリーを主ボタンにする（Outhold の「アップグレード」相当）
     const by = top + 950;
-    const bw = 196;
-    const gap = (GAME_WIDTH - 80 - 32 - bw * 3) / 2;
-    const bx = (i: number) => 40 + 16 + bw / 2 + i * (bw + gap);
-    add(new Button(this, bx(0), by, { width: bw, label: "ツリー", onTap: () => goTo(this, "Tree") }));
-    add(new Button(this, bx(1), by, { width: bw, label: "もう一度", kind: "primary", onTap: () => this.scene.restart({ levelId: this.levelId }) }));
-    add(new Button(this, bx(2), by, { width: bw, label: "ホーム", onTap: () => goTo(this, "Home") }));
+    const affordable = TREE.filter((n) => buyBlock(session.data, n.id) === null).length;
+    const ce = session.data.meta.tokens.ce;
+    const retryW = 210;
+    const treeW = GAME_WIDTH - 80 - 32 - retryW - 16;
+    add(new Button(this, 56 + retryW / 2, by, { width: retryW, label: "もう一度", onTap: () => this.scene.restart({ levelId: this.levelId }) }));
+    const treeBtn = add(
+      new Button(this, 56 + retryW + 16 + treeW / 2, by, {
+        width: treeW,
+        height: 104,
+        label: "スキルツリーで強化",
+        sub: affordable > 0 ? `強化できるスキル ${affordable} 個 ／ CE ${ce}` : `CE ${ce}`,
+        kind: "primary",
+        onTap: () => goTo(this, "Tree", { retryLevelId: this.levelId }),
+      }),
+    );
+    if (affordable > 0) this.tweens.add({ targets: treeBtn, scale: 1.05, duration: 520, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
 
     if (!hasSeen(session.data, "result.first")) {
       this.time.delayedCall(700, () => {
