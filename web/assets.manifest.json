@@ -558,13 +558,6 @@
       "key": "icon.battle.dbf_agi",
       "type": "image",
       "path": "Image/BattleIcons/Buffs/dbf_agi.png"
-    },
-    {
-      "key": "fx.area_damage",
-      "type": "spritesheet",
-      "path": "Image/Effects/Battle/02_area_damage.png",
-      "frameWidth": 100,
-      "frameHeight": 100
     }
   ]
 }

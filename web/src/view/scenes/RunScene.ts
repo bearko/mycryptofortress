@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { ENEMIES } from "../../data/balance/enemies";
-import { ROLES } from "../../data/balance/heroes";
+import { ROLES, roleStats, type RoleId } from "../../data/balance/heroes";
 import { getAsset } from "../../data/assets";
 import { getLevel } from "../../data/levels";
 import { DIALOGS, maycriComment } from "../../data/dialogs";
@@ -24,7 +24,7 @@ const SPEEDS = [1, 2] as const;
 /** 1 フレームで進める tick の上限（タブ復帰時などの暴走防止） */
 const MAX_STEPS_PER_FRAME = 12;
 /** 同じ SE を鳴らす最短間隔（ms） */
-const SE_THROTTLE_MS: Record<string, number> = { "se.hit": 70, "se.area": 90, "se.treasure": 60 };
+const SE_THROTTLE_MS: Record<string, number> = { "se.hit": 70, "se.area": 90, "se.treasure": 60, "se.debuff": 200 };
 
 interface RunSceneData {
   levelId?: string;
@@ -44,6 +44,8 @@ export class RunScene extends Phaser.Scene {
   private resultShown = false;
   private overlay: Phaser.GameObjects.GameObject[] = [];
   private lastSe = new Map<string, number>();
+  /** SPEC-114: 幻獣砲モード（ON の間は盤面を押している方向へ撃ち続ける） */
+  private cannonArmed = false;
 
   constructor() {
     super("Run");
@@ -58,6 +60,7 @@ export class RunScene extends Phaser.Scene {
     this.resultShown = false;
     this.overlay = [];
     this.lastSe.clear();
+    this.cannonArmed = false;
   }
 
   preload(): void {
@@ -94,14 +97,23 @@ export class RunScene extends Phaser.Scene {
       this.sim,
       {
         startWave: () => this.sim.startNextWave(),
+        callEarly: () => this.sim.callEarly(),
         toggleSpeed: () => (this.speedIndex = (this.speedIndex + 1) % SPEEDS.length),
+        toggleCannon: () => {
+          this.cannonArmed = !this.cannonArmed;
+          if (this.cannonArmed) showToast(this, "盤面を押している方向へ幻獣砲を撃ちます");
+        },
         openMenu: () => this.openMenu(),
-        place: (i) => this.place(i),
+        place: (i, role) => this.place(i, role),
+        openSlot: (i) => this.openSlot(i),
+        previewRole: (role) => this.board.setPreviewRole(role),
+        showRoleInfo: (role, x, y) => this.showRoleInfo(role, x, y),
         levelUp: (id) => this.levelUp(id),
         cycleTarget: (id) => this.cycleTarget(id),
         deselect: () => this.select(null),
       },
       () => SPEEDS[this.speedIndex],
+      () => this.cannonArmed,
     );
     this.setupBoardInput();
     playBgm(this, "bgm.pve");
@@ -133,6 +145,7 @@ export class RunScene extends Phaser.Scene {
         steps++;
       }
       if (steps === MAX_STEPS_PER_FRAME) this.acc = 0;
+      this.updateCannon();
     }
     for (const e of this.sim.drainEvents()) this.onEvent(e);
     this.board.sync(time);
@@ -162,8 +175,17 @@ export class RunScene extends Phaser.Scene {
     this.input.on(Phaser.Input.Events.POINTER_DOWN, collect);
   }
 
+  /** 幻獣砲: ON で盤面を押している間、指の方向へ撃つ（クールダウンは sim 側） */
+  private updateCannon(): void {
+    if (!this.cannonArmed) return;
+    const p = this.input.activePointer;
+    if (!p.isDown || p.y < BOARD_TOP || p.y > BOARD_BOTTOM) return;
+    const c = toCell(p.x, p.y);
+    if (this.sim.fireCannon(c.x, c.y)) this.se("se.hit");
+  }
+
   private onBoardTap(px: number, py: number): void {
-    if (this.paused || this.sim.isOver) return;
+    if (this.paused || this.sim.isOver || this.cannonArmed) return;
     const c = toCell(px, py);
     const index = this.sim.level.slots.findIndex((s) => s.col === Math.floor(c.x) && s.row === Math.floor(c.y));
     this.select(index >= 0 && index !== this.selectedSlot ? index : null);
@@ -195,7 +217,7 @@ export class RunScene extends Phaser.Scene {
         this,
         px,
         py,
-        `${role.heroName}（${role.roleName}） Lv${hero.level}`,
+        `${this.sim.heroVisual(hero.role).heroName}（${role.roleName}） Lv${hero.level}`,
         `攻撃 ${st.damage.toFixed(1)} ／ 射程 ${st.range.toFixed(1)} ／ 間隔 ${st.interval.toFixed(2)}秒\n狙い: ${TARGET_LABEL[hero.targetMode]} ／ 累計ダメージ ${Math.floor(hero.totalDamage)}`,
       );
     }
@@ -207,11 +229,35 @@ export class RunScene extends Phaser.Scene {
     this.panel.setMode(index === null ? { kind: "none" } : { kind: "slot", slotIndex: index });
   }
 
-  private place(slotIndex: number): void {
-    const cost = this.sim.placeCost("archer");
+  private place(slotIndex: number, role: RoleId): void {
+    if (!this.sim.isRoleUnlocked(role)) return showToast(this, `${ROLES[role].roleName}のヒーローはスキルツリーで解放できます`);
+    const cost = this.sim.placeCost(role);
     if (this.sim.gum < cost) return showToast(this, `GUM が足りません（${cost} 必要）`);
     // 配置後は未選択に戻し、続けて別のマスをタップできるようにする
-    if (this.sim.placeHero(slotIndex, "archer")) this.select(null);
+    if (this.sim.placeHero(slotIndex, role)) this.select(null);
+  }
+
+  private openSlot(slotIndex: number): void {
+    const cost = this.sim.slotOpenCost(slotIndex);
+    if (cost === null) return;
+    if (this.sim.gum < cost) return showToast(this, `GUM が足りません（${cost} 必要）`);
+    this.sim.openSlot(slotIndex);
+  }
+
+  /** ロール選択カードの長押し: ヒーロー名・説明・性能 */
+  private showRoleInfo(role: RoleId, x: number, y: number): void {
+    const def = ROLES[role];
+    const v = this.sim.heroVisual(role);
+    const st = this.sim.statsFor(role);
+    const base = roleStats(def, 1);
+    const body = [
+      def.blurb,
+      role === "miner"
+        ? `範囲 ${st.range.toFixed(1)} マス`
+        : `攻撃 ${st.damage.toFixed(1)}（基礎 ${base.damage.toFixed(1)}）／ 射程 ${st.range.toFixed(1)} ／ 間隔 ${st.interval.toFixed(2)}秒`,
+      this.sim.isRoleUnlocked(role) ? `配置 ${this.sim.placeCost(role)} GUM` : "スキルツリーで解放すると配置できます",
+    ].join("\n");
+    showTooltip(this, x, y - 120, `${v.heroName}（${def.roleName}）`, body);
   }
 
   private levelUp(heroId: number): void {
@@ -267,8 +313,33 @@ export class RunScene extends Phaser.Scene {
         break;
       case "leak":
         if (e.blocked) this.floatText("防いだ！", 0x5aa9ff);
-        else this.se("se.crash");
+        else {
+          this.se("se.crash");
+          if (e.gum > 0) this.floatText(`無血開城 +${e.gum} GUM`, COLORS.gold);
+        }
         break;
+      case "discharge":
+        this.se("se.debuff");
+        break;
+      case "combust":
+      case "blast":
+        this.se("se.area");
+        break;
+      case "payout":
+        this.se("se.treasure");
+        break;
+      case "slotOpened":
+        this.se("se.production");
+        break;
+      case "earlyCall":
+        showToast(this, `Wave を繰り上げ！ +${e.bonus} GUM`);
+        break;
+      case "enrage": {
+        const name = this.sim.enemies.find((x) => x.id === e.enemyId)?.def.name ?? "";
+        this.se("se.debuff");
+        this.banner("激昂！", `${name}が怒りで加速した`, COLORS.danger);
+        break;
+      }
       case "lastStand":
         this.se("se.buff");
         this.banner("聖女の祈り", "幻獣がボスの一撃を耐えた！", COLORS.gold);
@@ -376,14 +447,19 @@ export class RunScene extends Phaser.Scene {
       ["回収した GUM", String(st.gumEarned)],
       ["残り HP", `${Math.ceil(this.sim.hp)} / ${this.sim.maxHp}`],
     ];
+    if (this.sim.cannonUnlocked) rows.push(["幻獣砲のダメージ", String(Math.floor(st.cannonDamage))]);
+    const minerGum = this.sim.heroes.filter((h) => h.role === "miner").reduce((sum, h) => sum + h.totalGum, 0);
+    if (minerGum > 0) rows.push(["採掘で得た GUM", String(minerGum)]);
+    // 行が増えたら詰める（下の CE・ダメージ・実況が重ならないように）
+    const rowH = rows.length > 4 ? 34 : 40;
     rows.forEach(([k, v], i) => {
-      const y = top + 160 + i * 40;
+      const y = top + 160 + i * rowH;
       add(this.add.text(90, y, k, textStyle(22, { weight: 500, color: COLORS.inkDim })).setOrigin(0, 0.5));
       add(this.add.text(GAME_WIDTH - 90, y, v, textStyle(24)).setOrigin(1, 0.5));
     });
 
     // 獲得 CE
-    const rt = top + 330;
+    const rt = top + 170 + rows.length * rowH;
     const box = this.add.graphics();
     const lines = reward.breakdown.length > 0 ? reward.breakdown : [{ label: "クリアした Wave なし", ce: 0 }];
     const boxH = 96 + lines.length * 28;
@@ -402,11 +478,11 @@ export class RunScene extends Phaser.Scene {
     // ヒーロー別ダメージ（上位 3）
     const ht = rt + boxH + 36;
     add(this.add.text(90, ht, "ヒーロー別ダメージ", textStyle(20, { color: COLORS.inkDim })).setOrigin(0, 0.5));
-    const heroes = [...this.sim.heroes].sort((a, b) => b.totalDamage - a.totalDamage).slice(0, 3);
+    const heroes = [...this.sim.heroes].sort((a, b) => b.totalDamage - a.totalDamage).slice(0, rows.length > 4 ? 2 : 3);
     const maxDmg = Math.max(1, ...heroes.map((h) => h.totalDamage));
     heroes.forEach((h, i) => {
       const y = ht + 44 + i * 44;
-      add(this.add.image(110, y, ROLES[h.role].imageKey).setScale(0.6));
+      add(this.add.image(110, y, this.sim.heroVisual(h.role).imageKey).setScale(0.6));
       add(this.add.text(150, y, `Lv${h.level}`, textStyle(20)).setOrigin(0, 0.5));
       const bar = this.add.graphics();
       bar.fillStyle(COLORS.gold, 0.85).fillRoundedRect(220, y - 10, 300 * (h.totalDamage / maxDmg), 20, 6);

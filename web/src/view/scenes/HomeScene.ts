@@ -7,7 +7,7 @@ import { bindPress } from "../input/press";
 import { CENTER_X, GAME_WIDTH, MARGIN } from "../layout";
 import { session } from "../session";
 import { COLORS, css, textStyle } from "../ui/theme";
-import { Button, CryptidDisplay, LandBackground, showTooltip } from "../ui/widgets";
+import { Button, CryptidDisplay, LandBackground, showToast, showTooltip } from "../ui/widgets";
 
 const GRID_COLS = 3;
 const CELL_GAP = 16;
@@ -30,6 +30,9 @@ export class HomeScene extends Phaser.Scene {
     this.cells.clear();
     this.cameras.main.fadeIn(250, 11, 13, 18);
     playBgm(this, "bgm.land");
+    // セーブ移行のお知らせ（ツリー改訂による自動返金など）
+    const notice = session.takeNotice();
+    if (notice) this.time.delayedCall(500, () => showToast(this, notice));
     const selected = session.data.profile.cryptidId;
     this.background = new LandBackground(this, 0.62);
     void this.background.show(selected);
