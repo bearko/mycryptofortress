@@ -1,4 +1,4 @@
-import { TREE, TREE_BY_ID, nodeCost, type TreeNode } from "../data/tree";
+import { TREE, TREE_BY_ID, TREE_VERSION, nodeCost, type TreeNode } from "../data/tree";
 import { LEVELS } from "../data/levels";
 import type { LevelDef } from "../sim/level";
 import { emptyModifiers, type RunModifiers } from "../sim/modifiers";
@@ -94,6 +94,19 @@ export function refundAll(save: SaveData): SaveData {
 
 export function totalSpent(save: SaveData): number {
   return TREE.reduce((sum, n) => sum + spentOn(n, nodeLevel(save, n.id)), 0);
+}
+
+/**
+ * SPEC-108 §1: スキルツリーの構成が変わった（TREE_VERSION が違う）セーブは全返金する。
+ * CE はツリーにしか使わないので、所持 = 累計獲得に戻せば全額返金になる。
+ */
+export function syncTreeVersion(save: SaveData): { save: SaveData; refunded: boolean } {
+  if (save.meta.treeVersion === TREE_VERSION) return { save, refunded: false };
+  const hadTree = Object.keys(save.meta.tree).length > 0;
+  return {
+    save: withMeta(save, { tree: {}, tokens: { ...save.meta.tokens, ce: save.meta.tokensEarned.ce }, treeVersion: TREE_VERSION }),
+    refunded: hadTree,
+  };
 }
 
 /** SPEC-108: ツリーからランの補正値を作る（未知の ID は無視、レベルは上限で切る） */

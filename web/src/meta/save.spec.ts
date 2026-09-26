@@ -93,7 +93,7 @@ describe("migrate", () => {
     expect(migrated).not.toBeNull();
     expect(migrated!.profile.cryptidId).toBe("ruby");
     expect(migrated!.settings.bgmVolume).toBe(0);
-    expect(migrated!.meta).toEqual(emptyMeta());
+    expect(migrated!.meta).toEqual({ ...emptyMeta(), treeVersion: 0 });
   });
 
   it("v2 → v3: ツリー構成の変更に合わせてツリーを全返金する（所持 CE = 累計獲得 CE）", () => {

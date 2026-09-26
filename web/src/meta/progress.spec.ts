@@ -1,5 +1,5 @@
 import { getLevel } from "../data/levels";
-import { TREE, TREE_BY_ID, nodeCost } from "../data/tree";
+import { TREE, TREE_BY_ID, TREE_VERSION, nodeCost } from "../data/tree";
 import { runCampaign, STANDARD_BUY_ORDER } from "./campaign";
 import {
   applyRunResult,
@@ -12,6 +12,7 @@ import {
   markSeen,
   hasSeen,
   nodeLevel,
+  syncTreeVersion,
   refundAll,
   refundNode,
   totalSpent,
@@ -49,7 +50,7 @@ describe("スキルツリーの購入 (SPEC-107)", () => {
 describe("無料返金 (SPEC-108)", () => {
   function bought(): SaveData {
     let s = withCe(10_000);
-    for (const id of ["root", "root", "yabusame", "yabusame", "elite_yabusame", "kyudo", "mining"]) s = buyNode(s, id);
+    for (const id of ["root", "root", "yabusame", "yabusame", "elite_yabusame", "kyudo", "moai"]) s = buyNode(s, id);
     return s;
   }
 
@@ -64,7 +65,7 @@ describe("無料返金 (SPEC-108)", () => {
     const s = refundNode(bought(), "yabusame");
     const r = refundNode(s, "yabusame");
     for (const id of ["yabusame", "elite_yabusame", "kyudo"]) expect(nodeLevel(r, id)).toBe(0);
-    expect(nodeLevel(r, "mining")).toBe(1);
+    expect(nodeLevel(r, "moai")).toBe(1);
     expect(r.meta.tokens.ce + totalSpent(r)).toBe(10_000);
   });
 
@@ -75,7 +76,25 @@ describe("無料返金 (SPEC-108)", () => {
   });
 
   it("descendants は子孫だけを返す", () => {
-    expect(descendants("kyudo").map((n) => n.id).sort()).toEqual(["kyudo_a", "ogi_otoshi", "sanjushi"].sort());
+    expect(descendants("kyudo").map((n) => n.id).sort()).toEqual(["dokugiri", "kyudo_a", "ogi_otoshi", "sanjushi"].sort());
+  });
+});
+
+describe("ツリーの版 (SPEC-108 §1)", () => {
+  it("版が違うセーブは全返金（所持 = 累計獲得）し、版を合わせる", () => {
+    const s = createNewSave();
+    const old: SaveData = { ...s, meta: { ...s.meta, treeVersion: 0, tree: { root: 2, nope: 1 }, tokens: { ce: 5 }, tokensEarned: { ce: 40 } } };
+    const { save, refunded } = syncTreeVersion(old);
+    expect(refunded).toBe(true);
+    expect(save.meta.tree).toEqual({});
+    expect(save.meta.tokens.ce).toBe(40);
+    expect(save.meta.treeVersion).toBe(TREE_VERSION);
+    expect(syncTreeVersion(save).save).toBe(save);
+  });
+
+  it("ツリーが空なら返金のお知らせは出さない", () => {
+    const s = createNewSave();
+    expect(syncTreeVersion({ ...s, meta: { ...s.meta, treeVersion: 0 } }).refunded).toBe(false);
   });
 });
 

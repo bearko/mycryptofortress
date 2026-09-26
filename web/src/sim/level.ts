@@ -6,10 +6,12 @@ export interface Cell {
   row: number;
 }
 
-export type SlotKind = "normal";
+export type SlotKind = "normal" | "locked";
 
 export interface SlotDef extends Cell {
   kind?: SlotKind;
+  /** SPEC-113: locked の開放費用（GUM） */
+  cost?: number;
 }
 
 export interface PathDef {
@@ -106,7 +108,8 @@ export function validateLevel(lv: LevelDef): string[] {
     if (slotSeen.has(k)) errs.push(`slots[${i}]: 重複`);
     if (onPath.has(k)) errs.push(`slots[${i}]: 経路上`);
     if (s.col === lv.cryptid.col && s.row === lv.cryptid.row) errs.push(`slots[${i}]: 幻獣と重なる`);
-    if (s.kind !== undefined && s.kind !== "normal") errs.push(`slots[${i}]: kind ${s.kind} は未対応`);
+    if (s.kind !== undefined && s.kind !== "normal" && s.kind !== "locked") errs.push(`slots[${i}]: kind ${s.kind} は未対応`);
+    if (s.kind === "locked" && !(s.cost !== undefined && s.cost > 0)) errs.push(`slots[${i}]: locked には cost > 0 が必要`);
     slotSeen.add(k);
   });
 

@@ -1,3 +1,4 @@
+import { STANDARD_BUY_ORDER } from "../meta/campaign";
 import { getAsset } from "./assets";
 import { STAT_LABEL, TREE, TREE_BY_ID, nodeCost } from "./tree";
 
@@ -43,5 +44,13 @@ describe("スキルツリーのデータ (SPEC-107)", () => {
     for (const a of TREE)
       for (const b of TREE)
         if (a !== b) expect(Math.hypot(a.pos.x - b.pos.x, a.pos.y - b.pos.y), `${a.id}-${b.id}`).toBeGreaterThanOrEqual(0.9);
+  });
+});
+
+describe("標準購入順 (SPEC-106 §4)", () => {
+  it("すべて実在するノードで重複がない", () => {
+    const ids = new Set(TREE.map((n) => n.id));
+    for (const id of STANDARD_BUY_ORDER) expect(ids.has(id), id).toBe(true);
+    expect(new Set(STANDARD_BUY_ORDER).size).toBe(STANDARD_BUY_ORDER.length);
   });
 });

@@ -420,6 +420,151 @@
       "key": "se.heal",
       "type": "audio",
       "path": "Audio/SE/Battle/3_heal_resurrection.mp3"
+    },
+    {
+      "key": "hero.4053",
+      "type": "image",
+      "path": "Image/Heroes/4053.png"
+    },
+    {
+      "key": "hero.5028",
+      "type": "image",
+      "path": "Image/Heroes/5028.png"
+    },
+    {
+      "key": "hero.2041",
+      "type": "image",
+      "path": "Image/Heroes/2041.png"
+    },
+    {
+      "key": "hero.4041",
+      "type": "image",
+      "path": "Image/Heroes/4041.png"
+    },
+    {
+      "key": "hero.5021",
+      "type": "image",
+      "path": "Image/Heroes/5021.png"
+    },
+    {
+      "key": "hero.5015",
+      "type": "image",
+      "path": "Image/Heroes/5015.png"
+    },
+    {
+      "key": "hero.3038",
+      "type": "image",
+      "path": "Image/Heroes/3038.png"
+    },
+    {
+      "key": "hero.3007",
+      "type": "image",
+      "path": "Image/Heroes/3007.png"
+    },
+    {
+      "key": "hero.2025",
+      "type": "image",
+      "path": "Image/Heroes/2025.png"
+    },
+    {
+      "key": "hero.4034",
+      "type": "image",
+      "path": "Image/Heroes/4034.png"
+    },
+    {
+      "key": "enemy.181",
+      "type": "image",
+      "path": "Image/Enemies/181.png"
+    },
+    {
+      "key": "enemy.182",
+      "type": "image",
+      "path": "Image/Enemies/182.png"
+    },
+    {
+      "key": "enemy.397",
+      "type": "image",
+      "path": "Image/Enemies/397.png"
+    },
+    {
+      "key": "enemy.398",
+      "type": "image",
+      "path": "Image/Enemies/398.png"
+    },
+    {
+      "key": "enemy.399",
+      "type": "image",
+      "path": "Image/Enemies/399.png"
+    },
+    {
+      "key": "enemy.425",
+      "type": "image",
+      "path": "Image/Enemies/425.png"
+    },
+    {
+      "key": "enemy.421",
+      "type": "image",
+      "path": "Image/Enemies/421.png"
+    },
+    {
+      "key": "enemy.725",
+      "type": "image",
+      "path": "Image/Enemies/725.png"
+    },
+    {
+      "key": "enemy.519",
+      "type": "image",
+      "path": "Image/Enemies/519.png"
+    },
+    {
+      "key": "bg.node.1006",
+      "type": "image",
+      "path": "Image/Backgrounds/1006.png",
+      "preload": false
+    },
+    {
+      "key": "bg.node.1039",
+      "type": "image",
+      "path": "Image/Backgrounds/1039.png",
+      "preload": false
+    },
+    {
+      "key": "bg.node.1041",
+      "type": "image",
+      "path": "Image/Backgrounds/1041.png",
+      "preload": false
+    },
+    {
+      "key": "icon.battle.poison",
+      "type": "image",
+      "path": "Image/BattleIcons/StatusEffects/poison.png"
+    },
+    {
+      "key": "icon.battle.bleed",
+      "type": "image",
+      "path": "Image/BattleIcons/StatusEffects/bleed.png"
+    },
+    {
+      "key": "icon.battle.confused",
+      "type": "image",
+      "path": "Image/BattleIcons/StatusEffects/confused.png"
+    },
+    {
+      "key": "icon.battle.sleep",
+      "type": "image",
+      "path": "Image/BattleIcons/StatusEffects/sleep.png"
+    },
+    {
+      "key": "icon.battle.dbf_agi",
+      "type": "image",
+      "path": "Image/BattleIcons/Buffs/dbf_agi.png"
+    },
+    {
+      "key": "fx.area_damage",
+      "type": "spritesheet",
+      "path": "Image/Effects/Battle/02_area_damage.png",
+      "frameWidth": 100,
+      "frameHeight": 100
     }
   ]
 }
