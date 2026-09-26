@@ -22,12 +22,12 @@ import { goTo } from "../ui/header";
 import { COLORS, textStyle } from "../ui/theme";
 import { Button, showToast, showTooltip } from "../ui/widgets";
 
-/** 倍速。3x はマイルストーンで解放（SPEC-116） */
-const SPEEDS = [1, 2, 3] as const;
+/** 倍速。3x はマイルストーンで解放（SPEC-116）、5x はテストプレイ用（一時停止メニューで ON） */
+const TEST_SPEED = 5;
 /** オートレベルの判断間隔（秒） */
 const AUTO_LEVEL_EVERY = 0.5;
 /** 1 フレームで進める tick の上限（タブ復帰時などの暴走防止） */
-const MAX_STEPS_PER_FRAME = 12;
+const MAX_STEPS_PER_FRAME = 20;
 /** 同じ SE を鳴らす最短間隔（ms） */
 const SE_THROTTLE_MS: Record<string, number> = { "se.hit": 70, "se.area": 90, "se.treasure": 60, "se.debuff": 200 };
 
@@ -104,7 +104,7 @@ export class RunScene extends Phaser.Scene {
       {
         startWave: () => this.sim.startNextWave(),
         callEarly: () => this.sim.callEarly(),
-        toggleSpeed: () => (this.speedIndex = (this.speedIndex + 1) % this.speedCount),
+        toggleSpeed: () => (this.speedIndex = (this.speedIndex + 1) % this.speeds.length),
         toggleCannon: () => {
           this.cannonArmed = !this.cannonArmed;
           if (this.cannonArmed) showToast(this, "盤面を押している方向へ幻獣砲を撃ちます");
@@ -123,7 +123,7 @@ export class RunScene extends Phaser.Scene {
         cycleTarget: (id) => this.cycleTarget(id),
         deselect: () => this.select(null),
       },
-      () => SPEEDS[this.speedIndex],
+      () => this.speed,
       () => this.cannonArmed,
     );
     this.setupBoardInput();
@@ -150,7 +150,7 @@ export class RunScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     if (!this.paused && !this.sim.isOver) {
-      this.acc += (Math.min(delta, 250) / 1000) * SPEEDS[this.speedIndex];
+      this.acc += (Math.min(delta, 250) / 1000) * this.speed;
       let steps = 0;
       while (this.acc >= TICK && steps < MAX_STEPS_PER_FRAME) {
         this.sim.step();
@@ -189,8 +189,17 @@ export class RunScene extends Phaser.Scene {
     this.input.on(Phaser.Input.Events.POINTER_DOWN, collect);
   }
 
-  private get speedCount(): number {
-    return isMilestoneReached(session.data, "speed3x") ? 3 : 2;
+  /** 選べる倍速: 1x / 2x（最初から）、3x（マイルストーン）、5x（テストプレイ用の設定） */
+  private get speeds(): number[] {
+    const out = [1, 2];
+    if (isMilestoneReached(session.data, "speed3x")) out.push(3);
+    if (session.data.settings.testSpeed) out.push(TEST_SPEED);
+    return out;
+  }
+
+  private get speed(): number {
+    const list = this.speeds;
+    return list[Math.min(this.speedIndex, list.length - 1)];
   }
 
   /** SPEC-116: オートレベル（マイルストーン + 設定 ON）。一番低いレベルのヒーローを GUM が足りれば強化 */
@@ -200,7 +209,7 @@ export class RunScene extends Phaser.Scene {
 
   private updateAutoLevel(delta: number): void {
     if (!this.autoLevelOn) return;
-    this.autoLevelAcc += (delta / 1000) * SPEEDS[this.speedIndex];
+    this.autoLevelAcc += (delta / 1000) * this.speed;
     if (this.autoLevelAcc < AUTO_LEVEL_EVERY) return;
     this.autoLevelAcc = 0;
     const target = [...this.sim.heroes]
@@ -472,6 +481,21 @@ export class RunScene extends Phaser.Scene {
         }).setDepth(201),
       );
     }
+    // テストプレイ用: 5 倍速を速度ボタンに加える
+    const testOn = () => !!session.data.settings.testSpeed;
+    const testBtn = add(
+      new Button(this, CENTER_X, isMilestoneReached(session.data, "autoLevel") ? 960 : 840, {
+        width: 420,
+        label: `5 倍速（テスト用）: ${testOn() ? "ON" : "OFF"}`,
+        sub: "速度ボタンに 5x が加わります",
+        onTap: () => {
+          session.update((d) => ({ ...d, settings: { ...d.settings, testSpeed: !d.settings.testSpeed } }));
+          testBtn.setLabel(`5 倍速（テスト用）: ${testOn() ? "ON" : "OFF"}`);
+          if (testOn()) this.speedIndex = this.speeds.length - 1;
+          else this.speedIndex = Math.min(this.speedIndex, this.speeds.length - 1);
+        },
+      }).setDepth(201),
+    );
   }
 
   private closeMenu(): void {
