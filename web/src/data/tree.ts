@@ -39,14 +39,14 @@ const node = (n: Omit<TreeNode, "cost"> & { base: number; growth?: number }): Tr
 };
 
 export const TREE: readonly TreeNode[] = [
-  // ─── ルート ───
-  node({ id: "root", name: "ノービスショット", source: "マスケット", branch: "core", pos: { x: 0, y: 0 }, parent: null, maxLevel: 3, base: 3, effects: [{ stat: "damagePct", perLevel: 0.05 }], icon: "icon.battle.phy" }),
+  // ─── ルート: 最初に買うのは GUM（序盤は 2 体目のヒーローを置けるかが勝負） ───
+  node({ id: "root", name: "黄金の工房", source: "ルーベンスのパッシブ", branch: "core", pos: { x: 0, y: 0 }, parent: null, maxLevel: 5, base: 3, growth: 1.6, effects: [{ stat: "startGumAdd", perLevel: 20 }], icon: "icon.gum", note: "開始時の GUM が増え、ヒーローを早く増やせる" }),
 
   // ─── 弓（ユミ / マスケット） ───
-  node({ id: "yabusame", name: "ヤブサメ", source: "ユミ", branch: "archer", pos: { x: 0, y: -1.1 }, parent: "root", maxLevel: 5, base: 6, effects: [{ stat: "damagePct", perLevel: 0.1 }], icon: "icon.battle.phy" }),
-  node({ id: "elite_yabusame", name: "エリートヤブサメ", source: "ユミ", branch: "archer", pos: { x: -1.1, y: -1.8 }, parent: "yabusame", maxLevel: 5, base: 10, effects: [{ stat: "attackSpeedPct", perLevel: 0.06 }], icon: "icon.battle.buf_agi" }),
+  node({ id: "yabusame", name: "ヤブサメ", source: "ユミ", branch: "archer", pos: { x: 0, y: -1.1 }, parent: "root", maxLevel: 5, base: 5, effects: [{ stat: "damagePct", perLevel: 0.1 }], icon: "icon.battle.phy" }),
+  node({ id: "elite_yabusame", name: "エリートヤブサメ", source: "ユミ", branch: "archer", pos: { x: -1.1, y: -1.8 }, parent: "yabusame", maxLevel: 5, base: 9, effects: [{ stat: "attackSpeedPct", perLevel: 0.06 }], icon: "icon.battle.buf_agi" }),
   node({ id: "brave_yabusame", name: "ブレイブヤブサメ", source: "ユミ", branch: "archer", pos: { x: 1.1, y: -1.8 }, parent: "yabusame", maxLevel: 3, base: 12, effects: [{ stat: "rangeAdd", perLevel: 0.15 }], icon: "icon.battle.buf_int" }),
-  node({ id: "brave_shot", name: "ブレイブショット", source: "マスケット", branch: "archer", pos: { x: 0, y: -2.2 }, parent: "yabusame", maxLevel: 3, base: 12, effects: [{ stat: "placeCostFlat", perLevel: 5 }], icon: "icon.gum" }),
+  node({ id: "brave_shot", name: "ブレイブショット", source: "マスケット", branch: "archer", pos: { x: 0, y: -2.2 }, parent: "yabusame", maxLevel: 3, base: 10, effects: [{ stat: "placeCostFlat", perLevel: 5 }], icon: "icon.gum" }),
   node({ id: "elite_shot", name: "エリートショット", source: "マスケット", branch: "archer", pos: { x: 0, y: -3.3 }, parent: "brave_shot", maxLevel: 4, base: 18, effects: [{ stat: "levelCostPct", perLevel: 0.06 }], icon: "icon.gum" }),
   node({ id: "kyudo", name: "キュードー", source: "ユミ", branch: "archer", pos: { x: -1.9, y: -2.7 }, parent: "elite_yabusame", maxLevel: 4, base: 15, effects: [{ stat: "critChance", perLevel: 0.05 }], icon: "icon.battle.buf_phy" }),
   node({ id: "kyudo_a", name: "キュードーA", source: "ユミ", branch: "archer", pos: { x: -3.0, y: -3.1 }, parent: "kyudo", maxLevel: 3, base: 25, effects: [{ stat: "critMulAdd", perLevel: 0.25 }], icon: "icon.battle.buf_phy" }),
@@ -64,12 +64,12 @@ export const TREE: readonly TreeNode[] = [
   node({ id: "seijo", name: "聖女の祈り", source: "シールド", branch: "defense", pos: { x: -4.2, y: 2.3 }, parent: "gunshin", maxLevel: 1, base: 80, effects: [{ stat: "lastStand", perLevel: 1 }], icon: "icon.battle.resurrection", note: "ボスの到達を 1 度だけ HP 1 で耐える" }),
 
   // ─── 経済（ヒーローのパッシブ / モノクル / パロット / ブーツ / アルケブス） ───
-  node({ id: "golden_atelier", name: "黄金の工房", source: "ルーベンスのパッシブ", branch: "economy", pos: { x: 1.2, y: 0.8 }, parent: "root", maxLevel: 5, base: 5, effects: [{ stat: "startGumAdd", perLevel: 20 }], icon: "icon.gum" }),
-  node({ id: "mining", name: "マイニング ALPHA CC", source: "サトシ・ナカモトのパッシブ", branch: "economy", pos: { x: 2.4, y: 0.6 }, parent: "golden_atelier", maxLevel: 5, base: 10, effects: [{ stat: "dropValuePct", perLevel: 0.1 }], icon: "icon.gum", note: "撃破で落ちる GUM が増える" }),
-  node({ id: "otakara", name: "お宝はいただいた！", source: "モノクル", branch: "economy", pos: { x: 1.8, y: 1.9 }, parent: "golden_atelier", maxLevel: 3, base: 8, effects: [{ stat: "collectRadiusAdd", perLevel: 0.2 }], icon: "icon.gum", note: "GUM の回収範囲が広がる" }),
+  node({ id: "mining", name: "マイニング ALPHA CC", source: "サトシ・ナカモトのパッシブ", branch: "economy", pos: { x: 1.2, y: 0.8 }, parent: "root", maxLevel: 3, base: 6, effects: [{ stat: "dropValueFlat", perLevel: 1 }], icon: "icon.gum", note: "撃破で落ちる GUM が増える" }),
+  node({ id: "shihonron", name: "資本論", source: "マルクスのパッシブ", branch: "economy", pos: { x: 2.4, y: 0.6 }, parent: "mining", maxLevel: 3, base: 12, effects: [{ stat: "waveRewardPct", perLevel: 0.25 }], icon: "icon.gum" }),
+  node({ id: "otakara", name: "お宝はいただいた！", source: "モノクル", branch: "economy", pos: { x: 1.8, y: 1.9 }, parent: "mining", maxLevel: 3, base: 8, effects: [{ stat: "collectRadiusAdd", perLevel: 0.2 }], icon: "icon.gum", note: "GUM の回収範囲が広がる" }),
   node({ id: "houseki", name: "宝石の囀り", source: "パロット", branch: "economy", pos: { x: 2.9, y: 2.8 }, parent: "otakara", maxLevel: 3, base: 12, effects: [{ stat: "dropLifetimeAdd", perLevel: 3 }], icon: "icon.gum", note: "GUM が消えるまでの時間が延びる" }),
-  node({ id: "shihonron", name: "資本論", source: "マルクスのパッシブ", branch: "economy", pos: { x: 3.5, y: 1.1 }, parent: "mining", maxLevel: 3, base: 20, effects: [{ stat: "waveRewardPct", perLevel: 0.25 }], icon: "icon.gum" }),
-  node({ id: "daichi_ougon", name: "大地黄金", source: "ブーツ", branch: "economy", pos: { x: 4.4, y: 0.4 }, parent: "shihonron", maxLevel: 3, base: 35, effects: [{ stat: "gumOnHitChance", perLevel: 0.04 }], icon: "icon.gum", note: "矢が命中するたびに確率で 1 GUM" }),
+  node({ id: "daichi_ougon", name: "大地黄金", source: "ブーツ", branch: "economy", pos: { x: 3.5, y: 1.1 }, parent: "shihonron", maxLevel: 3, base: 30, effects: [{ stat: "gumOnHitChance", perLevel: 0.04 }], icon: "icon.gum", note: "矢が命中するたびに確率で 1 GUM" }),
+  node({ id: "mining_omega", name: "マイニング OMEGA CC", source: "サトシ・ナカモトのパッシブ", branch: "economy", pos: { x: 4.4, y: 0.4 }, parent: "daichi_ougon", maxLevel: 3, base: 45, effects: [{ stat: "dropValueFlat", perLevel: 1 }], icon: "icon.gum", note: "撃破で落ちる GUM がさらに増える" }),
   node({ id: "mouri", name: "毛利秀包の号令", source: "アルケブス", branch: "economy", pos: { x: 4.2, y: 2.2 }, parent: "shihonron", maxLevel: 3, base: 45, effects: [{ stat: "wealthDamagePct", perLevel: 0.03 }], icon: "icon.battle.phy", note: "所持 GUM 100 ごとに攻撃力アップ（最大 +30%）" }),
 ];
 
@@ -99,7 +99,7 @@ export const STAT_LABEL: Record<ModifierKey, (v: number) => string> = {
   leakIgnoreChance: (v) => `通常敵の到達を ${Math.round(v * 100)}% で無効化`,
   lastStand: () => "ボスの到達を 1 度だけ耐える",
   startGumAdd: (v) => `開始時の GUM ${signed(v, 0)}`,
-  dropValuePct: (v) => `撃破 GUM ${pct(v)}`,
+  dropValueFlat: (v) => `撃破 GUM ${signed(v, 0)}`,
   collectRadiusAdd: (v) => `GUM 回収範囲 ${signed(v, 1)} マス`,
   dropLifetimeAdd: (v) => `GUM の消滅まで ${signed(v, 0)} 秒`,
   waveRewardPct: (v) => `Wave クリア報酬 ${pct(v)}`,

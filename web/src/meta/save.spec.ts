@@ -96,6 +96,17 @@ describe("migrate", () => {
     expect(migrated!.meta).toEqual(emptyMeta());
   });
 
+  it("v2 → v3: ツリー構成の変更に合わせてツリーを全返金する（所持 CE = 累計獲得 CE）", () => {
+    const v2 = {
+      ...createNewSave(),
+      schemaVersion: 2,
+      meta: { ...emptyMeta(), tokens: { ce: 4 }, tokensEarned: { ce: 60 }, tree: { root: 2, golden_atelier: 3 } },
+    };
+    const migrated = migrate(v2);
+    expect(migrated!.meta.tree).toEqual({});
+    expect(migrated!.meta.tokens.ce).toBe(60);
+  });
+
   it("meta の破損（負のトークン・不正なツリー）は無効", () => {
     const d = createNewSave();
     expect(isValidSave({ ...d, meta: { ...d.meta, tokens: { ce: -1 } } })).toBe(false);

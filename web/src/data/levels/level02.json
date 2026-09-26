@@ -88,7 +88,7 @@
   "waves": [
     {
       "reward": 10,
-      "hpMul": 1.0,
+      "hpMul": 3.5,
       "groups": [
         {
           "enemy": "byte_s",
@@ -108,7 +108,7 @@
     },
     {
       "reward": 12,
-      "hpMul": 1.1,
+      "hpMul": 3.85,
       "groups": [
         {
           "enemy": "creeper_s",
@@ -128,7 +128,7 @@
     },
     {
       "reward": 14,
-      "hpMul": 1.2,
+      "hpMul": 4.2,
       "groups": [
         {
           "enemy": "byte_t",
@@ -148,7 +148,7 @@
     },
     {
       "reward": 16,
-      "hpMul": 1.35,
+      "hpMul": 4.725,
       "groups": [
         {
           "enemy": "creeper_s",
@@ -168,7 +168,7 @@
     },
     {
       "reward": 18,
-      "hpMul": 1.5,
+      "hpMul": 5.25,
       "groups": [
         {
           "enemy": "byte_t",
@@ -188,7 +188,7 @@
     },
     {
       "reward": 20,
-      "hpMul": 1.65,
+      "hpMul": 5.775,
       "groups": [
         {
           "enemy": "creeper_t",
@@ -208,7 +208,7 @@
     },
     {
       "reward": 22,
-      "hpMul": 1.8,
+      "hpMul": 6.3,
       "groups": [
         {
           "enemy": "rabbit_t",
@@ -228,7 +228,7 @@
     },
     {
       "reward": 24,
-      "hpMul": 2.0,
+      "hpMul": 7.0,
       "groups": [
         {
           "enemy": "byte_g",
@@ -255,7 +255,7 @@
     },
     {
       "reward": 26,
-      "hpMul": 2.2,
+      "hpMul": 7.7,
       "groups": [
         {
           "enemy": "creeper_t",
@@ -282,7 +282,7 @@
     },
     {
       "reward": 28,
-      "hpMul": 1.3,
+      "hpMul": 1.56,
       "groups": [
         {
           "enemy": "byte_t",

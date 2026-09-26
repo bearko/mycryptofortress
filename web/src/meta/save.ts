@@ -5,7 +5,7 @@ import type { StorageLike } from "./storage";
  * SPEC-101 §5.5: セーブデータ。スキーマを変える時は SAVE_SCHEMA_VERSION を上げ、
  * MIGRATIONS[旧バージョン] に 1 段分の変換を追加する。
  */
-export const SAVE_SCHEMA_VERSION = 2;
+export const SAVE_SCHEMA_VERSION = 3;
 
 export interface SaveData {
   schemaVersion: typeof SAVE_SCHEMA_VERSION;
@@ -52,6 +52,12 @@ export type Migrations = Record<number, (data: Record<string, unknown>) => Recor
 export const MIGRATIONS: Migrations = {
   // v1 → v2: メタ進行（トークン・ツリー・レベル進行・既読会話）を追加
   1: (d) => ({ ...d, meta: emptyMeta() }),
+  // v2 → v3: スキルツリーの構成変更（ルートを GUM ノードに）。ツリーを全返金する。
+  // CE はツリーにしか使わないので、所持 = 累計獲得に戻せば全額返金になる。
+  2: (d) => {
+    const meta = d.meta as MetaState;
+    return { ...d, meta: { ...meta, tree: {}, tokens: { ...meta.tokens, ce: meta.tokensEarned.ce } } };
+  },
 };
 
 export function createNewSave(now: Date = new Date()): SaveData {
