@@ -49,7 +49,7 @@ describe("スキルツリーの購入 (SPEC-107)", () => {
 describe("無料返金 (SPEC-108)", () => {
   function bought(): SaveData {
     let s = withCe(10_000);
-    for (const id of ["root", "root", "yabusame", "yabusame", "elite_yabusame", "kyudo", "golden_atelier"]) s = buyNode(s, id);
+    for (const id of ["root", "root", "yabusame", "yabusame", "elite_yabusame", "kyudo", "mining"]) s = buyNode(s, id);
     return s;
   }
 
@@ -64,7 +64,7 @@ describe("無料返金 (SPEC-108)", () => {
     const s = refundNode(bought(), "yabusame");
     const r = refundNode(s, "yabusame");
     for (const id of ["yabusame", "elite_yabusame", "kyudo"]) expect(nodeLevel(r, id)).toBe(0);
-    expect(nodeLevel(r, "golden_atelier")).toBe(1);
+    expect(nodeLevel(r, "mining")).toBe(1);
     expect(r.meta.tokens.ce + totalSpent(r)).toBe(10_000);
   });
 
@@ -84,9 +84,9 @@ describe("補正値 (SPEC-108)", () => {
     let s = withCe(10_000);
     for (const id of ["root", "root", "yabusame", "novice_protection", "novice_protection"]) s = buyNode(s, id);
     const m = computeModifiers(s);
-    expect(m.damagePct).toBeCloseTo(0.05 * 2 + 0.1);
+    expect(m.startGumAdd).toBe(40);
+    expect(m.damagePct).toBeCloseTo(0.1);
     expect(m.maxHpAdd).toBe(6);
-    expect(m.startGumAdd).toBe(0);
   });
 
   it("未知のノード・親が 0 のノード・上限超過は効果を持たない", () => {
@@ -94,7 +94,8 @@ describe("補正値 (SPEC-108)", () => {
     const broken: SaveData = { ...s, meta: { ...s.meta, tree: { nope: 3, yabusame: 2, root: 99 } } };
     const m = computeModifiers(broken);
     const root = TREE_BY_ID.get("root")!;
-    expect(m.damagePct).toBeCloseTo(root.effects[0].perLevel * root.maxLevel + 0.1 * 2);
+    expect(m.startGumAdd).toBe(root.effects[0].perLevel * root.maxLevel);
+    expect(m.damagePct).toBeCloseTo(0.1 * 2);
     const orphan: SaveData = { ...s, meta: { ...s.meta, tree: { yabusame: 2 } } };
     expect(computeModifiers(orphan).damagePct).toBe(0);
   });
@@ -142,10 +143,16 @@ describe("ラン報酬と進行 (SPEC-106)", () => {
 });
 
 describe("コアループの到達可能性 (SPEC-106 §4)", () => {
-  it.each([1, 2])("標準の購入順で強化しながら挑むと、12 ラン以内に Lv3 までクリアできる（シード %i）", (seed) => {
-    const { log, save } = runCampaign({ buyOrder: STANDARD_BUY_ORDER, maxRuns: 12, seed });
+  it.each([1, 2])("強化しながら挑むと少しずつ先へ進み、26 ラン以内に Lv3 までクリアできる（シード %i）", (seed) => {
+    const { log, save } = runCampaign({ buyOrder: STANDARD_BUY_ORDER, maxRuns: 26, seed });
     expect(save.meta.levels.L3?.cleared).toBe(true);
-    // 途中で負けても CE が入り、次のランで強くなっている
-    expect(log.some((l) => !l.won && l.ce > 0)).toBe(true);
+    // 1 回目は Wave 2 で負ける（それでも CE は入る）
+    expect(log[0]).toMatchObject({ levelId: "L1", won: false, wavesReached: 2 });
+    expect(log[0].ce).toBeGreaterThan(0);
+    // Lv1 はすぐには勝てず、到達 Wave が伸びていく
+    const l1 = log.filter((l) => l.levelId === "L1");
+    const firstWin = l1.findIndex((l) => l.won);
+    expect(firstWin).toBeGreaterThanOrEqual(4);
+    expect(Math.max(...l1.slice(0, firstWin).map((l) => l.wavesReached))).toBeGreaterThan(l1[0].wavesReached);
   });
 });

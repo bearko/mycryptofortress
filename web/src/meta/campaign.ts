@@ -50,29 +50,29 @@ export function runCampaign(opts: {
   return { log, save };
 }
 
-/** バランス確認で使う標準の購入順（弓の火力 → 経済 → 防御を交互に） */
+/** バランス確認で使う標準の購入順（GUM → 弓の火力 → 防御を交互に。1 周で各 1 レベルずつ買う） */
 export const STANDARD_BUY_ORDER = [
   "root",
+  "mining",
   "yabusame",
-  "golden_atelier",
   "novice_protection",
   "elite_yabusame",
-  "mining",
-  "otakara",
-  "brave_yabusame",
   "brave_shot",
+  "otakara",
+  "shihonron",
+  "brave_yabusame",
   "healing",
   "kyudo",
   "nue_goroshi",
   "elite_shot",
-  "shihonron",
   "elite_protection",
+  "houseki",
   "ogi_otoshi",
   "kyudo_a",
-  "houseki",
-  "recovery",
   "daichi_ougon",
+  "recovery",
   "gunshin",
+  "mining_omega",
   "snipe",
   "mouri",
   "seijo",

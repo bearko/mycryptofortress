@@ -8,14 +8,14 @@
     "col": 4,
     "row": 10
   },
-  "startGum": 120,
-  "cryptidHp": 20,
+  "startGum": 50,
+  "cryptidHp": 10,
   "prepSeconds": 15,
   "intermissionSeconds": 6,
   "reward": {
-    "perWave": 2,
-    "clear": 15,
-    "firstClear": 20
+    "perWave": 3,
+    "clear": 20,
+    "firstClear": 30
   },
   "paths": [
     {
@@ -79,214 +79,214 @@
   ],
   "waves": [
     {
-      "reward": 10,
+      "reward": 8,
+      "hpMul": 1.0,
+      "groups": [
+        {
+          "enemy": "byte_s",
+          "count": 8,
+          "interval": 2.0,
+          "path": "west",
+          "delay": 0
+        }
+      ]
+    },
+    {
+      "reward": 8,
       "hpMul": 1.0,
       "groups": [
         {
           "enemy": "byte_s",
           "count": 6,
-          "interval": 1.4,
-          "path": "west",
-          "delay": 0
-        }
-      ]
-    },
-    {
-      "reward": 12,
-      "hpMul": 1.1,
-      "groups": [
-        {
-          "enemy": "byte_s",
-          "count": 5,
-          "interval": 1.4,
+          "interval": 0.9,
           "path": "west",
           "delay": 0
         },
         {
           "enemy": "byte_s",
-          "count": 5,
-          "interval": 1.4,
+          "count": 6,
+          "interval": 0.9,
           "path": "east",
-          "delay": 0.7
+          "delay": 0.45
         }
       ]
     },
     {
-      "reward": 14,
-      "hpMul": 1.25,
+      "reward": 10,
+      "hpMul": 1.1,
       "groups": [
         {
           "enemy": "byte_s",
-          "count": 6,
-          "interval": 1.2,
+          "count": 8,
+          "interval": 0.9,
           "path": "west",
           "delay": 0
         },
         {
           "enemy": "rabbit_s",
-          "count": 4,
+          "count": 5,
           "interval": 1.0,
           "path": "east",
-          "delay": 3
+          "delay": 1
         }
       ]
     },
     {
-      "reward": 16,
-      "hpMul": 1.4,
+      "reward": 12,
+      "hpMul": 2.4,
       "groups": [
         {
           "enemy": "byte_t",
-          "count": 5,
-          "interval": 1.3,
+          "count": 6,
+          "interval": 1.1,
           "path": "east",
           "delay": 0
         },
         {
           "enemy": "byte_s",
-          "count": 6,
-          "interval": 1.2,
+          "count": 8,
+          "interval": 0.9,
           "path": "west",
           "delay": 1
         }
       ]
     },
     {
-      "reward": 18,
-      "hpMul": 1.55,
+      "reward": 14,
+      "hpMul": 2.6,
       "groups": [
         {
           "enemy": "rabbit_s",
-          "count": 4,
-          "interval": 0.8,
+          "count": 6,
+          "interval": 0.7,
           "path": "west",
           "delay": 0
         },
         {
           "enemy": "rabbit_s",
-          "count": 4,
-          "interval": 0.8,
+          "count": 6,
+          "interval": 0.7,
           "path": "east",
-          "delay": 0.4
+          "delay": 0.35
         },
         {
           "enemy": "byte_t",
-          "count": 4,
-          "interval": 1.3,
+          "count": 5,
+          "interval": 1.1,
           "path": "west",
           "delay": 4
         }
       ]
     },
     {
-      "reward": 20,
-      "hpMul": 1.75,
+      "reward": 16,
+      "hpMul": 2.9,
       "groups": [
         {
           "enemy": "byte_t",
-          "count": 6,
-          "interval": 1.1,
+          "count": 8,
+          "interval": 0.9,
           "path": "west",
           "delay": 0
         },
         {
           "enemy": "byte_t",
-          "count": 6,
-          "interval": 1.1,
+          "count": 8,
+          "interval": 0.9,
           "path": "east",
-          "delay": 0.5
+          "delay": 0.45
         }
       ]
     },
     {
-      "reward": 22,
-      "hpMul": 2.0,
+      "reward": 18,
+      "hpMul": 3.2,
       "groups": [
         {
           "enemy": "byte_g",
-          "count": 4,
-          "interval": 2.0,
+          "count": 5,
+          "interval": 1.6,
           "path": "west",
           "delay": 0
         },
         {
           "enemy": "rabbit_t",
-          "count": 6,
-          "interval": 0.8,
+          "count": 8,
+          "interval": 0.7,
           "path": "east",
           "delay": 1
         }
       ]
     },
     {
-      "reward": 24,
-      "hpMul": 2.25,
+      "reward": 20,
+      "hpMul": 3.6,
       "groups": [
         {
           "enemy": "byte_t",
-          "count": 6,
-          "interval": 1.0,
+          "count": 8,
+          "interval": 0.8,
           "path": "west",
           "delay": 0
         },
         {
           "enemy": "byte_t",
-          "count": 6,
-          "interval": 1.0,
+          "count": 8,
+          "interval": 0.8,
           "path": "east",
-          "delay": 0.5
+          "delay": 0.4
         },
         {
           "enemy": "byte_g",
-          "count": 3,
-          "interval": 1.8,
+          "count": 4,
+          "interval": 1.5,
           "path": "east",
           "delay": 5
         }
       ]
     },
     {
-      "reward": 26,
-      "hpMul": 2.5,
+      "reward": 22,
+      "hpMul": 4.0,
       "groups": [
         {
           "enemy": "rabbit_t",
-          "count": 5,
-          "interval": 0.6,
+          "count": 7,
+          "interval": 0.55,
           "path": "west",
           "delay": 0
         },
         {
           "enemy": "rabbit_t",
-          "count": 5,
-          "interval": 0.6,
+          "count": 7,
+          "interval": 0.55,
           "path": "east",
           "delay": 0.3
         },
         {
           "enemy": "byte_g",
-          "count": 5,
-          "interval": 1.6,
+          "count": 6,
+          "interval": 1.3,
           "path": "west",
           "delay": 3
         }
       ]
     },
     {
-      "reward": 40,
-      "hpMul": 1.2,
+      "reward": 30,
+      "hpMul": 2.6,
       "groups": [
         {
           "enemy": "byte_s",
-          "count": 6,
-          "interval": 1.0,
+          "count": 8,
+          "interval": 0.8,
           "path": "west",
           "delay": 0
         },
         {
           "enemy": "byte_t",
-          "count": 6,
-          "interval": 1.0,
+          "count": 8,
+          "interval": 0.8,
           "path": "east",
           "delay": 0
         },

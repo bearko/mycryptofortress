@@ -26,7 +26,8 @@ export interface RunModifiers {
   lastStand: number;
   // 経済
   startGumAdd: number;
-  dropValuePct: number;
+  /** 撃破時の GUM に加算（小さな報酬でも効くよう固定値） */
+  dropValueFlat: number;
   collectRadiusAdd: number;
   dropLifetimeAdd: number;
   waveRewardPct: number;
@@ -59,7 +60,7 @@ export function emptyModifiers(): RunModifiers {
     leakIgnoreChance: 0,
     lastStand: 0,
     startGumAdd: 0,
-    dropValuePct: 0,
+    dropValueFlat: 0,
     collectRadiusAdd: 0,
     dropLifetimeAdd: 0,
     waveRewardPct: 0,

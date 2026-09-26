@@ -528,7 +528,7 @@ export class RunSim {
         id: this.nextId++,
         x: e.x,
         y: e.y,
-        value: Math.round(e.def.reward * (1 + this.mods.dropValuePct)),
+        value: e.def.reward + this.mods.dropValueFlat,
         ttl: DROP_LIFETIME + this.mods.dropLifetimeAdd,
       };
       this.drops.push(drop);

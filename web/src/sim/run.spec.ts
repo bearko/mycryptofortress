@@ -1,3 +1,4 @@
+import { ENEMIES } from "../data/balance/enemies";
 import { ROLES } from "../data/balance/heroes";
 import { getLevel } from "../data/levels";
 import type { LevelDef } from "./level";
@@ -71,11 +72,20 @@ describe("RunSim: 決定性 (SPEC-102 §2.1)", () => {
   });
 });
 
-describe("RunSim: レベル 1 の到達可能性 (SPEC-104 §6)", () => {
-  it.each([1, 2, 3, 4, 5])("簡易ボットはシード %i でクリアできる", (seed) => {
+describe("RunSim: 序盤の難度 (SPEC-104 §6)", () => {
+  it.each([1, 2, 3, 4, 5])("初期状態では 2 体目のヒーローを置けないまま Wave 2 で陥落する（シード %i）", (seed) => {
+    // Wave 1 の GUM を全部回収しても 2 体目（50 GUM）に届かない
+    const w1 = L1.waves[0];
+    const wave1Gum = w1.groups.reduce((s, g) => s + g.count * ENEMIES[g.enemy].reward, 0) + w1.reward;
+    expect(L1.startGum - ROLES.archer.placeCost + wave1Gum).toBeLessThan(ROLES.archer.placeCost);
     const sim = runBot(L1, seed);
-    expect(sim.status).toBe("won");
-    expect(sim.stats.wavesReached).toBe(L1.waves.length);
+    expect(sim.status).toBe("lost");
+    expect(sim.stats.wavesReached).toBe(2);
+  });
+
+  it.each([1, 2, 3])("黄金の工房 Lv1（開始 GUM +20）なら Wave 2 前に 2 体目を置け、Wave 2 を越える（シード %i）", (seed) => {
+    const sim = runBot(L1, seed, { mods: { ...emptyModifiers(), startGumAdd: 20 } });
+    expect(sim.stats.wavesCleared).toBeGreaterThanOrEqual(2);
   });
 
   it("Lv2 / Lv3 は強化なしでは突破できない（スキルツリー前提）", () => {
@@ -309,13 +319,13 @@ describe("RunSim: ツリー補正 (SPEC-108)", () => {
   });
 
   it("撃破 GUM・Wave 報酬・消滅時間・回収半径の補正", () => {
-    const sim = new RunSim(miniLevel(), 1, mods({ dropValuePct: 1, waveRewardPct: 1, dropLifetimeAdd: 5, collectRadiusAdd: 0.3 }));
+    const sim = new RunSim(miniLevel(), 1, mods({ dropValueFlat: 3, waveRewardPct: 1, dropLifetimeAdd: 5, collectRadiusAdd: 0.3 }));
     sim.placeHero(0, "archer");
     sim.placeHero(1, "archer");
     sim.startNextWave();
     const evs = runUntil(sim, (e) => e.type === "won");
     const drop = sim.drops[0];
-    expect(drop.value).toBe(6); // byte_s 3 GUM × 2
+    expect(drop.value).toBe(6); // byte_s 3 GUM + 3
     expect(evs.find((e) => e.type === "waveClear")).toMatchObject({ reward: 14 });
     expect(sim.collectRadius).toBeCloseTo(1.0);
     expect(drop.ttl).toBeGreaterThan(DROP_LIFETIME);
