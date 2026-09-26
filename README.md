@@ -1,7 +1,12 @@
 # MyCryptoFortress
 
 マイクリプトヒーローズのアセットを活用したブラウザ向け 2D タワーディフェンスゲーム。
-2021 年に Unity で途中まで開発していた `MCHTowerDefence` を、TypeScript + Phaser 3 でブラウザ駆動に作り直すプロジェクト。
+
+> **v2 へ作り直し中（2026-09〜）**: v1（Unity `MCHTowerDefence` 移植・Arknights 型の編成 TD）を廃棄し、
+> [Outhold](https://store.steampowered.com/app/3767740/Outhold/) のゲームシステムをベースにした **タワーディフェンス × インクリメンタル** として再設計しています。
+> - Outhold 解析: [docs/research/OUTHOLD_ANALYSIS.md](docs/research/OUTHOLD_ANALYSIS.md)
+> - v2 設計（親仕様）: [docs/specs/SPEC-100-v2-game-design.md](docs/specs/SPEC-100-v2-game-design.md)
+> - ロードマップ: [docs/ROADMAP.md](docs/ROADMAP.md)
 
 ## 技術スタック
 
@@ -44,6 +49,7 @@ Vercel プロジェクトのダッシュボード側では **Root Directory は�
 | プロジェクト憲章 | [docs/charters/PROJECT_CHARTER.md](docs/charters/PROJECT_CHARTER.md) |
 | 開発憲章 | [docs/charters/DEVELOPMENT_CHARTER.md](docs/charters/DEVELOPMENT_CHARTER.md) |
 | 仕様一覧 | [docs/specs/SPEC-INDEX.md](docs/specs/SPEC-INDEX.md) |
+| ロードマップ（v2） | [docs/ROADMAP.md](docs/ROADMAP.md) |
 | Git ワークフロー | [docs/process/GIT_WORKFLOW.md](docs/process/GIT_WORKFLOW.md) |
 
 ## 由来となる Unity プロジェクト
