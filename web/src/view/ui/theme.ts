@@ -13,8 +13,31 @@ export const COLORS = {
   danger: 0xe0485a,
 } as const;
 
-export const FONT_FAMILY = '"Zen Kaku Gothic New", "Noto Sans JP", system-ui, sans-serif';
-export const FONT_DISPLAY = '"Orbitron", "Zen Kaku Gothic New", system-ui, sans-serif';
+/**
+ * 日本語フォントのスタック。Phaser のテキストは DOM 外の canvas に描かれ `lang="ja"` を継承しないため、
+ * フォント名を明示しないと環境によって中国語フォント（字形が異なる）にフォールバックする。
+ * Windows → macOS / iOS → その他（Noto / 源ノ角 / IPA）の順に日本語フォントを並べる。
+ */
+export const FONT_JA = [
+  '"Meiryo UI"',
+  "Meiryo",
+  '"Yu Gothic UI"',
+  "YuGothic",
+  '"Yu Gothic"',
+  '"Hiragino Sans"',
+  '"Hiragino Kaku Gothic ProN"',
+  '"BIZ UDPGothic"',
+  '"Noto Sans JP"',
+  '"Noto Sans CJK JP"',
+  '"Source Han Sans JP"',
+  "IPAPGothic",
+  "IPAexGothic",
+  "sans-serif",
+].join(", ");
+
+export const FONT_FAMILY = FONT_JA;
+/** 英数字の見出し用（Orbitron はバンドル同梱。日本語が混ざった場合は FONT_JA で描く） */
+export const FONT_DISPLAY = `"Orbitron", ${FONT_JA}`;
 
 export const css = (n: number): string => `#${n.toString(16).padStart(6, "0")}`;
 

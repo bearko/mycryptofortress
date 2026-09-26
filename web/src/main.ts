@@ -1,17 +1,19 @@
+import "@fontsource/orbitron/700.css";
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "./view/layout";
 import { BootScene } from "./view/scenes/BootScene";
 import { HomeScene } from "./view/scenes/HomeScene";
 import { RunScene } from "./view/scenes/RunScene";
 import { TitleScene } from "./view/scenes/TitleScene";
-import { COLORS, FONT_DISPLAY, FONT_FAMILY } from "./view/ui/theme";
+import { COLORS, FONT_DISPLAY } from "./view/ui/theme";
 
-/** テキストテクスチャがフォールバックフォントで焼かれないよう、Web フォントを先に読む（最大 2 秒待つ） */
+/**
+ * テキストテクスチャがフォールバックフォントで焼かれないよう、同梱の Orbitron を先に読む（最大 2 秒待つ）。
+ * 日本語はシステムの日本語フォント（FONT_JA）を使うので読み込み待ちは不要。
+ */
 async function loadFonts(): Promise<void> {
   if (!document.fonts) return;
-  const loads = [`700 20px ${FONT_FAMILY}`, `500 20px ${FONT_FAMILY}`, `700 20px ${FONT_DISPLAY}`].map((f) =>
-    document.fonts.load(f).catch(() => undefined),
-  );
+  const loads = [`700 20px ${FONT_DISPLAY}`].map((f) => document.fonts.load(f, "WAVE 0123").catch(() => undefined));
   await Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, 2000))]);
 }
 
