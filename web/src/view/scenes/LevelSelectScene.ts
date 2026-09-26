@@ -12,6 +12,7 @@ import { playDialog, speechBubble } from "../ui/dialog";
 import { Header, HEADER_H, goTo } from "../ui/header";
 import { COLORS, textStyle } from "../ui/theme";
 import { LandBackground, showToast } from "../ui/widgets";
+import { jaWrap } from "../ui/jaWrap";
 
 const CARD_H = 196;
 const CARD_GAP = 18;
@@ -57,7 +58,7 @@ export class LevelSelectScene extends Phaser.Scene {
     parts.push(
       this.add.text(184, 68, `入口 ${lv.paths.length} ／ ${lv.waves.length} Wave ／ ボス: ${boss?.name ?? "なし"}`, {
         ...textStyle(19, { weight: 500, color: COLORS.inkDim }),
-        wordWrap: { width: w - 200, useAdvancedWrap: true },
+        wordWrap: jaWrap(w - 200),
       }),
     );
     const status = !unlocked
