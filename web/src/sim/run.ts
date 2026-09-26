@@ -1,4 +1,4 @@
-import { ENEMIES, REVEAL_RANGE, TWIN_ENRAGE, resistOf, type EnemyDef } from "../data/balance/enemies";
+import { ARMOR_MIN_PCT, ENEMIES, INSULATED_LIGHTNING, REVEAL_RANGE, TWIN_ENRAGE, resistOf, type EnemyDef } from "../data/balance/enemies";
 import { STONES, STONE_IDS, STONE_NUM, STONE_REVEALS, type StoneId } from "../data/balance/stones";
 import { ROLES, heroVisual, maxLevel, roleStats, type RoleId } from "../data/balance/heroes";
 import type { LevelDef } from "./level";
@@ -41,6 +41,9 @@ export const ZHUGE_VULN_DURATION = 2;
 /** SPEC-113: Wave の繰り上げ呼び出し（残っている敵 1 体ごとのボーナスと、呼んだ Wave の加速） */
 export const EARLY_CALL_BONUS = 2;
 export const EARLY_CALL_ACCEL = 0.2;
+/** SPEC-118: 装甲の貫通（弓の矢と幻獣砲は装甲を半分無視、一撃特化は全部無視） */
+export const ARROW_PIERCE = 0.5;
+export const CANNON_PIERCE = 0.5;
 /** SPEC-114: 幻獣砲 */
 export const CANNON = { cooldown: 0.25, cost: 3, damage: 6, width: 0.45, length: 14, burnDps: 2, burnDuration: 2 };
 
@@ -101,6 +104,8 @@ export interface EnemyState {
   timer: number;
   /** 多節ボス: 共有 HP */
   pool?: HpPool;
+  /** SPEC-118: 1 発ごとに減らすダメージ（装甲 × √HP 倍率） */
+  armor: number;
 }
 
 /** SPEC-117: 多節ボスの共有 HP */
@@ -641,7 +646,7 @@ export class RunSim {
       if (this.mods.cannonBurn > 0 || stone === "ifrit") this.applyBurn(e, CANNON.burnDps, CANNON.burnDuration, 0, Infinity);
       if (stone === "leviathan") this.applySlow(e, STONE_NUM.cannonSlow, STONE_NUM.levSlowDuration);
       if (stone === "tiamat") this.applyPoison(e, 0);
-      this.dealDamage(e, damage, 0, false);
+      this.strike(e, damage, 0, false, { pierce: CANNON_PIERCE });
     }
     this.emit({ type: "cannon", x0: o.x, y0: o.y, x1, y1, hits });
     this.enemies = this.enemies.filter((e) => e.hp > 0);
@@ -738,6 +743,7 @@ export class RunSim {
       scale: def.scale ?? 1,
       rewardMul: 1,
       timer: def.healer?.interval ?? def.summon?.interval ?? 0,
+      armor: (def.armor ?? 0) * Math.sqrt(hpMul),
     };
     if (pool) {
       enemy.maxHp = pool.maxHp;
@@ -1006,16 +1012,16 @@ export class RunSim {
       hit.push(cur);
       points.push({ x: cur.x, y: cur.y });
       const dmg = damage * (1 - c.falloff) ** k;
-      this.dealDamage(cur, dmg, h.id, false);
+      this.strike(cur, dmg, h.id, false, { lightning: true });
       if (el === "ifrit" && cur.hp > 0) this.applyBurn(cur, dmg * STONE_NUM.ifritBurnPct, STONE_NUM.ifritBurnDuration, h.id, dmg * STONE_NUM.ifritBurnPct * 4);
       if (el === "tiamat" && cur.hp > 0) this.applyPoison(cur, h.id);
       const s = cur.status;
-      s.shock += c.shockPerHit + this.mods.lightningShock;
+      if (!cur.def.insulated) s.shock += c.shockPerHit + this.mods.lightningShock;
       if (s.shock >= c.shockThreshold && cur.hp > 0) {
         s.shock = 0;
         this.applyStun(cur, c.stun + this.mods.dischargeStunAdd);
         this.emit({ type: "discharge", enemyId: cur.id, x: cur.x, y: cur.y });
-        if (this.mods.arcFlash > 0) this.dealDamage(cur, dmg * 3, h.id, false);
+        if (this.mods.arcFlash > 0) this.strike(cur, dmg * 3, h.id, false, { lightning: true });
         // リヴァイアサン: 放電で押し戻す（ボスは半分）
         if (el === "leviathan" && cur.hp > 0) {
           cur.dist = Math.max(0, cur.dist - STONE_NUM.levKnockback * (1 - resistOf(cur.def)));
@@ -1046,7 +1052,7 @@ export class RunSim {
       if (stun > 0 && this.rng.chance(stun)) this.applyStun(e, PULSE_STUN);
       if (el === "ifrit") this.applyBurn(e, stats.damage, STONE_NUM.ifritBurnDuration, h.id, stats.damage * 4);
       if (el === "tiamat") this.applyPoison(e, h.id);
-      this.dealDamage(e, stats.damage, h.id, false);
+      this.strike(e, stats.damage, h.id, false);
     }
     this.emit({ type: "pulse", heroId: h.id, x: h.x, y: h.y, r: stats.range });
     return true;
@@ -1064,7 +1070,7 @@ export class RunSim {
     for (const e of victims) {
       this.applyBurn(e, burn, duration, h.id, cap);
       if (el === "leviathan") this.applySlow(e, STONE_NUM.levFireSlow, STONE_NUM.levSlowDuration);
-      this.dealDamage(e, damage, h.id, false, true);
+      this.strike(e, damage, h.id, false, { silent: true });
     }
     this.emit({ type: "flame", heroId: h.id, tx: target.x, ty: target.y });
     // ガルーダ（十字火球）: 1 秒ごとに縦横 4 方向へ貫通する火を放つ
@@ -1080,7 +1086,7 @@ export class RunSim {
           const dy = Math.abs(e.y - h.y);
           if ((dy <= w && dx <= len) || (dx <= w && dy <= len)) {
             this.applyBurn(e, burn, duration, h.id, cap);
-            this.dealDamage(e, damage * STONE_NUM.garudaCrossDmg, h.id, false);
+            this.strike(e, damage * STONE_NUM.garudaCrossDmg, h.id, false);
           }
         }
         this.emit({ type: "cross", heroId: h.id, x: h.x, y: h.y, len });
@@ -1173,10 +1179,10 @@ export class RunSim {
         for (const o of [...this.enemies]) {
           if (o.hp <= 0 || Math.hypot(o.x - target.x, o.y - target.y) > STONE_NUM.ifritSplash) continue;
           this.applyBurn(o, burn, STONE_NUM.ifritBurnDuration, p.heroId, burn * 4);
-          if (o !== target) this.dealDamage(o, p.damage * STONE_NUM.ifritSplashPct, p.heroId, false, true);
+          if (o !== target) this.strike(o, p.damage * STONE_NUM.ifritSplashPct, p.heroId, false, { pierce: ARROW_PIERCE, silent: true });
         }
       }
-      this.dealDamage(target, p.damage, p.heroId, p.crit);
+      this.strike(target, p.damage, p.heroId, p.crit, { pierce: this.mods.heavyShot > 0 ? 1 : ARROW_PIERCE });
       if (this.mods.gumOnHitChance > 0 && this.rng.chance(this.mods.gumOnHitChance)) {
         this.gum += 1;
         this.stats.gumEarned += 1;
@@ -1190,6 +1196,19 @@ export class RunSim {
    * すべてのダメージの入口。脆弱で増やし、撃破処理（ドロップ・分裂・双子）まで行う。
    * heroId 0 は幻獣砲。silent は継続ダメージ（hit イベントを出さない）。
    */
+  /**
+   * SPEC-118: 1 発の攻撃。絶縁（雷を弱める）と装甲（1 発ごとに固定値を減らす）を掛けてから dealDamage へ。
+   * pierce = 装甲を無視する割合。継続ダメージ・爆発・誘爆は dealDamage を直接呼ぶ（装甲に関係しない）。
+   */
+  private strike(e: EnemyState, amount: number, heroId: number, crit: boolean, o: { pierce?: number; lightning?: boolean; silent?: boolean } = {}): void {
+    if (e.hp <= 0 || amount <= 0) return;
+    let dmg = amount;
+    if (o.lightning && e.def.insulated) dmg *= INSULATED_LIGHTNING;
+    const armor = e.armor * (1 - (o.pierce ?? 0));
+    if (armor > 0) dmg = Math.max(dmg * ARMOR_MIN_PCT, dmg - armor);
+    this.dealDamage(e, dmg, heroId, crit, o.silent ?? false);
+  }
+
   private dealDamage(e: EnemyState, amount: number, heroId: number, crit: boolean, silent = false, linked = false): void {
     if (e.hp <= 0 || amount <= 0) return;
     const hero = heroId > 0;

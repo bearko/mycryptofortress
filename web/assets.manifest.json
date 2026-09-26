@@ -631,6 +631,26 @@
       "key": "stone.garuda",
       "type": "image",
       "path": "Image/Materials/Gemstones/345.webp"
+    },
+    {
+      "key": "enemy.111",
+      "type": "image",
+      "path": "Image/Enemies/111.png"
+    },
+    {
+      "key": "enemy.112",
+      "type": "image",
+      "path": "Image/Enemies/112.png"
+    },
+    {
+      "key": "enemy.131",
+      "type": "image",
+      "path": "Image/Enemies/131.png"
+    },
+    {
+      "key": "enemy.132",
+      "type": "image",
+      "path": "Image/Enemies/132.png"
     }
   ]
 }

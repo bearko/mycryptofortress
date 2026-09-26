@@ -25,6 +25,7 @@
 | [SPEC-115](./SPEC-115-magic-stones.md) | Accepted | 魔石（MCH の 4 属性）と属性マス: ロールごとの挙動変化 | 2026-09-26 |
 | [SPEC-116 / 116a](./SPEC-116-milestones-and-emblems.md) | Accepted | マイルストーン・ビルドセット / エンブレム（トークンの多層化）・セーブ v5 | 2026-09-26 |
 | [SPEC-117](./SPEC-117-gimmick-enemies.md) | Accepted | ギミック敵（隠密・回復）・ギミックボス（召喚・分裂・多節）と Lv7〜9 | 2026-09-26 |
+| [SPEC-118](./SPEC-118-armor-insulation.md) | Accepted | 装甲・絶縁と雷の調整（弓の装甲貫通、雷一辺倒を防ぐギミック） | 2026-09-26 |
 
 ## v1 → v2 の切り替え
 

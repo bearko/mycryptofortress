@@ -262,3 +262,33 @@ describe("自動回収 (SPEC-116)", () => {
     expect(sim.gum).toBeGreaterThan(gum);
   });
 });
+
+describe("装甲と絶縁（雷対策, SPEC-118）", () => {
+  it("装甲は 1 発ごとに固定値を減らし、弓の矢は半分貫通、継続ダメージには効かない", () => {
+    const sim = new RunSim(line([wave("elk_t", 1, 4)]), 1, mods());
+    sim.startNextWave();
+    run(sim, 1);
+    const e = sim.enemies[0];
+    expect(e.armor).toBeCloseTo(5 * Math.sqrt(4)); // 10
+    const hp = e.hp;
+    // 幻獣砲（6、装甲を半分貫通）→ max(6 * 0.2, 6 - 5) = 1.2
+    sim.fireCannon(e.x, e.y);
+    expect(hp - e.hp).toBeCloseTo(1.2);
+  });
+
+  it("絶縁の敵には雷がほとんど効かず、感電もしない", () => {
+    const a = new RunSim(line([wave("melissa_t", 1, 50)]), 1, mods({ lightningShock: 10 }));
+    a.placeHero(0, "lightning");
+    a.startNextWave();
+    const evs = run(a, 8);
+    const m = a.enemies[0];
+    expect(evs.some((e) => e.type === "discharge")).toBe(false);
+    const b = new RunSim(line([wave("byte_t", 1, 50 * 50 / 20)]), 1, mods({ lightningShock: 10 }));
+    b.placeHero(0, "lightning");
+    b.startNextWave();
+    run(b, 8);
+    const n = b.enemies[0];
+    // 同じ最大 HP 相当で比べると、絶縁の敵が受けた割合はずっと小さい
+    expect(1 - m.hp / m.maxHp).toBeLessThan((1 - n.hp / n.maxHp) * 0.5);
+  });
+});

@@ -76,7 +76,7 @@ export const ROLES: Record<RoleId, RoleDef> = {
     unlock: "unlockLightning",
     placeCost: 70,
     levelUpCosts: [60, 100, 160, 250],
-    base: { damage: 7, interval: 1.1, range: 2.0 },
+    base: { damage: 6, interval: 1.25, range: 2.0 },
     perLevel: { damageMul: 1.45, intervalMul: 0.93, rangeAdd: 0.15 },
     chain: { jumps: 2, jumpRange: 1.6, falloff: 0.35, shockPerHit: 1, shockThreshold: 5, stun: 0.6 },
   },
