@@ -22,6 +22,8 @@ export interface RunModifiers {
   wealthDamagePct: number;
   /** 命中時に毒を与える確率 */
   poisonChance: number;
+  /** 一撃特化（フラグ）: 弓の攻撃力 ×HEAVY_SHOT_DAMAGE・攻撃間隔 ×HEAVY_SHOT_INTERVAL */
+  heavyShot: number;
   // 雷（SPEC-110）
   unlockLightning: number;
   lightningTesla: number;
@@ -39,6 +41,10 @@ export interface RunModifiers {
   pulseSlowDurAdd: number;
   pulseRangeAdd: number;
   pulseStunChance: number;
+  /** 充電: 結界の範囲内にいる他のヒーローの攻撃間隔を短縮（割合、上限 HASTE_CAP） */
+  pulseHaste: number;
+  /** ダメージリンク: 鈍足中の敵へのヒーローの命中ダメージのうち、この割合を他の鈍足中の敵全員にも与える */
+  slowLink: number;
   // 炎（SPEC-112）
   unlockFire: number;
   fireNero: number;
@@ -48,6 +54,8 @@ export interface RunModifiers {
   fireRangeAdd: number;
   /** 弓の会心で、炎上中の敵が誘爆（炎上の毎秒ダメージ × COMBUST_MUL） */
   critCombust: number;
+  /** 撃破した敵が確率で爆発し、周りの敵に最大 HP × BLAST_PCT のダメージ */
+  deathBlastChance: number;
   // 採掘・経済（SPEC-113）
   unlockMiner: number;
   minerOmega: number;
@@ -70,6 +78,10 @@ export interface RunModifiers {
   leakIgnoreChance: number;
   /** ボスの到達を 1 回だけ HP 1 で耐える */
   lastStand: number;
+  /** 失った幻獣 HP 1 あたりのヒーローの攻撃力補正（上限 LOST_HP_CAP） */
+  lostHpDamagePct: number;
+  /** 敵の到達で受けたダメージ 1 あたりに得る GUM */
+  gumOnLeak: number;
   // GUM
   startGumAdd: number;
   /** 撃破時の GUM に加算（小さな報酬でも効くよう固定値） */
@@ -87,6 +99,12 @@ export const VOLLEY_DAMAGE = 0.55;
 export const WEALTH_CAP = 0.3;
 export const BASE_CRIT_MUL = 2;
 export const COMBUST_MUL = 3;
+export const HEAVY_SHOT_DAMAGE = 5;
+export const HEAVY_SHOT_INTERVAL = 3;
+export const HASTE_CAP = 0.5;
+export const BLAST_PCT = 0.4;
+export const BLAST_RADIUS = 1.2;
+export const LOST_HP_CAP = 1;
 
 export function emptyModifiers(): RunModifiers {
   // 型で網羅を強制する（キーを足し忘れるとコンパイルエラー）
@@ -104,6 +122,7 @@ export function emptyModifiers(): RunModifiers {
     levelCostPct: 0,
     wealthDamagePct: 0,
     poisonChance: 0,
+    heavyShot: 0,
     unlockLightning: 0,
     lightningTesla: 0,
     lightningDamagePct: 0,
@@ -118,6 +137,8 @@ export function emptyModifiers(): RunModifiers {
     pulseSlowDurAdd: 0,
     pulseRangeAdd: 0,
     pulseStunChance: 0,
+    slowLink: 0,
+    pulseHaste: 0,
     unlockFire: 0,
     fireNero: 0,
     fireDamagePct: 0,
@@ -125,6 +146,7 @@ export function emptyModifiers(): RunModifiers {
     fireBurnDurAdd: 0,
     fireRangeAdd: 0,
     critCombust: 0,
+    deathBlastChance: 0,
     unlockMiner: 0,
     minerOmega: 0,
     minerTollAdd: 0,
@@ -143,6 +165,8 @@ export function emptyModifiers(): RunModifiers {
     regenPerSec: 0,
     leakIgnoreChance: 0,
     lastStand: 0,
+    lostHpDamagePct: 0,
+    gumOnLeak: 0,
     startGumAdd: 0,
     dropValueFlat: 0,
     collectRadiusAdd: 0,

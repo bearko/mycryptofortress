@@ -9,7 +9,7 @@
     "row": 10
   },
   "startGum": 150,
-  "cryptidHp": 20,
+  "cryptidHp": 3,
   "prepSeconds": 15,
   "intermissionSeconds": 6,
   "reward": {

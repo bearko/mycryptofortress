@@ -56,9 +56,9 @@ export function runCampaign(opts: {
  */
 export const STANDARD_BUY_ORDER = [
   "root",
+  "novice_protection",
   "moai",
   "yabusame",
-  "novice_protection",
   "elite_yabusame",
   "brave_shot",
   "otakara",

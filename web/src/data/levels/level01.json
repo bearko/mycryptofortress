@@ -9,11 +9,11 @@
     "row": 10
   },
   "startGum": 50,
-  "cryptidHp": 10,
+  "cryptidHp": 3,
   "prepSeconds": 15,
   "intermissionSeconds": 6,
   "reward": {
-    "perWave": 3,
+    "perWave": 4,
     "clear": 20,
     "firstClear": 30
   },
@@ -97,17 +97,17 @@
       "groups": [
         {
           "enemy": "byte_s",
-          "count": 6,
-          "interval": 0.9,
+          "count": 5,
+          "interval": 1.7,
           "path": "west",
           "delay": 0
         },
         {
           "enemy": "byte_s",
-          "count": 6,
-          "interval": 0.9,
+          "count": 5,
+          "interval": 1.7,
           "path": "east",
-          "delay": 0.45
+          "delay": 0.85
         }
       ]
     },
