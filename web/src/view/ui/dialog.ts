@@ -85,7 +85,7 @@ export function playDialog(scene: Phaser.Scene, lines: DialogLine[]): Promise<vo
 
     blocker.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => {
       if (shown < full.length) return finishLine();
-      playSe(scene, "se.buff");
+      playSe(scene, "se.crash");
       if (index + 1 < lines.length) return showLine(index + 1);
       timer?.remove();
       for (const o of objects) o.destroy();
