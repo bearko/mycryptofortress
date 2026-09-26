@@ -49,7 +49,7 @@ export class Button extends Phaser.GameObjects.Container {
     bindPress(this, {
       onPressChange: (pressed) => this.setScale(pressed ? 0.96 : 1),
       onTap: () => {
-        playSe(scene, "se.buff");
+        playSe(scene, "se.crash");
         this.opts.onTap?.();
       },
     });
