@@ -7,7 +7,7 @@ import type { ModifierKey } from "../sim/modifiers";
 export type TreeBranch = "core" | "archer" | "lightning" | "pulse" | "fire" | "miner" | "cannon" | "defense" | "economy";
 
 /** ツリーの構成を変えたら上げる。セーブの版と違えば全返金する（SPEC-108 §1） */
-export const TREE_VERSION = 3;
+export const TREE_VERSION = 4;
 export type TokenId = "ce";
 
 export interface TreeEffect {
@@ -58,6 +58,7 @@ export const TREE: readonly TreeNode[] = [
   node({ id: "sanjushi", name: "三銃士の一斉射撃", source: "マスケット", branch: "archer", pos: { x: -1.0, y: -4.9 }, parent: "ogi_otoshi", maxLevel: 1, base: 60, effects: [{ stat: "volley", perLevel: 1 }], icon: "icon.battle.decoy", note: "最大 3 体に同時射撃（1 本 ×0.55）。弓が那須与一に交代" }),
   node({ id: "nue_goroshi", name: "鵺殺し", source: "ユミ", branch: "archer", pos: { x: 1.9, y: -2.7 }, parent: "brave_yabusame", maxLevel: 3, base: 18, effects: [{ stat: "bossDamagePct", perLevel: 0.15 }], icon: "icon.battle.fear" }),
   node({ id: "snipe", name: "スナイプ", source: "マスケット", branch: "archer", pos: { x: 2.0, y: -3.9 }, parent: "nue_goroshi", maxLevel: 1, base: 40, effects: [{ stat: "rangeAdd", perLevel: 0.6 }, { stat: "attackSpeedPct", perLevel: -0.13 }, { stat: "archerHeavy", perLevel: 1 }], icon: "icon.battle.buf_int", note: "射程が大きく伸びる代わりに攻撃が遅くなる。弓がウィリアム・テルに交代" }),
+  node({ id: "houjou", name: "崩城の一撃", source: "バリスタ", branch: "archer", pos: { x: 3.0, y: -4.6 }, parent: "snipe", maxLevel: 1, base: 80, effects: [{ stat: "heavyShot", perLevel: 1 }], icon: "icon.battle.phy", note: "弓が一撃特化に。攻撃力 ×5・攻撃間隔 ×3。会心やボス特効と相性抜群" }),
 
   // ─── 雷（ベンジャミン・フランクリン → ニコラ・テスラ / リング） ───
   node({ id: "raiden", name: "凧とライデン瓶の雷実験", source: "ベンジャミン・フランクリンのパッシブ", branch: "lightning", pos: { x: -3.0, y: -1.4 }, parent: "elite_yabusame", maxLevel: 1, base: 45, effects: [{ stat: "unlockLightning", perLevel: 1 }], icon: "hero.2041", note: "雷ヒーロー（フランクリン）を配置できるようになる" }),
@@ -71,14 +72,17 @@ export const TREE: readonly TreeNode[] = [
   // ─── 結界（安倍晴明 → 諸葛亮 / スクロール / シールド） ───
   node({ id: "kyukyu", name: "急急如律令", source: "安倍晴明のパッシブ", branch: "pulse", pos: { x: -3.4, y: -0.1 }, parent: "healing", maxLevel: 1, base: 40, effects: [{ stat: "unlockPulse", perLevel: 1 }], icon: "hero.5021", note: "結界ヒーロー（安倍晴明）を配置できるようになる" }),
   node({ id: "tactics", name: "タクティクス", source: "スクロール", branch: "pulse", pos: { x: -4.6, y: 0.2 }, parent: "kyukyu", maxLevel: 3, base: 16, effects: [{ stat: "pulseSlowAdd", perLevel: 0.08 }], icon: "icon.battle.dbf_agi", note: "結界の鈍足が強くなる" }),
+  node({ id: "denki", name: "電気伝導", source: "グラファイト", branch: "pulse", pos: { x: -5.3, y: 2.2 }, parent: "goji", maxLevel: 3, base: 26, effects: [{ stat: "pulseHaste", perLevel: 0.1 }], icon: "icon.battle.buf_agi", note: "結界の範囲内にいる他のヒーローの攻撃が速くなる（充電）" }),
   node({ id: "goji", name: "五事七計", source: "スクロール", branch: "pulse", pos: { x: -5.3, y: 1.2 }, parent: "tactics", maxLevel: 3, base: 22, effects: [{ stat: "pulseRangeAdd", perLevel: 0.2 }], icon: "icon.battle.buf_int" }),
   node({ id: "strategy", name: "ストラテジー", source: "スクロール", branch: "pulse", pos: { x: -5.8, y: 0.0 }, parent: "tactics", maxLevel: 4, base: 20, effects: [{ stat: "pulseDamagePct", perLevel: 0.25 }], icon: "icon.battle.phy" }),
   node({ id: "sekika", name: "石化の呪い", source: "シールド", branch: "pulse", pos: { x: -6.5, y: 1.1 }, parent: "goji", maxLevel: 3, base: 32, effects: [{ stat: "pulseStunChance", perLevel: 0.08 }], icon: "icon.battle.sleep", note: "結界の波動で確率スタン" }),
   node({ id: "koumei", name: "死せる孔明生ける仲達を走らす", source: "諸葛亮のパッシブ", branch: "pulse", pos: { x: -7.0, y: -0.1 }, parent: "strategy", maxLevel: 1, base: 90, effects: [{ stat: "pulseZhuge", perLevel: 1 }, { stat: "pulseDamagePct", perLevel: 0.25 }], icon: "hero.5015", note: "結界ヒーローが諸葛亮に交代。波動を受けた敵が脆弱（被ダメージ +15%）" }),
+  node({ id: "renkan", name: "連環の計", source: "貂蝉のパッシブ", branch: "pulse", pos: { x: -8.2, y: 0.5 }, parent: "koumei", maxLevel: 3, base: 60, effects: [{ stat: "slowLink", perLevel: 0.1 }], icon: "icon.battle.confused", note: "鈍足中の敵に当てたダメージの一部が、他の鈍足中の敵全員にも伝わる" }),
   node({ id: "medusa", name: "メドゥーサの呪い", source: "シールド", branch: "pulse", pos: { x: -7.4, y: 1.9 }, parent: "sekika", maxLevel: 2, base: 36, effects: [{ stat: "pulseSlowDurAdd", perLevel: 0.5 }], icon: "icon.battle.dbf_agi", note: "鈍足が長く続く" }),
 
   // ─── 炎（猿飛佐助 → 皇帝ネロ / ドラゴン / タイガー） ───
   node({ id: "jiraika", name: "地雷火", source: "猿飛佐助のパッシブ", branch: "fire", pos: { x: 3.0, y: -1.4 }, parent: "brave_yabusame", maxLevel: 1, base: 50, effects: [{ stat: "unlockFire", perLevel: 1 }], icon: "hero.3038", note: "炎ヒーロー（猿飛佐助）を配置できるようになる" }),
+  node({ id: "fukubaku", name: "伏爆の罠", source: "地雷", branch: "fire", pos: { x: 3.0, y: -2.6 }, parent: "jiraika", maxLevel: 3, base: 30, effects: [{ stat: "deathBlastChance", perLevel: 0.1 }], icon: "icon.battle.bleed", note: "撃破した敵が確率で爆発し、周りの敵にその最大 HP の 40% ダメージ（連鎖あり）" }),
   node({ id: "ryuou", name: "龍王の息吹", source: "ドラゴン", branch: "fire", pos: { x: 4.2, y: -1.0 }, parent: "jiraika", maxLevel: 4, base: 16, effects: [{ stat: "fireBurnPct", perLevel: 0.25 }], icon: "icon.battle.bleed", note: "炎上のダメージが増える" }),
   node({ id: "dragon_quake", name: "ドラゴンクエイク", source: "ドラゴン", branch: "fire", pos: { x: 4.0, y: -2.3 }, parent: "jiraika", maxLevel: 3, base: 22, effects: [{ stat: "fireBurnDurAdd", perLevel: 1 }], icon: "icon.battle.bleed", note: "炎上が長く続く" }),
   node({ id: "ryugan", name: "リュウガン", source: "ドラゴン", branch: "fire", pos: { x: 5.3, y: -1.6 }, parent: "ryuou", maxLevel: 2, base: 28, effects: [{ stat: "fireRangeAdd", perLevel: 0.25 }], icon: "icon.battle.buf_int" }),
@@ -90,8 +94,10 @@ export const TREE: readonly TreeNode[] = [
   node({ id: "novice_protection", name: "ノービスプロテクション", source: "アーマー", branch: "defense", pos: { x: -1.2, y: 0.8 }, parent: "root", maxLevel: 5, base: 5, effects: [{ stat: "maxHpAdd", perLevel: 3 }], icon: "icon.battle.hp" }),
   node({ id: "healing", name: "ヒーリング", source: "ネックレス", branch: "defense", pos: { x: -2.4, y: 0.6 }, parent: "novice_protection", maxLevel: 3, base: 10, effects: [{ stat: "healPerWave", perLevel: 1 }], icon: "icon.battle.resurrection", note: "Wave クリアごとに回復" }),
   node({ id: "elite_protection", name: "エリートプロテクション", source: "アーマー", branch: "defense", pos: { x: -1.8, y: 1.9 }, parent: "novice_protection", maxLevel: 3, base: 20, effects: [{ stat: "maxHpAdd", perLevel: 5 }], icon: "icon.battle.hp" }),
+  node({ id: "fukutsu", name: "不屈のガンマン", source: "ワイアット・アープのパッシブ", branch: "defense", pos: { x: -2.0, y: 3.1 }, parent: "elite_protection", maxLevel: 3, base: 30, effects: [{ stat: "lostHpDamagePct", perLevel: 0.03 }], icon: "icon.battle.buf_phy", note: "幻獣が失った HP 1 ごとにヒーローの攻撃力アップ（最大 +100%）。HP を増やすほど強くなる" }),
   node({ id: "recovery", name: "リカバリー", source: "ペン", branch: "defense", pos: { x: -3.5, y: 1.1 }, parent: "healing", maxLevel: 3, base: 25, effects: [{ stat: "regenPerSec", perLevel: 0.03 }], icon: "icon.battle.resurrection", note: "時間とともに少しずつ回復" }),
   node({ id: "gunshin", name: "軍神の加護", source: "カブト", branch: "defense", pos: { x: -2.9, y: 2.6 }, parent: "elite_protection", maxLevel: 2, base: 35, effects: [{ stat: "leakIgnoreChance", perLevel: 0.25 }], icon: "icon.battle.dbf_phy", note: "ボス以外の敵の到達ダメージを確率で無効化" }),
+  node({ id: "muketsu", name: "無血開城", source: "勝海舟のパッシブ", branch: "defense", pos: { x: -3.2, y: 3.6 }, parent: "gunshin", maxLevel: 2, base: 28, effects: [{ stat: "gumOnLeak", perLevel: 5 }], icon: "icon.gum", note: "敵に到達されるたびに、受けたダメージ 1 あたり 5 GUM を得る" }),
   node({ id: "seijo", name: "聖女の祈り", source: "シールド", branch: "defense", pos: { x: -4.2, y: 2.3 }, parent: "gunshin", maxLevel: 1, base: 80, effects: [{ stat: "lastStand", perLevel: 1 }], icon: "icon.battle.resurrection", note: "ボスの到達を 1 度だけ HP 1 で耐える" }),
 
   // ─── 幻獣砲（ネックレス / オリフラム） ───
@@ -145,6 +151,7 @@ export const STAT_LABEL: Record<ModifierKey, (v: number) => string> = {
   levelCostPct: (v) => `強化コスト -${Math.round(v * 100)}%`,
   wealthDamagePct: (v) => `所持 GUM 100 ごとに弓の攻撃力 ${pct(v)}`,
   poisonChance: (v) => `命中時 ${Math.round(v * 100)}% で毒`,
+  heavyShot: () => "弓が一撃特化（攻撃力 ×5・攻撃間隔 ×3）",
   unlockLightning: () => "雷ヒーローを解放",
   lightningTesla: () => "雷ヒーローがニコラ・テスラに交代",
   lightningDamagePct: (v) => `雷の攻撃力 ${pct(v)}`,
@@ -159,6 +166,8 @@ export const STAT_LABEL: Record<ModifierKey, (v: number) => string> = {
   pulseSlowDurAdd: (v) => `鈍足の持続 ${signed(v, 1)} 秒`,
   pulseRangeAdd: (v) => `結界の範囲 ${signed(v, 1)} マス`,
   pulseStunChance: (v) => `結界で ${Math.round(v * 100)}% スタン`,
+  pulseHaste: (v) => `結界の範囲内のヒーローの攻撃間隔 -${Math.round(v * 100)}%`,
+  slowLink: (v) => `鈍足中の敵への命中の ${Math.round(v * 100)}% を他の鈍足中の敵にも`,
   unlockFire: () => "炎ヒーローを解放",
   fireNero: () => "炎ヒーローが皇帝ネロに交代",
   fireDamagePct: (v) => `炎の攻撃力 ${pct(v)}`,
@@ -166,6 +175,7 @@ export const STAT_LABEL: Record<ModifierKey, (v: number) => string> = {
   fireBurnDurAdd: (v) => `炎上の持続 ${signed(v, 1)} 秒`,
   fireRangeAdd: (v) => `炎の射程 ${signed(v, 2)} マス`,
   critCombust: () => "弓の会心で炎上中の敵が誘爆",
+  deathBlastChance: (v) => `撃破した敵が ${Math.round(v * 100)}% で爆発`,
   unlockMiner: () => "採掘ヒーローを解放",
   minerOmega: () => "採掘ヒーローが OMEGA CC に交代",
   minerTollAdd: (v) => `通行料 ${signed(v, 0)} GUM`,
@@ -184,6 +194,8 @@ export const STAT_LABEL: Record<ModifierKey, (v: number) => string> = {
   regenPerSec: (v) => `毎秒 HP ${signed(v, 2)} 回復`,
   leakIgnoreChance: (v) => `通常敵の到達を ${Math.round(v * 100)}% で無効化`,
   lastStand: () => "ボスの到達を 1 度だけ耐える",
+  lostHpDamagePct: (v) => `失った HP 1 ごとに攻撃力 +${Math.round(v * 100)}%`,
+  gumOnLeak: (v) => `到達ダメージ 1 ごとに ${v} GUM`,
   startGumAdd: (v) => `開始時の GUM ${signed(v, 0)}`,
   dropValueFlat: (v) => `撃破 GUM ${signed(v, 0)}`,
   collectRadiusAdd: (v) => `GUM 回収範囲 ${signed(v, 1)} マス`,

@@ -9,7 +9,7 @@
     "row": 11
   },
   "startGum": 190,
-  "cryptidHp": 20,
+  "cryptidHp": 3,
   "prepSeconds": 15,
   "intermissionSeconds": 6,
   "reward": {
@@ -104,7 +104,7 @@
   "waves": [
     {
       "reward": 16,
-      "hpMul": 4.3,
+      "hpMul": 3.9,
       "groups": [
         {
           "enemy": "byte_g",
@@ -124,7 +124,7 @@
     },
     {
       "reward": 18,
-      "hpMul": 4.73,
+      "hpMul": 4.29,
       "groups": [
         {
           "enemy": "rabbit_t",
@@ -144,7 +144,7 @@
     },
     {
       "reward": 20,
-      "hpMul": 5.375,
+      "hpMul": 4.875,
       "groups": [
         {
           "enemy": "bagle_s",
@@ -164,7 +164,7 @@
     },
     {
       "reward": 22,
-      "hpMul": 6.02,
+      "hpMul": 5.46,
       "groups": [
         {
           "enemy": "creeper_t",
@@ -184,7 +184,7 @@
     },
     {
       "reward": 24,
-      "hpMul": 6.665,
+      "hpMul": 6.045,
       "groups": [
         {
           "enemy": "bagle_t",
@@ -204,7 +204,7 @@
     },
     {
       "reward": 26,
-      "hpMul": 7.31,
+      "hpMul": 6.63,
       "groups": [
         {
           "enemy": "rabbit_t",
@@ -231,7 +231,7 @@
     },
     {
       "reward": 28,
-      "hpMul": 8.17,
+      "hpMul": 7.41,
       "groups": [
         {
           "enemy": "bagle_t",
@@ -251,7 +251,7 @@
     },
     {
       "reward": 30,
-      "hpMul": 9.03,
+      "hpMul": 8.19,
       "groups": [
         {
           "enemy": "byte_g",
@@ -278,7 +278,7 @@
     },
     {
       "reward": 32,
-      "hpMul": 9.89,
+      "hpMul": 8.97,
       "groups": [
         {
           "enemy": "bagle_t",

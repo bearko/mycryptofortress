@@ -1,7 +1,7 @@
 import { ENEMIES } from "../data/balance/enemies";
 import { ROLES } from "../data/balance/heroes";
 import type { LevelDef, WaveDef } from "./level";
-import { emptyModifiers, type RunModifiers } from "./modifiers";
+import { BLAST_PCT, HASTE_CAP, HEAVY_SHOT_DAMAGE, HEAVY_SHOT_INTERVAL, emptyModifiers, type RunModifiers } from "./modifiers";
 import { CANNON, EARLY_CALL_ACCEL, RunSim, type SimEvent } from "./run";
 
 const ALL_ROLES: Partial<RunModifiers> = { unlockLightning: 1, unlockPulse: 1, unlockFire: 1, unlockMiner: 1 };
@@ -291,5 +291,74 @@ describe("特殊な敵 (SPEC-109 / Phase 3)", () => {
       if (best >= 5) break;
     }
     expect(best).toBe(5);
+  });
+});
+
+describe("Outhold 由来のシナジー", () => {
+  it("一撃特化（崩城の一撃）: 弓の攻撃力 ×5・攻撃間隔 ×3", () => {
+    const base = new RunSim(line([wave("byte_s", 1)]), 1).statsFor("archer", 1);
+    const heavy = new RunSim(line([wave("byte_s", 1)]), 1, mods({ heavyShot: 1 })).statsFor("archer", 1);
+    expect(heavy.damage).toBeCloseTo(base.damage * HEAVY_SHOT_DAMAGE);
+    expect(heavy.interval).toBeCloseTo(base.interval * HEAVY_SHOT_INTERVAL);
+  });
+
+  it("充電（電気伝導）: 結界の範囲内のヒーローだけ攻撃間隔が短くなる", () => {
+    const sim = new RunSim(line([wave("byte_s", 1)]), 1, mods({ ...ALL_ROLES, pulseHaste: 0.3 }));
+    const far = sim.placeHero(0, "archer")!; // (5,1)
+    sim.placeHero(1, "pulse"); // (7,1): 距離 2 > 結界の範囲 1.7
+    expect(sim.hasteFor(far)).toBe(0);
+    const sim2 = new RunSim(
+      line([wave("byte_s", 1)], { slots: [{ col: 5, row: 1 }, { col: 6, row: 1 }] }),
+      1,
+      mods({ ...ALL_ROLES, pulseHaste: 0.9 }),
+    );
+    const a = sim2.placeHero(0, "archer")!;
+    const p = sim2.placeHero(1, "pulse")!;
+    expect(sim2.hasteFor(a)).toBe(HASTE_CAP);
+    expect(sim2.hasteFor(p)).toBe(0);
+  });
+
+  it("ダメージリンク（連環の計）: 鈍足中の敵への命中が他の鈍足中の敵にも伝わる", () => {
+    const sim = new RunSim(short([wave("byte_t", 3, 0.2, 50)]), 1, mods({ unlockCannon: 1, slowLink: 0.5 }));
+    sim.startNextWave();
+    run(sim, 2);
+    const [a, b, c] = sim.enemies;
+    for (const e of [a, b]) {
+      e.status.slow = 0.3;
+      e.status.slowTime = 5;
+    }
+    const hb = b.hp;
+    const hc = c.hp;
+    // ヒーローの直接の命中として与える
+    const archer = sim.placeHero(0, "archer")!;
+    (sim as unknown as { dealDamage: (e: unknown, n: number, h: number, c: boolean) => void }).dealDamage(a, 10, archer.id, false);
+    expect(b.hp).toBeCloseTo(hb - 5);
+    expect(c.hp).toBe(hc); // 鈍足していない敵には伝わらない
+  });
+
+  it("撃破時の爆発（伏爆の罠）: 周りの敵に最大 HP の一定割合", () => {
+    const sim = new RunSim(short([wave("byte_t", 3, 0.2, 50)]), 1, mods({ unlockCannon: 1, deathBlastChance: 1 }));
+    sim.startNextWave();
+    run(sim, 1.5);
+    const [a, b] = sim.enemies;
+    const hb = b.hp;
+    a.hp = 1;
+    sim.fireCannon(a.x, a.y);
+    const evs = sim.drainEvents();
+    expect(evs.some((e) => e.type === "blast")).toBe(true);
+    expect(b.hp).toBeLessThanOrEqual(hb - CANNON.damage - a.maxHp * BLAST_PCT + 1e-6);
+    expect(sim.stats.blastDamage).toBeGreaterThan(0);
+  });
+
+  it("背水（不屈のガンマン）と無血開城: 失った HP で攻撃力、到達で GUM", () => {
+    const sim = new RunSim(short([wave("byte_s", 2, 0.3)], { cryptidHp: 3 }), 1, mods({ lostHpDamagePct: 0.2, gumOnLeak: 5 }));
+    expect(sim.lostHpBonus).toBe(0);
+    sim.startNextWave();
+    const g = sim.gum;
+    const evs = run(sim, 30, (e) => e.type === "leak");
+    const leak = evs.find((e) => e.type === "leak");
+    expect(leak && leak.type === "leak" && leak.gum).toBe(5);
+    expect(sim.gum).toBe(g + 5);
+    expect(sim.lostHpBonus).toBeCloseTo(0.2);
   });
 });

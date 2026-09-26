@@ -174,4 +174,13 @@ describe("コアループの到達可能性 (SPEC-106 §4)", () => {
     expect(firstWin).toBeGreaterThanOrEqual(4);
     expect(Math.max(...l1.slice(0, firstWin).map((l) => l.wavesReached))).toBeGreaterThan(l1[0].wavesReached);
   });
+
+  it("Lv4〜6 も強化を続ければ 65 ラン以内に全クリアでき、各レベルで数回は負ける", () => {
+    const { log, save } = runCampaign({ buyOrder: STANDARD_BUY_ORDER, maxRuns: 65, seed: 1 });
+    expect(save.meta.levels.L6?.cleared).toBe(true);
+    for (const id of ["L4", "L5", "L6"]) {
+      const runs = log.filter((l) => l.levelId === id);
+      expect(runs.length, id).toBeGreaterThanOrEqual(3);
+    }
+  }, 120_000);
 });

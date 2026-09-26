@@ -3,7 +3,13 @@ import { ROLES, heroVisual, maxLevel, roleStats, type RoleId } from "../data/bal
 import type { LevelDef } from "./level";
 import {
   BASE_CRIT_MUL,
+  BLAST_PCT,
+  BLAST_RADIUS,
   COMBUST_MUL,
+  HASTE_CAP,
+  HEAVY_SHOT_DAMAGE,
+  HEAVY_SHOT_INTERVAL,
+  LOST_HP_CAP,
   VOLLEY_DAMAGE,
   VOLLEY_TARGETS,
   WEALTH_CAP,
@@ -130,7 +136,8 @@ export type SimEvent =
   | { type: "attack"; heroId: number; targetId: number; tx: number; ty: number }
   | { type: "hit"; enemyId: number; damage: number; x: number; y: number; crit: boolean }
   | { type: "kill"; enemyId: number; x: number; y: number; boss: boolean }
-  | { type: "leak"; enemyId: number; damage: number; blocked: boolean }
+  | { type: "leak"; enemyId: number; damage: number; blocked: boolean; gum: number }
+  | { type: "blast"; x: number; y: number; r: number }
   | { type: "lastStand" }
   | { type: "leap"; enemyId: number }
   | { type: "gumOnHit"; x: number; y: number }
@@ -154,6 +161,9 @@ export type SimEvent =
   | { type: "won" }
   | { type: "lost" };
 
+/** dealDamage の heroId: 撃破時の爆発（0 は幻獣砲、正の数はヒーロー） */
+const BLAST_SOURCE = -1;
+
 export interface RunStats {
   kills: number;
   leaks: number;
@@ -164,6 +174,8 @@ export interface RunStats {
   wavesCleared: number;
   /** 幻獣砲のダメージ合計 */
   cannonDamage: number;
+  /** 撃破時の爆発（伏爆の罠）のダメージ合計 */
+  blastDamage: number;
 }
 
 interface SpawnEntry {
@@ -210,7 +222,7 @@ export class RunSim {
   drops: DropState[] = [];
   /** 開放済みのロックマス（スロット番号） */
   readonly openedSlots = new Set<number>();
-  readonly stats: RunStats = { kills: 0, leaks: 0, gumEarned: 0, wavesReached: 0, wavesCleared: 0, cannonDamage: 0 };
+  readonly stats: RunStats = { kills: 0, leaks: 0, gumEarned: 0, wavesReached: 0, wavesCleared: 0, cannonDamage: 0, blastDamage: 0 };
   readonly paths: PathGeom[];
   /** 幻獣の位置（マス座標の中心） */
   readonly cryptidPos: Point;
@@ -376,11 +388,26 @@ export class RunSim {
       miner: { dmg: 0, speed: 0, range: m.minerRangeAdd },
     };
     const b = by[role];
+    const heavy = role === "archer" && m.heavyShot > 0;
     return {
-      damage: base.damage * (1 + b.dmg),
-      interval: base.interval / Math.max(0.2, 1 + b.speed),
+      damage: base.damage * (1 + b.dmg) * (heavy ? HEAVY_SHOT_DAMAGE : 1),
+      interval: (base.interval / Math.max(0.2, 1 + b.speed)) * (heavy ? HEAVY_SHOT_INTERVAL : 1),
       range: base.range + b.range,
     };
+  }
+
+  /** 充電: 結界ヒーローの範囲内にいれば攻撃間隔がこの割合だけ短くなる（0〜HASTE_CAP） */
+  hasteFor(hero: HeroState): number {
+    if (this.mods.pulseHaste <= 0 || hero.role === "pulse" || hero.role === "miner") return 0;
+    const covered = this.heroes.some(
+      (p) => p.role === "pulse" && p !== hero && Math.hypot(p.x - hero.x, p.y - hero.y) <= this.heroStats(p).range,
+    );
+    return covered ? Math.min(HASTE_CAP, this.mods.pulseHaste) : 0;
+  }
+
+  /** 背水: 失った幻獣 HP に応じたヒーローの攻撃力補正 */
+  get lostHpBonus(): number {
+    return Math.min(LOST_HP_CAP, this.mods.lostHpDamagePct * Math.max(0, this.maxHp - this.hp));
   }
 
   /** 採掘ヒーローの通行料（1 体あたり） */
@@ -694,18 +721,23 @@ export class RunSim {
   private onLeak(e: EnemyState): void {
     this.stats.leaks += 1;
     if (!e.def.boss && this.mods.leakIgnoreChance > 0 && this.rng.chance(this.mods.leakIgnoreChance)) {
-      this.emit({ type: "leak", enemyId: e.id, damage: 0, blocked: true });
+      this.emit({ type: "leak", enemyId: e.id, damage: 0, blocked: true, gum: 0 });
       return;
     }
     if (e.def.boss && this.mods.lastStand > 0 && !this.lastStandUsed && this.hp - e.def.leak <= 0) {
       this.lastStandUsed = true;
       this.hp = 1;
-      this.emit({ type: "leak", enemyId: e.id, damage: 0, blocked: true });
+      this.emit({ type: "leak", enemyId: e.id, damage: 0, blocked: true, gum: 0 });
       this.emit({ type: "lastStand" });
       return;
     }
     this.hp -= e.def.leak;
-    this.emit({ type: "leak", enemyId: e.id, damage: e.def.leak, blocked: false });
+    const gum = Math.round(e.def.leak * this.mods.gumOnLeak);
+    if (gum > 0) {
+      this.gum += gum;
+      this.stats.gumEarned += gum;
+    }
+    this.emit({ type: "leak", enemyId: e.id, damage: e.def.leak, blocked: false, gum });
   }
 
   // ─── ヒーローの行動 ─────────────────────────────────────
@@ -738,7 +770,7 @@ export class RunSim {
       }
       const target = this.selectTarget(h, stats.range);
       if (!target) continue;
-      h.cooldown = stats.interval;
+      h.cooldown = stats.interval * (1 - this.hasteFor(h));
       h.facing = target.x < h.x ? -1 : 1;
       if (h.role === "lightning") this.lightning(h, target, stats.damage);
       else if (h.role === "fire") this.flame(h, target, stats.damage);
@@ -913,17 +945,26 @@ export class RunSim {
    * すべてのダメージの入口。脆弱で増やし、撃破処理（ドロップ・分裂・双子）まで行う。
    * heroId 0 は幻獣砲。silent は継続ダメージ（hit イベントを出さない）。
    */
-  private dealDamage(e: EnemyState, amount: number, heroId: number, crit: boolean, silent = false): void {
+  private dealDamage(e: EnemyState, amount: number, heroId: number, crit: boolean, silent = false, linked = false): void {
     if (e.hp <= 0 || amount <= 0) return;
-    const total = amount * (1 + e.status.vuln);
+    const hero = heroId > 0;
+    const total = amount * (1 + e.status.vuln) * (hero ? 1 + this.lostHpBonus : 1);
     const dealt = Math.min(total, e.hp);
     e.hp -= total;
     if (heroId === 0) this.stats.cannonDamage += dealt;
+    else if (heroId === BLAST_SOURCE) this.stats.blastDamage += dealt;
     else {
-      const hero = this.findHero(heroId);
-      if (hero) hero.totalDamage += dealt;
+      const h = this.findHero(heroId);
+      if (h) h.totalDamage += dealt;
     }
     if (!silent) this.emit({ type: "hit", enemyId: e.id, damage: dealt, x: e.x, y: e.y, crit });
+    // ダメージリンク: 鈍足中の敵への直接の命中を、他の鈍足中の敵にも分ける
+    if (hero && !silent && !linked && this.mods.slowLink > 0 && e.status.slowTime > 0) {
+      const share = amount * this.mods.slowLink;
+      for (const o of this.enemies) {
+        if (o !== e && o.hp > 0 && o.status.slowTime > 0) this.dealDamage(o, share, heroId, false, true, true);
+      }
+    }
     if (e.hp <= 0) this.onKill(e);
   }
 
@@ -939,6 +980,14 @@ export class RunSim {
     };
     this.drops.push(drop);
     this.emit({ type: "drop", dropId: drop.id });
+    // 伏爆の罠: 確率で爆発して周りの敵を巻き込む
+    if (this.mods.deathBlastChance > 0 && this.rng.chance(this.mods.deathBlastChance)) {
+      this.emit({ type: "blast", x: e.x, y: e.y, r: BLAST_RADIUS });
+      const damage = e.maxHp * BLAST_PCT;
+      for (const o of [...this.enemies]) {
+        if (o !== e && o.hp > 0 && Math.hypot(o.x - e.x, o.y - e.y) <= BLAST_RADIUS) this.dealDamage(o, damage, BLAST_SOURCE, false);
+      }
+    }
     // 分裂
     if (e.def.split) {
       const child = ENEMIES[e.def.split.enemy];

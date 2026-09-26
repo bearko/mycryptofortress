@@ -10,6 +10,14 @@ describe("validateLevel (SPEC-103)", () => {
     expect(getAsset(lv.background).type).toBe("image");
   });
 
+  it("幻獣の初期 HP はどのレベルも 3（HP はスキルツリーで伸ばす前提）", () => {
+    for (const lv of LEVELS) expect(lv.cryptidHp, lv.id).toBe(3);
+  });
+
+  it("Lv4 以降にはロックマスがある", () => {
+    for (const lv of LEVELS.slice(3)) expect(lv.slots.some((s) => s.kind === "locked"), lv.id).toBe(true);
+  });
+
   it("斜めの経路を検出", () => {
     const lv = clone();
     lv.paths[0].points[1] = [2, 3];
