@@ -1,0 +1,563 @@
+{
+  "$comment": "SPEC-101 §5.2: ゲームが使う MCH アセットの唯一の登録先。追加したら `npm run assets:sync` を実行してコミットする。",
+  "source": {
+    "repo": "bearko/mycryptoheroes",
+    "ref": "main"
+  },
+  "assets": [
+    {
+      "key": "cryptid.ocean",
+      "type": "image",
+      "path": "Image/Cryptids/01_Ocean.png"
+    },
+    {
+      "key": "cryptid.strawberry",
+      "type": "image",
+      "path": "Image/Cryptids/02_Strawberry.png"
+    },
+    {
+      "key": "cryptid.tangerine",
+      "type": "image",
+      "path": "Image/Cryptids/03_Tangerine.png"
+    },
+    {
+      "key": "cryptid.lime",
+      "type": "image",
+      "path": "Image/Cryptids/04_Lime.png"
+    },
+    {
+      "key": "cryptid.graphite",
+      "type": "image",
+      "path": "Image/Cryptids/05_Graphite.png"
+    },
+    {
+      "key": "cryptid.grape",
+      "type": "image",
+      "path": "Image/Cryptids/06_Grape.png"
+    },
+    {
+      "key": "cryptid.sage",
+      "type": "image",
+      "path": "Image/Cryptids/07_Sage.png"
+    },
+    {
+      "key": "cryptid.blueberry",
+      "type": "image",
+      "path": "Image/Cryptids/08_Blueberry.png"
+    },
+    {
+      "key": "cryptid.ruby",
+      "type": "image",
+      "path": "Image/Cryptids/09_ruby.png"
+    },
+    {
+      "key": "bg.land.ocean",
+      "type": "image",
+      "path": "Image/Backgrounds/2105.png",
+      "preload": false
+    },
+    {
+      "key": "bg.land.strawberry",
+      "type": "image",
+      "path": "Image/Backgrounds/2205.png",
+      "preload": false
+    },
+    {
+      "key": "bg.land.tangerine",
+      "type": "image",
+      "path": "Image/Backgrounds/2301.png",
+      "preload": false
+    },
+    {
+      "key": "bg.land.lime",
+      "type": "image",
+      "path": "Image/Backgrounds/2405.png",
+      "preload": false
+    },
+    {
+      "key": "bg.land.graphite",
+      "type": "image",
+      "path": "Image/Backgrounds/2505.png",
+      "preload": false
+    },
+    {
+      "key": "bg.land.grape",
+      "type": "image",
+      "path": "Image/Backgrounds/2605.png",
+      "preload": false
+    },
+    {
+      "key": "bg.land.sage",
+      "type": "image",
+      "path": "Image/Backgrounds/2705.png",
+      "preload": false
+    },
+    {
+      "key": "bg.land.blueberry",
+      "type": "image",
+      "path": "Image/Backgrounds/2805.png",
+      "preload": false
+    },
+    {
+      "key": "bg.land.ruby",
+      "type": "image",
+      "path": "Image/Backgrounds/2905.png",
+      "preload": false
+    },
+    {
+      "key": "logo.mch",
+      "type": "image",
+      "path": "Image/Icons/mch_logo_horizontal.png"
+    },
+    {
+      "key": "icon.gum",
+      "type": "image",
+      "path": "Image/Icons/gum.png"
+    },
+    {
+      "key": "icon.ce",
+      "type": "image",
+      "path": "Image/Icons/ce.png"
+    },
+    {
+      "key": "icon.cp",
+      "type": "image",
+      "path": "Image/Icons/cp.png"
+    },
+    {
+      "key": "icon.emblem",
+      "type": "image",
+      "path": "Image/Icons/emblem.webp"
+    },
+    {
+      "key": "icon.gold_dust",
+      "type": "image",
+      "path": "Image/Icons/gold_dust.webp"
+    },
+    {
+      "key": "chara.navi_ain_11_idle",
+      "type": "image",
+      "path": "Image/Characters/navi_ain_11_idle.png"
+    },
+    {
+      "key": "chara.navi_ain_12_blink",
+      "type": "image",
+      "path": "Image/Characters/navi_ain_12_blink.png"
+    },
+    {
+      "key": "chara.navi_ain_13_blink",
+      "type": "image",
+      "path": "Image/Characters/navi_ain_13_blink.png"
+    },
+    {
+      "key": "chara.navi_ain_greeting_00_greet_sparkle",
+      "type": "image",
+      "path": "Image/Characters/navi_ain_greeting_00_greet_sparkle.png"
+    },
+    {
+      "key": "chara.navi_ain_greeting_01_greet_sparkle",
+      "type": "image",
+      "path": "Image/Characters/navi_ain_greeting_01_greet_sparkle.png"
+    },
+    {
+      "key": "bgm.land",
+      "type": "audio",
+      "path": "Audio/BGM/land.mp3"
+    },
+    {
+      "key": "se.buff",
+      "type": "audio",
+      "path": "Audio/SE/Battle/4_buff.mp3"
+    },
+    {
+      "key": "se.treasure",
+      "type": "audio",
+      "path": "Audio/SE/Actions/open_treasure.mp3"
+    },
+    {
+      "key": "hero.3026",
+      "type": "image",
+      "path": "Image/Heroes/3026.png"
+    },
+    {
+      "key": "enemy.161",
+      "type": "image",
+      "path": "Image/Enemies/161.png"
+    },
+    {
+      "key": "enemy.162",
+      "type": "image",
+      "path": "Image/Enemies/162.png"
+    },
+    {
+      "key": "enemy.163",
+      "type": "image",
+      "path": "Image/Enemies/163.png"
+    },
+    {
+      "key": "enemy.386",
+      "type": "image",
+      "path": "Image/Enemies/386.png"
+    },
+    {
+      "key": "enemy.387",
+      "type": "image",
+      "path": "Image/Enemies/387.png"
+    },
+    {
+      "key": "enemy.450",
+      "type": "image",
+      "path": "Image/Enemies/450.png"
+    },
+    {
+      "key": "bg.node.1037",
+      "type": "image",
+      "path": "Image/Backgrounds/1037.png",
+      "preload": false
+    },
+    {
+      "key": "fx.single_damage",
+      "type": "spritesheet",
+      "path": "Image/Effects/Battle/01_single_damage.png",
+      "frameWidth": 100,
+      "frameHeight": 100
+    },
+    {
+      "key": "bgm.pve",
+      "type": "audio",
+      "path": "Audio/BGM/pve.mp3",
+      "preload": false
+    },
+    {
+      "key": "bgm.raid",
+      "type": "audio",
+      "path": "Audio/BGM/raid.mp3",
+      "preload": false
+    },
+    {
+      "key": "se.hit",
+      "type": "audio",
+      "path": "Audio/SE/Battle/1_single_damage.mp3"
+    },
+    {
+      "key": "se.area",
+      "type": "audio",
+      "path": "Audio/SE/Battle/2_area_damage.mp3"
+    },
+    {
+      "key": "se.debuff",
+      "type": "audio",
+      "path": "Audio/SE/Battle/5_debuff_status_effect.mp3"
+    },
+    {
+      "key": "se.crash",
+      "type": "audio",
+      "path": "Audio/SE/Actions/crash.mp3"
+    },
+    {
+      "key": "se.production",
+      "type": "audio",
+      "path": "Audio/SE/Actions/production.mp3"
+    },
+    {
+      "key": "jingle.win",
+      "type": "audio",
+      "path": "Audio/SE/Jingles/win.mp3"
+    },
+    {
+      "key": "jingle.lose",
+      "type": "audio",
+      "path": "Audio/SE/Jingles/lose.mp3"
+    },
+    {
+      "key": "enemy.101",
+      "type": "image",
+      "path": "Image/Enemies/101.png"
+    },
+    {
+      "key": "enemy.102",
+      "type": "image",
+      "path": "Image/Enemies/102.png"
+    },
+    {
+      "key": "enemy.448",
+      "type": "image",
+      "path": "Image/Enemies/448.png"
+    },
+    {
+      "key": "enemy.445",
+      "type": "image",
+      "path": "Image/Enemies/445.png"
+    },
+    {
+      "key": "bg.node.1038",
+      "type": "image",
+      "path": "Image/Backgrounds/1038.png",
+      "preload": false
+    },
+    {
+      "key": "bg.node.1023",
+      "type": "image",
+      "path": "Image/Backgrounds/1023.png",
+      "preload": false
+    },
+    {
+      "key": "chara.navi_ain_speak_00_talk",
+      "type": "image",
+      "path": "Image/Characters/navi_ain_speak_00_talk.png"
+    },
+    {
+      "key": "chara.navi_ain_speak_01_talk",
+      "type": "image",
+      "path": "Image/Characters/navi_ain_speak_01_talk.png"
+    },
+    {
+      "key": "chara.navi_ain_00_pointer_up",
+      "type": "image",
+      "path": "Image/Characters/navi_ain_00_pointer_up.png"
+    },
+    {
+      "key": "chara.navi_ain_06_smile",
+      "type": "image",
+      "path": "Image/Characters/navi_ain_06_smile.png"
+    },
+    {
+      "key": "chara.chris_09_idle",
+      "type": "image",
+      "path": "Image/Characters/chris_09_idle.png"
+    },
+    {
+      "key": "chara.chris_10_blink",
+      "type": "image",
+      "path": "Image/Characters/chris_10_blink.png"
+    },
+    {
+      "key": "chara.chris_11_blink",
+      "type": "image",
+      "path": "Image/Characters/chris_11_blink.png"
+    },
+    {
+      "key": "chara.chris_speak_02_talk",
+      "type": "image",
+      "path": "Image/Characters/chris_speak_02_talk.png"
+    },
+    {
+      "key": "chara.chris_speak_03_talk",
+      "type": "image",
+      "path": "Image/Characters/chris_speak_03_talk.png"
+    },
+    {
+      "key": "chara.chris_03_cheer",
+      "type": "image",
+      "path": "Image/Characters/chris_03_cheer.png"
+    },
+    {
+      "key": "chara.maycri_04_eyes_blank",
+      "type": "image",
+      "path": "Image/Characters/maycri_04_eyes_blank.png"
+    },
+    {
+      "key": "chara.maycri_05_blink",
+      "type": "image",
+      "path": "Image/Characters/maycri_05_blink.png"
+    },
+    {
+      "key": "chara.maycri_06_eyes_small",
+      "type": "image",
+      "path": "Image/Characters/maycri_06_eyes_small.png"
+    },
+    {
+      "key": "chara.maycri_02_eyes_wide",
+      "type": "image",
+      "path": "Image/Characters/maycri_02_eyes_wide.png"
+    },
+    {
+      "key": "icon.battle.hp",
+      "type": "image",
+      "path": "Image/BattleIcons/Parameters/hp.png"
+    },
+    {
+      "key": "icon.battle.phy",
+      "type": "image",
+      "path": "Image/BattleIcons/Parameters/phy.png"
+    },
+    {
+      "key": "icon.battle.buf_agi",
+      "type": "image",
+      "path": "Image/BattleIcons/Buffs/buf_agi.png"
+    },
+    {
+      "key": "icon.battle.buf_phy",
+      "type": "image",
+      "path": "Image/BattleIcons/Buffs/buf_phy.png"
+    },
+    {
+      "key": "icon.battle.buf_int",
+      "type": "image",
+      "path": "Image/BattleIcons/Buffs/buf_int.png"
+    },
+    {
+      "key": "icon.battle.dbf_phy",
+      "type": "image",
+      "path": "Image/BattleIcons/Buffs/dbf_phy.png"
+    },
+    {
+      "key": "icon.battle.fear",
+      "type": "image",
+      "path": "Image/BattleIcons/StatusEffects/fear.png"
+    },
+    {
+      "key": "icon.battle.resurrection",
+      "type": "image",
+      "path": "Image/BattleIcons/StatusEffects/resurrection.png"
+    },
+    {
+      "key": "icon.battle.decoy",
+      "type": "image",
+      "path": "Image/BattleIcons/StatusEffects/decoy.png"
+    },
+    {
+      "key": "se.heal",
+      "type": "audio",
+      "path": "Audio/SE/Battle/3_heal_resurrection.mp3"
+    },
+    {
+      "key": "hero.4053",
+      "type": "image",
+      "path": "Image/Heroes/4053.png"
+    },
+    {
+      "key": "hero.5028",
+      "type": "image",
+      "path": "Image/Heroes/5028.png"
+    },
+    {
+      "key": "hero.2041",
+      "type": "image",
+      "path": "Image/Heroes/2041.png"
+    },
+    {
+      "key": "hero.4041",
+      "type": "image",
+      "path": "Image/Heroes/4041.png"
+    },
+    {
+      "key": "hero.5021",
+      "type": "image",
+      "path": "Image/Heroes/5021.png"
+    },
+    {
+      "key": "hero.5015",
+      "type": "image",
+      "path": "Image/Heroes/5015.png"
+    },
+    {
+      "key": "hero.3038",
+      "type": "image",
+      "path": "Image/Heroes/3038.png"
+    },
+    {
+      "key": "hero.3007",
+      "type": "image",
+      "path": "Image/Heroes/3007.png"
+    },
+    {
+      "key": "hero.2025",
+      "type": "image",
+      "path": "Image/Heroes/2025.png"
+    },
+    {
+      "key": "hero.4034",
+      "type": "image",
+      "path": "Image/Heroes/4034.png"
+    },
+    {
+      "key": "enemy.181",
+      "type": "image",
+      "path": "Image/Enemies/181.png"
+    },
+    {
+      "key": "enemy.182",
+      "type": "image",
+      "path": "Image/Enemies/182.png"
+    },
+    {
+      "key": "enemy.397",
+      "type": "image",
+      "path": "Image/Enemies/397.png"
+    },
+    {
+      "key": "enemy.398",
+      "type": "image",
+      "path": "Image/Enemies/398.png"
+    },
+    {
+      "key": "enemy.399",
+      "type": "image",
+      "path": "Image/Enemies/399.png"
+    },
+    {
+      "key": "enemy.425",
+      "type": "image",
+      "path": "Image/Enemies/425.png"
+    },
+    {
+      "key": "enemy.421",
+      "type": "image",
+      "path": "Image/Enemies/421.png"
+    },
+    {
+      "key": "enemy.725",
+      "type": "image",
+      "path": "Image/Enemies/725.png"
+    },
+    {
+      "key": "enemy.519",
+      "type": "image",
+      "path": "Image/Enemies/519.png"
+    },
+    {
+      "key": "bg.node.1006",
+      "type": "image",
+      "path": "Image/Backgrounds/1006.png",
+      "preload": false
+    },
+    {
+      "key": "bg.node.1039",
+      "type": "image",
+      "path": "Image/Backgrounds/1039.png",
+      "preload": false
+    },
+    {
+      "key": "bg.node.1041",
+      "type": "image",
+      "path": "Image/Backgrounds/1041.png",
+      "preload": false
+    },
+    {
+      "key": "icon.battle.poison",
+      "type": "image",
+      "path": "Image/BattleIcons/StatusEffects/poison.png"
+    },
+    {
+      "key": "icon.battle.bleed",
+      "type": "image",
+      "path": "Image/BattleIcons/StatusEffects/bleed.png"
+    },
+    {
+      "key": "icon.battle.confused",
+      "type": "image",
+      "path": "Image/BattleIcons/StatusEffects/confused.png"
+    },
+    {
+      "key": "icon.battle.sleep",
+      "type": "image",
+      "path": "Image/BattleIcons/StatusEffects/sleep.png"
+    },
+    {
+      "key": "icon.battle.dbf_agi",
+      "type": "image",
+      "path": "Image/BattleIcons/Buffs/dbf_agi.png"
+    }
+  ]
+}

@@ -15,8 +15,10 @@
 ## このプロジェクト固有のルール
 
 - **ゲーム実装は `web/` ディレクトリ配下に置く**（Vite + TypeScript + Phaser 3）。
-- **アセット参照**: ヒーロー画像・敵画像・SE/BGM は [bearko/mycryptoheroes](https://github.com/bearko/mycryptoheroes) から `raw.githubusercontent.com` 経由で取得するか、`web/public/assets/` 配下にローカルコピーを置く。重い画像をリポジトリにコミットせず、必要なものだけサブセット化する方針。
-- **由来 Unity プロジェクト**: `C:\Users\beark\UnityProject\MCHTowerDefence` のスクリプト群（`Assets/Scripts/5_Stage/*.cs`）が一次資料。ダメージ式・コスト・Wave 構造はここに沿う。差分は SPEC で明示する。
+- **アセット参照**: MCH アセットは `web/assets.manifest.json` に登録し、`npm run assets:sync` で `web/public/assets/mch/` に**使用分だけ**同梱する（実行時に raw.githubusercontent.com を参照しない）。マニフェスト外の読み込み禁止（[SPEC-101](docs/specs/SPEC-101-phase0-foundation.md)）。
+- **レイヤ分離**: `web/src/sim`（戦闘）/ `meta`（メタ進行・セーブ）/ `data` は Phaser に依存させない（テストで検査）。描画・入力は `web/src/view`。
+- **v2（作り直し中）の一次資料**: [docs/research/OUTHOLD_ANALYSIS.md](docs/research/OUTHOLD_ANALYSIS.md)（Outhold のゲームシステム解析）と [docs/specs/SPEC-100-v2-game-design.md](docs/specs/SPEC-100-v2-game-design.md)（v2 親仕様）。進め方は [docs/ROADMAP.md](docs/ROADMAP.md)。v1 の由来だった Unity `MCHTowerDefence` は参照しない。
+- **MCH アセット原則**: 画面に出るキャラクター・アイコン・SE・BGM・背景・スキル名は原則 `mycryptoheroes` の素材を使う。オリジナルキャラクター（マインちゃん / クリスくん / マイクリくん）はナビゲーター / NPC 用。
 - **PR は完走させる**: テスト追加・型チェック・ビルド成功まで。論点は PR 本文の「マージ前確認事項（HITL）」に書く。
 
 ## 作業時のルール（要約）

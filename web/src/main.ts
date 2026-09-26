@@ -1,83 +1,48 @@
+import "@fontsource/orbitron/700.css";
 import Phaser from "phaser";
-import { BootScene } from "./scenes/BootScene";
-import { StageScene } from "./scenes/StageScene";
-import { WorldSelectScene } from "./scenes/WorldSelectScene";
-import { StageSelectScene } from "./scenes/StageSelectScene";
-import { PartyFormationScene } from "./scenes/PartyFormationScene";
-
-const appEl = document.getElementById("app");
-const loaderEl = appEl?.querySelector(".loader");
-loaderEl?.remove();
-
-/**
- * SPEC-022 / SPEC-023: Phaser Text を高解像度で描く。
- *
- * Phaser 3 の `Text` は内部テクスチャを生成する際 `text.style.resolution`
- * を参照する（`text.resolution` ではない）。プロトタイプ書き換えだけでは
- * `style.resolution = 1` のデフォルトが効いてしまうので、`scene.add.text(...)`
- * を呼ぶたびに `setResolution(value)` を呼んでスタイル側の値を上書きする。
- *
- * これにより Retina 環境で日本語フォントが粒状感なく描画される。
- */
-const TEXT_RES = Math.min(3, Math.max(2, window.devicePixelRatio || 2));
-{
-  const factoryProto = Phaser.GameObjects.GameObjectFactory.prototype as {
-    text: (
-      x: number,
-      y: number,
-      text: string | string[],
-      style?: Phaser.Types.GameObjects.Text.TextStyle,
-    ) => Phaser.GameObjects.Text;
-  };
-  const original = factoryProto.text;
-  factoryProto.text = function (
-    this: Phaser.GameObjects.GameObjectFactory,
-    x: number,
-    y: number,
-    text: string | string[],
-    style?: Phaser.Types.GameObjects.Text.TextStyle,
-  ): Phaser.GameObjects.Text {
-    const t = original.call(this, x, y, text, style);
-    t.setResolution(TEXT_RES);
-    return t;
-  };
-}
+import { GAME_HEIGHT, GAME_WIDTH } from "./view/layout";
+import { BootScene } from "./view/scenes/BootScene";
+import { HomeScene } from "./view/scenes/HomeScene";
+import { LevelSelectScene } from "./view/scenes/LevelSelectScene";
+import { RunScene } from "./view/scenes/RunScene";
+import { TreeScene } from "./view/scenes/TreeScene";
+import { TitleScene } from "./view/scenes/TitleScene";
+import { COLORS, FONT_DISPLAY } from "./view/ui/theme";
 
 /**
- * SPEC-016: canvas はビューポート全体を埋める方針に切り替え。
- * `Scale.RESIZE` を使い、各シーンは `scenes/layout.ts` の `getViewport` で
- * 縦/横を判定し、レイアウトを再構築する。
- *
- * SPEC-022: `pixelArt: true` をやめ、テキスト / UI は LINEAR フィルタで滑らかに、
- * ヒーロー / エネミー等のピクセルアート画像にだけ NEAREST フィルタを明示適用する
- * 方針に変更。`pixelArt: true` は antialias=false + roundPixels=true + 全テクスチャ
- * NEAREST を強制し、Retina 環境で日本語テキストが粒状になるのを引き起こしていた。
+ * テキストテクスチャがフォールバックフォントで焼かれないよう、同梱の Orbitron を先に読む（最大 2 秒待つ）。
+ * 日本語はシステムの日本語フォント（FONT_JA）を使うので読み込み待ちは不要。
  */
-const game = new Phaser.Game({
-  type: Phaser.AUTO,
-  parent: "app",
-  backgroundColor: "#0b0d12",
-  antialias: true,
-  roundPixels: false,
-  // 右クリックでブラウザのコンテキストメニューが出ないように
-  disableContextMenu: true,
-  scene: [
-    BootScene,
-    WorldSelectScene,
-    StageSelectScene,
-    PartyFormationScene,
-    StageScene,
-  ],
-  scale: {
-    mode: Phaser.Scale.RESIZE,
-    autoCenter: Phaser.Scale.NO_CENTER,
-    width: window.innerWidth,
-    height: window.innerHeight,
-  },
-});
-
-// 開発時のデバッグ用に window へ exposed する（dev/preview 限定）。
-if (import.meta.env.DEV) {
-  (window as unknown as { __FORTRESS_GAME__: Phaser.Game }).__FORTRESS_GAME__ =
-    game;
+async function loadFonts(): Promise<void> {
+  if (!document.fonts) return;
+  const loads = [`700 20px ${FONT_DISPLAY}`].map((f) => document.fonts.load(f, "WAVE 0123").catch(() => undefined));
+  await Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, 2000))]);
 }
+
+async function start(): Promise<void> {
+  await loadFonts();
+  document.querySelector("#app .loader")?.remove();
+
+  // SPEC-101 §5.3: 論理 720×1280（9:16）を端末に FIT。PC では左右が余白になる。
+  const game = new Phaser.Game({
+    type: Phaser.AUTO,
+    parent: "app",
+    backgroundColor: COLORS.bg,
+    width: GAME_WIDTH,
+    height: GAME_HEIGHT,
+    antialias: true,
+    disableContextMenu: true,
+    scale: {
+      mode: Phaser.Scale.FIT,
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+    },
+    input: { activePointers: 2 },
+    scene: [BootScene, TitleScene, HomeScene, LevelSelectScene, TreeScene, RunScene],
+  });
+
+  if (import.meta.env.DEV) {
+    (window as unknown as { __FORTRESS_GAME__: Phaser.Game }).__FORTRESS_GAME__ = game;
+  }
+}
+
+void start();

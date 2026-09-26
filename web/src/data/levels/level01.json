@@ -1,0 +1,303 @@
+{
+  "id": "L1",
+  "name": "アンティキティラ・ノード",
+  "background": "bg.node.1037",
+  "cols": 9,
+  "rows": 12,
+  "cryptid": {
+    "col": 4,
+    "row": 10
+  },
+  "startGum": 50,
+  "cryptidHp": 3,
+  "prepSeconds": 15,
+  "intermissionSeconds": 6,
+  "reward": {
+    "perWave": 4,
+    "clear": 20,
+    "firstClear": 30
+  },
+  "paths": [
+    {
+      "id": "west",
+      "points": [
+        [-1, 1],
+        [3, 1],
+        [3, 4],
+        [1, 4],
+        [1, 8],
+        [4, 8],
+        [4, 10]
+      ]
+    },
+    {
+      "id": "east",
+      "points": [
+        [9, 1],
+        [5, 1],
+        [5, 4],
+        [7, 4],
+        [7, 8],
+        [4, 8],
+        [4, 10]
+      ]
+    }
+  ],
+  "slots": [
+    {
+      "col": 4,
+      "row": 2
+    },
+    {
+      "col": 4,
+      "row": 4
+    },
+    {
+      "col": 2,
+      "row": 6
+    },
+    {
+      "col": 3,
+      "row": 6
+    },
+    {
+      "col": 5,
+      "row": 6
+    },
+    {
+      "col": 6,
+      "row": 6
+    },
+    {
+      "col": 3,
+      "row": 9
+    },
+    {
+      "col": 5,
+      "row": 9
+    }
+  ],
+  "waves": [
+    {
+      "reward": 8,
+      "hpMul": 1.0,
+      "groups": [
+        {
+          "enemy": "byte_s",
+          "count": 8,
+          "interval": 2.0,
+          "path": "west",
+          "delay": 0
+        }
+      ]
+    },
+    {
+      "reward": 8,
+      "hpMul": 1.0,
+      "groups": [
+        {
+          "enemy": "byte_s",
+          "count": 5,
+          "interval": 1.7,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "byte_s",
+          "count": 5,
+          "interval": 1.7,
+          "path": "east",
+          "delay": 0.85
+        }
+      ]
+    },
+    {
+      "reward": 10,
+      "hpMul": 1.1,
+      "groups": [
+        {
+          "enemy": "byte_s",
+          "count": 8,
+          "interval": 0.9,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "rabbit_s",
+          "count": 5,
+          "interval": 1.0,
+          "path": "east",
+          "delay": 1
+        }
+      ]
+    },
+    {
+      "reward": 12,
+      "hpMul": 2.4,
+      "groups": [
+        {
+          "enemy": "byte_t",
+          "count": 6,
+          "interval": 1.1,
+          "path": "east",
+          "delay": 0
+        },
+        {
+          "enemy": "byte_s",
+          "count": 8,
+          "interval": 0.9,
+          "path": "west",
+          "delay": 1
+        }
+      ]
+    },
+    {
+      "reward": 14,
+      "hpMul": 2.6,
+      "groups": [
+        {
+          "enemy": "rabbit_s",
+          "count": 6,
+          "interval": 0.7,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "rabbit_s",
+          "count": 6,
+          "interval": 0.7,
+          "path": "east",
+          "delay": 0.35
+        },
+        {
+          "enemy": "byte_t",
+          "count": 5,
+          "interval": 1.1,
+          "path": "west",
+          "delay": 4
+        }
+      ]
+    },
+    {
+      "reward": 16,
+      "hpMul": 2.9,
+      "groups": [
+        {
+          "enemy": "byte_t",
+          "count": 8,
+          "interval": 0.9,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "byte_t",
+          "count": 8,
+          "interval": 0.9,
+          "path": "east",
+          "delay": 0.45
+        }
+      ]
+    },
+    {
+      "reward": 18,
+      "hpMul": 3.2,
+      "groups": [
+        {
+          "enemy": "byte_g",
+          "count": 5,
+          "interval": 1.6,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "rabbit_t",
+          "count": 8,
+          "interval": 0.7,
+          "path": "east",
+          "delay": 1
+        }
+      ]
+    },
+    {
+      "reward": 20,
+      "hpMul": 3.6,
+      "groups": [
+        {
+          "enemy": "byte_t",
+          "count": 8,
+          "interval": 0.8,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "byte_t",
+          "count": 8,
+          "interval": 0.8,
+          "path": "east",
+          "delay": 0.4
+        },
+        {
+          "enemy": "byte_g",
+          "count": 4,
+          "interval": 1.5,
+          "path": "east",
+          "delay": 5
+        }
+      ]
+    },
+    {
+      "reward": 22,
+      "hpMul": 4.0,
+      "groups": [
+        {
+          "enemy": "rabbit_t",
+          "count": 7,
+          "interval": 0.55,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "rabbit_t",
+          "count": 7,
+          "interval": 0.55,
+          "path": "east",
+          "delay": 0.3
+        },
+        {
+          "enemy": "byte_g",
+          "count": 6,
+          "interval": 1.3,
+          "path": "west",
+          "delay": 3
+        }
+      ]
+    },
+    {
+      "reward": 30,
+      "hpMul": 2.6,
+      "groups": [
+        {
+          "enemy": "byte_s",
+          "count": 8,
+          "interval": 0.8,
+          "path": "west",
+          "delay": 0
+        },
+        {
+          "enemy": "byte_t",
+          "count": 8,
+          "interval": 0.8,
+          "path": "east",
+          "delay": 0
+        },
+        {
+          "enemy": "boss_nobunaga",
+          "count": 1,
+          "interval": 1,
+          "path": "west",
+          "delay": 4
+        }
+      ]
+    }
+  ]
+}
