@@ -9,4 +9,4 @@
 
 - 原稿は `og.html` / `icon.html`。素材は `web/public/assets/mch/` に同期済みの **MCH アセットのみ**（背景 1037、幻獣オーシャン、5 ロールのヒーロー、エネミー、MCH ロゴ）。
 - 書き出し: `node design/thumbnail/make-thumbnails.mjs`（グローバルの Playwright と Chromium を使う）。
-- `og:image` の絶対 URL は、Vercel のビルド時に `VERCEL_PROJECT_PRODUCTION_URL` から組み立てる（`web/vite.config.ts`）。
+- `og:image` の絶対 URL は本番の `https://fortress.bearko.games` を使う（`web/vite.config.ts`。ビルド時の環境変数 `SITE_URL` で上書きできる）。
