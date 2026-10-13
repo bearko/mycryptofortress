@@ -1,12 +1,10 @@
 import { defineConfig, type Plugin } from "vite";
 
 /**
- * OGP の og:image / og:url は絶対 URL が必要。Vercel のビルドでは本番ドメイン
- * （VERCEL_PROJECT_PRODUCTION_URL）を使い、それ以外は既定の本番 URL にする。
+ * OGP の og:image / og:url は絶対 URL が必要。本番は Cloudflare Workers（fortress.bearko.games）。
+ * 別の場所で公開するときは、ビルド時の環境変数 SITE_URL で上書きする。
  */
-const SITE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
-  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-  : "https://mycryptofortress.vercel.app";
+const SITE_URL = (process.env.SITE_URL || "https://fortress.bearko.games").replace(/\/+$/, "");
 
 const siteUrl = (): Plugin => ({
   name: "site-url",
