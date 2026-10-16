@@ -27,6 +27,7 @@
 | [SPEC-117](./SPEC-117-gimmick-enemies.md) | Accepted | ギミック敵（隠密・回復）・ギミックボス（召喚・分裂・多節）と Lv7〜9 | 2026-09-26 |
 | [SPEC-118](./SPEC-118-armor-insulation.md) | Accepted | 装甲・絶縁と雷の調整（弓の装甲貫通、雷一辺倒を防ぐギミック） | 2026-09-26 |
 | [SPEC-119](./SPEC-119-tree-panels-and-records.md) | Accepted | スキルツリーのパネル形状（四角・丸・上辺の紋章）・条件つきパネルと累計記録（セーブ v6）・印 / 弱点 / 多重会心 / 報復の炎 / 利息 | 2026-09-26 |
+| [SPEC-120](./SPEC-120-platform-trophies.md) | Accepted | bearko.games 共通基盤のトロフィー（L1・L5・L9 のクリアで送る） | 2026-10-16 |
 
 ## v1 → v2 の切り替え
 
