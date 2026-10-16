@@ -66,13 +66,13 @@
         pointer-events: none;
       }
     </style>
+    <!-- SPEC-120 / SPEC-121: bearko.games 共通基盤の SDK（読めなくてもゲームは動く）。Vite は main.ts を head に入れるので、head の中でそれより先に読む -->
+    <script defer src="https://bearko.games/sdk/v1.js"></script>
   </head>
   <body>
     <div id="app">
       <div class="loader">Loading…</div>
     </div>
-    <!-- SPEC-120: bearko.games 共通基盤の SDK（読めなくてもゲームは動く）。main.ts より先に読む -->
-    <script defer src="https://bearko.games/sdk/v1.js"></script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

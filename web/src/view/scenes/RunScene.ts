@@ -20,7 +20,8 @@ import { playDialog, speechBubble } from "../ui/dialog";
 import { goTo } from "../ui/header";
 import { COLORS, textStyle } from "../ui/theme";
 import { Button, showToast, showTooltip } from "../ui/widgets";
-import { reportLevelResult } from "../platform";
+import { reportLevelResult, reportLevelScore } from "../platform";
+import { levelScoreMetrics } from "../../meta/score";
 
 /** 倍速。3x は丸パネルで解放（SPEC-119）、5x はテストプレイ用（一時停止メニューで ON） */
 const TEST_SPEED = 5;
@@ -523,6 +524,8 @@ export class RunScene extends Phaser.Scene {
     session.update((d) => applyRunResult(d, result, reward));
     // SPEC-120: bearko.games 共通基盤のトロフィー（L1・L5・L9 のクリア）。SDK がなければ何もしない
     reportLevelResult(level.id, won);
+    // SPEC-121: 総合スコア（残り体力・置いたヒーローの数）。撤退でも送る（点は勝ったときだけ付く）
+    reportLevelScore(levelScoreMetrics({ levelId: level.id, won, hp: this.sim.hp, maxHp: this.sim.maxHp, heroesUsed: this.sim.heroes.length, slots: level.slots.length }));
     // SPEC-119: 記録で新しく解放できるようになった条件つきパネル（ツリーで手動で解放する）
     const unlocked = newlyUnlocked(before, session.data);
     if (unlocked.length > 0)
