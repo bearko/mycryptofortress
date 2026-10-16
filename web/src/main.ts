@@ -8,6 +8,7 @@ import { RunScene } from "./view/scenes/RunScene";
 import { TreeScene } from "./view/scenes/TreeScene";
 import { TitleScene } from "./view/scenes/TitleScene";
 import { COLORS, FONT_DISPLAY } from "./view/ui/theme";
+import { initPlatform } from "./view/platform";
 
 /**
  * テキストテクスチャがフォールバックフォントで焼かれないよう、同梱の Orbitron を先に読む（最大 2 秒待つ）。
@@ -20,6 +21,8 @@ async function loadFonts(): Promise<void> {
 }
 
 async function start(): Promise<void> {
+  // SPEC-120: bearko.games 共通基盤（トロフィー）。SDK がなければ何もしない
+  initPlatform("0.2.0");
   await loadFonts();
   document.querySelector("#app .loader")?.remove();
 
