@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { abortRta, initPlatform, reportLevelResult, reportScore, rtaCheckpoint, setChatVisible, startRta } from "./platform";
+import { abortRta, canPickAvatar, initPlatform, openAvatarPicker, reportLevelResult, reportScore, rtaCheckpoint, setChatVisible, startRta } from "./platform";
 
 describe("SPEC-120 共通基盤 SDK への窓口", () => {
   afterEach(() => {
@@ -113,5 +113,23 @@ describe("SPEC-128 全体チャットの置き場所", () => {
     setChatVisible(false);
     expect(calls).toEqual([false, true, false]);
     setChatVisible(true);   // 次のテストのために戻す
+  });
+});
+
+describe("SPEC-129 共通のアイコン", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("SDK がない・古いときは出さず、例外も出さない。あれば窓を開く", () => {
+    expect(canPickAvatar()).toBe(false);
+    expect(openAvatarPicker()).toBe(false);
+    vi.stubGlobal("window", { BearkoGames: { init: async () => ({ ok: true }) } });
+    expect(canPickAvatar()).toBe(false);
+    let opened = 0;
+    vi.stubGlobal("window", { BearkoGames: { init: async () => ({ ok: true }), openAvatarPicker: () => { opened++; } } });
+    expect(canPickAvatar()).toBe(true);
+    expect(openAvatarPicker()).toBe(true);
+    expect(opened).toBe(1);
   });
 });

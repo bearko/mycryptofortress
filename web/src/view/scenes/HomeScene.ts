@@ -10,7 +10,7 @@ import { COLORS, css, textStyle } from "../ui/theme";
 import { Button, CryptidDisplay, LandBackground, showToast, showTooltip } from "../ui/widgets";
 import { VolumeStepper } from "../ui/volumeStepper";
 import { volumeLabel } from "../ui/volume";
-import { abortRta, openPlatformRanking, startRta, setChatVisible } from "../platform";
+import { abortRta, canPickAvatar, openAvatarPicker, openPlatformRanking, startRta, setChatVisible } from "../platform";
 import { jaWrap } from "../ui/jaWrap";
 import { RTA_REGULATION, RTA_SPEED } from "../../meta/rta";
 
@@ -80,6 +80,15 @@ export class HomeScene extends Phaser.Scene {
       .setPadding(0, 10, 0, 10)
       .setInteractive({ useHandCursor: true });
     bindPress(ranking, { onTap: () => openPlatformRanking() });
+    // SPEC-129: bearko.games 共通のアイコン（すべてのゲームとチャットで同じ絵）。窓は SDK。SDK が無いときは出さない
+    if (canPickAvatar()) {
+      const avatar = this.add
+        .text(MARGIN, 160, "アイコンを変える（bearko.games 共通）", textStyle(18, { color: COLORS.gold }))
+        .setOrigin(0, 0.5)
+        .setPadding(0, 10, 0, 10)
+        .setInteractive({ useHandCursor: true });
+      bindPress(avatar, { onTap: () => openAvatarPicker() });
+    }
   }
 
   private modal(title: string, body: string, okLabel: string, onOk: () => void): void {
