@@ -74,6 +74,18 @@ export function reportScore(metrics: ScoreMetrics): void {
   }
 }
 
+/** SPEC-125: 共通基盤のタイトル別ランキング */
+export const PLATFORM_RANKING_URL = "https://bearko.games/score/?game=fortress";
+
+/** SPEC-125: 共通基盤のランキングを新しいタブで開く（再読み込みすると RTA の計測が消えるため、このタブは残す） */
+export function openPlatformRanking(): void {
+  try {
+    window.open(PLATFORM_RANKING_URL, "_blank", "noopener");
+  } catch (e) {
+    console.warn("[platform] open ranking", e);
+  }
+}
+
 /** SPEC-123: RTA の計測を始める。SDK がない・通信に失敗したら false（ゲームは RTA なしで続けられる） */
 export async function startRta(regulation: string, timerOffset: number): Promise<boolean> {
   const rta = sdk()?.rta;
