@@ -20,7 +20,7 @@ import { playDialog, speechBubble } from "../ui/dialog";
 import { goTo } from "../ui/header";
 import { COLORS, textStyle } from "../ui/theme";
 import { Button, showToast, showTooltip } from "../ui/widgets";
-import { reportLevelResult, reportScore, rtaCheckpoint } from "../platform";
+import { reportLevelResult, reportScore, rtaCheckpoint, setChatVisible } from "../platform";
 import { applyLevelBest, levelBestOf, levelPoints, scoreMetrics } from "../../meta/score";
 import { isFinished, recordRun, RTA_SPEED } from "../../meta/rta";
 
@@ -84,6 +84,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   create(): void {
+    setChatVisible(false);   // SPEC-128: 戦闘中は全体チャットの 💬 を隠す
     this.children.removeAll(true);
     this.cameras.main.fadeIn(200, 11, 13, 18);
     const level = getLevel(this.levelId);

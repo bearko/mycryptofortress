@@ -13,6 +13,7 @@ import { Header, HEADER_H, goTo } from "../ui/header";
 import { COLORS, textStyle } from "../ui/theme";
 import { LandBackground, showToast } from "../ui/widgets";
 import { jaWrap } from "../ui/jaWrap";
+import { setChatVisible } from "../platform";
 
 const CARD_H = 196;
 const CARD_GAP = 18;
@@ -32,6 +33,7 @@ export class LevelSelectScene extends Phaser.Scene {
   }
 
   create(): void {
+    setChatVisible(true);   // SPEC-128: 全体チャットの 💬 を出す
     this.cameras.main.fadeIn(180, 11, 13, 18);
     playBgm(this, "bgm.land");
     void new LandBackground(this, 0.7).show(session.data.profile.cryptidId);

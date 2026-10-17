@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { abortRta, initPlatform, reportLevelResult, reportScore, rtaCheckpoint, startRta } from "./platform";
+import { abortRta, initPlatform, reportLevelResult, reportScore, rtaCheckpoint, setChatVisible, startRta } from "./platform";
 
 describe("SPEC-120 共通基盤 SDK への窓口", () => {
   afterEach(() => {
@@ -82,5 +82,36 @@ describe("SPEC-120 共通基盤 SDK への窓口", () => {
     expect(PLATFORM_RANKING_URL).toBe("https://bearko.games/score/?game=fortress");
     open.mockImplementation(() => { throw new Error("blocked"); });
     expect(() => openPlatformRanking()).not.toThrow();
+  });
+});
+
+describe("SPEC-128 全体チャットの置き場所", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("SDK がない・古い（chat が無い）ときは何もせず、例外も出さない", () => {
+    expect(() => setChatVisible(false)).not.toThrow();
+    vi.stubGlobal("window", { BearkoGames: { init: async () => ({ ok: true }), unlockTrophy: async () => ({ ok: true }) } });
+    expect(() => setChatVisible(true)).not.toThrow();
+  });
+
+  it("出す・隠すを SDK に渡し、SDK が後から読めたときはいまの値をそろえる", async () => {
+    const calls: boolean[] = [];
+    setChatVisible(false);   // SDK がまだ無いときに隠した（戦闘に入った）
+    vi.stubGlobal("window", {
+      BearkoGames: {
+        init: async () => ({ ok: true }),
+        unlockTrophy: async () => ({ ok: true }),
+        chat: { setVisible: (on: boolean) => { calls.push(on); } },
+      },
+    });
+    initPlatform("0.3.0");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(calls).toEqual([false]);
+    setChatVisible(true);
+    setChatVisible(false);
+    expect(calls).toEqual([false, true, false]);
+    setChatVisible(true);   // 次のテストのために戻す
   });
 });
