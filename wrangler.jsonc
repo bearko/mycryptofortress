@@ -5,6 +5,8 @@
   "name": "mycryptofortress",
   "compatibility_date": "2026-10-06",
   "assets": { "directory": "./web/dist" },
+  // プレビューのビルドで web/dist がまだないときのために、Wrangler の custom build で作る
+  "build": { "command": "cd web && npm ci && npm run build" },
   // 空なので、プレビューには本番の変数・シークレットはつながらない
   "previews": {}
 }
