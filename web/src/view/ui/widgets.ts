@@ -18,6 +18,8 @@ export interface ButtonOptions {
   kind?: ButtonKind;
   /** primary の塗り色（既定: ゴールド） */
   accent?: number;
+  /** SPEC-127: タップ音を鳴らさない（音量のステッパーのように、呼び出し側が自分で鳴らすとき） */
+  silent?: boolean;
   onTap?: () => void;
 }
 
@@ -34,6 +36,7 @@ export class Button extends Phaser.GameObjects.Container {
       height: MIN_TAP,
       kind: "secondary",
       accent: COLORS.gold,
+      silent: false,
       ...options,
     };
     const h = Math.max(MIN_TAP, this.opts.height);
@@ -49,7 +52,7 @@ export class Button extends Phaser.GameObjects.Container {
     bindPress(this, {
       onPressChange: (pressed) => this.setScale(pressed ? 0.96 : 1),
       onTap: () => {
-        playSe(scene, "se.crash");
+        if (!this.opts.silent) playSe(scene, "se.crash");
         this.opts.onTap?.();
       },
     });

@@ -2,12 +2,14 @@ import Phaser from "phaser";
 import { CRYPTIDS, getCryptid, type CryptidId } from "../../data/cryptids";
 import { LEVELS } from "../../data/levels";
 import { goTo } from "../ui/header";
-import { DEFAULT_BGM_VOLUME, DEFAULT_SE_VOLUME, playBgm, playSe } from "../audio";
+import { playBgm, playSe } from "../audio";
 import { bindPress } from "../input/press";
 import { CENTER_X, GAME_HEIGHT, GAME_WIDTH, MARGIN } from "../layout";
 import { session } from "../session";
 import { COLORS, css, textStyle } from "../ui/theme";
 import { Button, CryptidDisplay, LandBackground, showToast, showTooltip } from "../ui/widgets";
+import { VolumeStepper } from "../ui/volumeStepper";
+import { volumeLabel } from "../ui/volume";
 import { abortRta, openPlatformRanking, startRta } from "../platform";
 import { jaWrap } from "../ui/jaWrap";
 import { RTA_REGULATION, RTA_SPEED } from "../../meta/rta";
@@ -165,7 +167,6 @@ export class HomeScene extends Phaser.Scene {
 
     const y = 1210;
     const treeW = 312;
-    const smallW = (fullW - treeW - CELL_GAP * 2) / 2;
     new Button(this, MARGIN + treeW / 2, y, {
       width: treeW,
       label: "スキルツリー",
@@ -173,30 +174,61 @@ export class HomeScene extends Phaser.Scene {
       onTap: () => goTo(this, "Tree"),
     });
 
-    const bgmX = MARGIN + treeW + CELL_GAP + smallW / 2;
-    const bgm: Button = new Button(this, bgmX, y, {
-      width: smallW,
-      label: this.volumeLabel("BGM", session.data.settings.bgmVolume),
-      onTap: () => {
-        const on = session.data.settings.bgmVolume <= 0;
-        session.update((d) => ({ ...d, settings: { ...d.settings, bgmVolume: on ? DEFAULT_BGM_VOLUME : 0 } }));
-        bgm.setLabel(this.volumeLabel("BGM", session.data.settings.bgmVolume));
-        playBgm(this, "bgm.land");
-      },
-    });
-    const se: Button = new Button(this, bgmX + smallW + CELL_GAP, y, {
-      width: smallW,
-      label: this.volumeLabel("SE", session.data.settings.seVolume),
-      onTap: () => {
-        const on = session.data.settings.seVolume <= 0;
-        session.update((d) => ({ ...d, settings: { ...d.settings, seVolume: on ? DEFAULT_SE_VOLUME : 0 } }));
-        se.setLabel(this.volumeLabel("SE", session.data.settings.seVolume));
-      },
+    // SPEC-127: 音の設定（BGM・SE の 20 段階）。いまの段階を sub に出し、押すと上げ下げの画面
+    const soundW = fullW - treeW - CELL_GAP;
+    const sound: Button = new Button(this, GAME_WIDTH - MARGIN - soundW / 2, y, {
+      width: soundW,
+      label: "音の設定",
+      sub: this.soundSummary(),
+      onTap: () => this.openSoundSettings(() => sound.setSub(this.soundSummary())),
     });
   }
 
-  private volumeLabel(name: string, volume: number): string {
-    return `${name} ${volume > 0 ? "ON" : "OFF"}`;
+  private soundSummary(): string {
+    const s = session.data.settings;
+    return `BGM ${volumeLabel(s.bgmVolume)} / SE ${volumeLabel(s.seVolume)}`;
+  }
+
+  /**
+   * SPEC-127: BGM・SE を「−」「＋」で 5% ずつ（0 は OFF）上げ下げする。押した瞬間に保存し、
+   * BGM は再生中の曲にその場で反映、SE はステッパーのタップ音が新しい大きさの試し聞きになる。
+   */
+  private openSoundSettings(onClose: () => void): void {
+    const parts: Phaser.GameObjects.GameObject[] = [];
+    const close = () => {
+      parts.forEach((p) => p.destroy());
+      onClose();
+    };
+    const top = 360;
+    const h = 460;
+    const w = GAME_WIDTH - MARGIN * 2;
+    parts.push(this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.7).setOrigin(0).setDepth(200).setInteractive());
+    const g = this.add.graphics().setDepth(201);
+    g.fillStyle(COLORS.panel, 0.98).fillRoundedRect(MARGIN, top, w, h, 24);
+    g.lineStyle(3, COLORS.gold, 1).strokeRoundedRect(MARGIN, top, w, h, 24);
+    parts.push(g);
+    parts.push(this.add.text(CENTER_X, top + 60, "音の設定", textStyle(36, { color: COLORS.gold })).setOrigin(0.5).setDepth(201));
+    const rowW = w - 80;
+    parts.push(
+      new VolumeStepper(this, CENTER_X, top + 150, {
+        width: rowW,
+        label: "BGM",
+        value: session.data.settings.bgmVolume,
+        onChange: (v) => {
+          session.update((d) => ({ ...d, settings: { ...d.settings, bgmVolume: v } }));
+          playBgm(this, "bgm.land");
+        },
+      }).setDepth(201),
+    );
+    parts.push(
+      new VolumeStepper(this, CENTER_X, top + 255, {
+        width: rowW,
+        label: "SE",
+        value: session.data.settings.seVolume,
+        onChange: (v) => session.update((d) => ({ ...d, settings: { ...d.settings, seVolume: v } })),
+      }).setDepth(201),
+    );
+    parts.push(new Button(this, CENTER_X, top + h - 74, { width: rowW, label: "閉じる", kind: "primary", onTap: close }).setDepth(201));
   }
 
   private select(id: CryptidId, byUser: boolean): void {

@@ -1,9 +1,8 @@
 import type Phaser from "phaser";
 import { session } from "./session";
 
-/** 設定 ON 時の既定音量 */
-export const DEFAULT_BGM_VOLUME = 0.6;
-export const DEFAULT_SE_VOLUME = 0.8;
+// 音量はセーブの settings.bgmVolume / seVolume（0..1、既定 0.6 / 0.8 は meta/save.ts）。
+// SPEC-127: 5% 刻みの上げ下げと表示は view/ui/volume.ts
 
 let currentBgm: { key: string; sound: Phaser.Sound.BaseSound } | null = null;
 
