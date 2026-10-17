@@ -10,7 +10,7 @@ import { COLORS, css, textStyle } from "../ui/theme";
 import { Button, CryptidDisplay, LandBackground, showToast, showTooltip } from "../ui/widgets";
 import { VolumeStepper } from "../ui/volumeStepper";
 import { volumeLabel } from "../ui/volume";
-import { abortRta, openPlatformRanking, startRta } from "../platform";
+import { abortRta, openPlatformRanking, startRta, setChatVisible } from "../platform";
 import { jaWrap } from "../ui/jaWrap";
 import { RTA_REGULATION, RTA_SPEED } from "../../meta/rta";
 
@@ -32,6 +32,7 @@ export class HomeScene extends Phaser.Scene {
   }
 
   create(): void {
+    setChatVisible(true);   // SPEC-128: 全体チャットの 💬 を出す
     // SPEC-123: RTA を終えた（完走・中断・再読み込み）あとは、ホームでふだんのセーブに戻る
     if (session.onRtaSave && !session.rta) session.leaveRtaSave();
     this.cells.clear();

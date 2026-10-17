@@ -4,6 +4,7 @@ import { CENTER_X, GAME_HEIGHT, GAME_WIDTH } from "../layout";
 import { session } from "../session";
 import { COLORS, textStyle } from "../ui/theme";
 import { CryptidDisplay, LandBackground } from "../ui/widgets";
+import { setChatVisible } from "../platform";
 
 /** SPEC-101 §5.7: タイトル。初回タップで音声をアンロックして BGM を開始し、ホームへ。 */
 export class TitleScene extends Phaser.Scene {
@@ -12,6 +13,7 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create(): void {
+    setChatVisible(true);   // SPEC-128: 全体チャットの 💬 を出す
     const cryptidId = session.data.profile.cryptidId;
     void new LandBackground(this, 0.5).show(cryptidId);
 

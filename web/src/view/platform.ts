@@ -17,6 +17,8 @@ interface BearkoGamesSdk {
     checkpoint(id: string, opts?: { igtMs?: number }): Promise<RtaResult> | RtaResult;
     abort(): Promise<RtaResult> | RtaResult;
   };
+  // SPEC-128: 全体チャット（共通基盤 SPEC-004。SDK 1.6.0 から）
+  chat?: { setVisible(on: boolean): void };
 }
 
 const sdk = (): BearkoGamesSdk | undefined =>
@@ -37,10 +39,32 @@ export function initPlatform(version?: string): void {
   if (initedWith === (version ?? "")) return;
   initedWith = version ?? "";
   try {
-    Promise.resolve(bg.init({ game: "fortress", version })).catch((e) => console.warn("[platform] init", e));
+    Promise.resolve(bg.init({ game: "fortress", version }))
+      .then(() => applyChatVisible())   // SPEC-128: SDK が後から読めたときも、いまの画面の出す／隠すをそろえる
+      .catch((e) => console.warn("[platform] init", e));
   } catch (e) {
     console.warn("[platform] init", e);
   }
+}
+
+// ---------------------------------------------------------------- SPEC-128: 全体チャットの置き場所
+// 窓そのものは SDK が描く（右下の 💬）。ここでは出す・隠すだけ：戦闘（Run）では隠し、それ以外の場面で出す
+let chatWanted = true;
+
+function applyChatVisible(): void {
+  const bg = sdk();
+  if (!bg?.chat || typeof bg.chat.setVisible !== "function") return;
+  try {
+    bg.chat.setVisible(chatWanted);
+  } catch (e) {
+    console.warn("[platform] chat", e);
+  }
+}
+
+/** 💬 を出す（true）／隠す（false）。SDK がない・古い（chat が無い）ときは覚えておいて、読めたときにそろえる */
+export function setChatVisible(on: boolean): void {
+  chatWanted = on;
+  applyChatVisible();
 }
 
 export function reportLevelResult(levelId: string, won: boolean): void {

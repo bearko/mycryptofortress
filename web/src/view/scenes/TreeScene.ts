@@ -34,6 +34,7 @@ import { Header, HEADER_H, goTo } from "../ui/header";
 import { COLORS, textStyle } from "../ui/theme";
 import { Button, LandBackground, showToast } from "../ui/widgets";
 import { jaWrap } from "../ui/jaWrap";
+import { setChatVisible } from "../platform";
 
 /** ツリー座標 1 あたりの px */
 const UNIT = 120;
@@ -126,6 +127,7 @@ export class TreeScene extends Phaser.Scene {
   }
 
   create(): void {
+    setChatVisible(true);   // SPEC-128: 全体チャットの 💬 を出す
     this.views.clear();
     this.selected = null;
     this.pinch = null;
