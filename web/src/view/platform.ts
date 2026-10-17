@@ -19,6 +19,8 @@ interface BearkoGamesSdk {
   };
   // SPEC-128: 全体チャット（共通基盤 SPEC-004。SDK 1.6.0 から）
   chat?: { setVisible(on: boolean): void };
+  // SPEC-129: bearko.games 共通のアイコンを選ぶ窓（共通基盤 SPEC-005 5.3。SDK 1.7.0 から）
+  openAvatarPicker?(): void;
 }
 
 const sdk = (): BearkoGamesSdk | undefined =>
@@ -108,6 +110,24 @@ export function openPlatformRanking(): void {
   } catch (e) {
     console.warn("[platform] open ranking", e);
   }
+}
+
+// ---------------------------------------------------------------- SPEC-129: bearko.games 共通のアイコン
+/** 選ぶ窓を出せるか（SDK が読めて 1.7.0 以上） */
+export function canPickAvatar(): boolean {
+  const bg = sdk();
+  return !!bg && typeof bg.openAvatarPicker === "function";
+}
+/** アイコンを選ぶ窓（すべてのゲームとチャットで同じ絵になる）。SDK がない・古いときは何もしない */
+export function openAvatarPicker(): boolean {
+  const bg = sdk();
+  if (!bg || typeof bg.openAvatarPicker !== "function") return false;
+  try {
+    bg.openAvatarPicker();
+  } catch (e) {
+    console.warn("[platform] avatar", e);
+  }
+  return true;
 }
 
 /** SPEC-123: RTA の計測を始める。SDK がない・通信に失敗したら false（ゲームは RTA なしで続けられる） */

@@ -36,6 +36,7 @@
 | [SPEC-126](./SPEC-126-score-typical.md) | Accepted | 総合スコアの「ふつうのクリア」を自動プレイの実測に（TYPICAL 0.54・npm run score:measure） | 2026-10-17 |
 | [SPEC-127](./SPEC-127-volume-steps.md) | Accepted | 音量の 20 段階（BGM・SE を 5% 刻みで。ホームの「音の設定」） | 2026-10-17 |
 | [SPEC-128](./SPEC-128-global-chat-placement.md) | Accepted | 全体チャットの置き場所（共通基盤 SPEC-004。戦闘中は隠す。右下） | 2026-10-17 |
+| [SPEC-129](./SPEC-129-shared-avatar.md) | Accepted | bearko.games 共通のアイコンへの入口（ホームの文字リンク → SDK の窓） | 2026-10-17 |
 
 ## v1 → v2 の切り替え
 
