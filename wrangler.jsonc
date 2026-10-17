@@ -1,11 +1,11 @@
 {
-  // ルート（リポジトリの直下）で動く Wrangler のコマンド用。中身は web/wrangler.jsonc と同じ Worker を指す。
-  // Cloudflare のプレビュー（本番以外のブランチ）のビルドは `npx wrangler preview` をリポジトリの直下で動かすため、
-  // ここに設定がないと「Worker の名前がない」で失敗していた（SPEC-122 4 章）。本番の公開は web/wrangler.jsonc を使う
+  // リポジトリの直下で動く Wrangler 用（SPEC-124）。web/wrangler.jsonc と同じ Worker を指す。
+  // Cloudflare のプレビュー（本番以外のブランチ）のビルドは `npx wrangler preview` を直下で動かすので、
+  // ここに設定がないと失敗していた。本番の公開はいままでどおり
   "name": "mycryptofortress",
   "compatibility_date": "2026-10-06",
   "assets": { "directory": "./web/dist" },
-  // プレビューのビルドで web/dist がまだないときのために、Wrangler の custom build で作る
+  // プレビューのコマンドの時点では web/dist ができていないので、Wrangler の custom build で作る
   "build": { "command": "cd web && npm ci && npm run build" },
   // 空なので、プレビューには本番の変数・シークレットはつながらない
   "previews": {}
