@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { initPlatform, reportLevelResult } from "./platform";
+import { abortRta, initPlatform, reportLevelResult, reportScore, rtaCheckpoint, startRta } from "./platform";
 
 describe("SPEC-120 共通基盤 SDK への窓口", () => {
   afterEach(() => {
@@ -31,6 +31,45 @@ describe("SPEC-120 共通基盤 SDK への窓口", () => {
       throw new Error("boom");
     };
     expect(() => reportLevelResult("L1", true)).not.toThrow();
+    warn.mockRestore();
+  });
+
+  it("SPEC-122/123: 総合スコアと RTA。SDK がない・失敗・例外でも止めない", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(() => reportScore({ levels: {} })).not.toThrow();
+    expect(await startRta("fortress-all", 0)).toBe(false);
+    expect(() => rtaCheckpoint("L1", 1000)).not.toThrow();
+    expect(() => abortRta()).not.toThrow();
+
+    const calls: unknown[][] = [];
+    vi.stubGlobal("window", {
+      BearkoGames: {
+        init: async () => ({ ok: true }),
+        unlockTrophy: async () => ({ ok: true }),
+        submitScore: async (m: unknown) => (calls.push(["score", m]), { ok: true }),
+        rta: {
+          start: async (o: unknown) => (calls.push(["start", o]), { ok: true }),
+          checkpoint: async (id: string, o: unknown) => (calls.push(["cp", id, o]), { ok: false, error: "order" }),
+          abort: () => {
+            throw new Error("boom");
+          },
+        },
+      },
+    });
+    reportScore({ levels: { L1: { hpLeft: 2, maxHp: 3, heroesUsed: 7, slots: 15, earlyBonus: 0 } } });
+    expect(await startRta("fortress-all", 0)).toBe(true);
+    rtaCheckpoint("L1", 1234);
+    expect(() => abortRta()).not.toThrow();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(calls).toEqual([
+      ["score", { levels: { L1: { hpLeft: 2, maxHp: 3, heroesUsed: 7, slots: 15, earlyBonus: 0 } } }],
+      ["start", { regulation: "fortress-all", timer: "top", timerOffset: 0 }],
+      ["cp", "L1", { igtMs: 1234 }],
+    ]);
+    (window as unknown as { BearkoGames: { rta: { start: () => never } } }).BearkoGames.rta.start = () => {
+      throw new Error("boom");
+    };
+    expect(await startRta("fortress-all", 0)).toBe(false);
     warn.mockRestore();
   });
 });

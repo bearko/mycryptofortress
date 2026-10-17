@@ -306,6 +306,7 @@ export function applyRunResult(save: SaveData, result: RunResult, reward: RunRew
     levels: {
       ...save.meta.levels,
       [result.levelId]: {
+        ...prev,
         cleared: prev.cleared || result.won,
         bestWave: Math.max(prev.bestWave, result.wavesReached),
         clears: prev.clears + (result.won ? 1 : 0),

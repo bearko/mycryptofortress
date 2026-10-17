@@ -4,10 +4,13 @@ import { LEVELS } from "../../data/levels";
 import { goTo } from "../ui/header";
 import { DEFAULT_BGM_VOLUME, DEFAULT_SE_VOLUME, playBgm, playSe } from "../audio";
 import { bindPress } from "../input/press";
-import { CENTER_X, GAME_WIDTH, MARGIN } from "../layout";
+import { CENTER_X, GAME_HEIGHT, GAME_WIDTH, MARGIN } from "../layout";
 import { session } from "../session";
 import { COLORS, css, textStyle } from "../ui/theme";
 import { Button, CryptidDisplay, LandBackground, showToast, showTooltip } from "../ui/widgets";
+import { abortRta, startRta } from "../platform";
+import { jaWrap } from "../ui/jaWrap";
+import { RTA_REGULATION, RTA_SPEED } from "../../meta/rta";
 
 const GRID_COLS = 3;
 const CELL_GAP = 16;
@@ -27,6 +30,8 @@ export class HomeScene extends Phaser.Scene {
   }
 
   create(): void {
+    // SPEC-123: RTA を終えた（完走・中断・再読み込み）あとは、ホームでふだんのセーブに戻る
+    if (session.onRtaSave && !session.rta) session.leaveRtaSave();
     this.cells.clear();
     this.cameras.main.fadeIn(250, 11, 13, 18);
     playBgm(this, "bgm.land");
@@ -55,9 +60,67 @@ export class HomeScene extends Phaser.Scene {
   private buildHeader(): void {
     const logo = this.add.image(MARGIN, 64, "logo.mch").setOrigin(0, 0.5);
     logo.setScale(56 / logo.height);
-    const slotLabel = `SLOT ${session.slot}${session.persistent ? "" : "（保存不可）"}`;
+    const slotLabel = session.rta ? "RTA 計測中" : `SLOT ${session.slot}${session.persistent ? "" : "（保存不可）"}`;
     const chip = this.add.text(GAME_WIDTH - MARGIN - 14, 64, slotLabel, textStyle(20, { color: session.persistent ? COLORS.inkDim : COLORS.danger })).setOrigin(1, 0.5);
     this.add.rectangle(chip.x - chip.width / 2, 64, chip.width + 28, 44).setStrokeStyle(2, COLORS.line).setOrigin(0.5);
+    // SPEC-123: RTA（レベル 01〜09）。計測中は「やめる」
+    const rtaW = session.rta ? 200 : 140;
+    new Button(this, chip.x - chip.width - 28 - 16 - rtaW / 2, 64, {
+      width: rtaW,
+      label: session.rta ? "RTA をやめる" : "RTA",
+      onTap: () => (session.rta ? this.confirmAbortRta() : this.confirmStartRta()),
+    });
+  }
+
+  private modal(title: string, body: string, okLabel: string, onOk: () => void): void {
+    const parts: Phaser.GameObjects.GameObject[] = [];
+    const close = () => parts.forEach((p) => p.destroy());
+    parts.push(this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.7).setOrigin(0).setDepth(200).setInteractive());
+    const g = this.add.graphics().setDepth(201);
+    g.fillStyle(COLORS.panel, 0.98).fillRoundedRect(MARGIN, 300, GAME_WIDTH - MARGIN * 2, 520, 24);
+    g.lineStyle(3, COLORS.gold, 1).strokeRoundedRect(MARGIN, 300, GAME_WIDTH - MARGIN * 2, 520, 24);
+    parts.push(g);
+    parts.push(this.add.text(CENTER_X, 360, title, textStyle(36, { color: COLORS.gold })).setOrigin(0.5).setDepth(201));
+    parts.push(
+      this.add
+        .text(MARGIN + 40, 420, body, { ...textStyle(22, { weight: 500 }), wordWrap: jaWrap(GAME_WIDTH - MARGIN * 2 - 80), lineSpacing: 8 })
+        .setDepth(201),
+    );
+    const bw = (GAME_WIDTH - MARGIN * 2 - 48 - 16) / 2;
+    parts.push(new Button(this, MARGIN + 24 + bw / 2, 750, { width: bw, label: "やめておく", onTap: close }).setDepth(201));
+    parts.push(new Button(this, GAME_WIDTH - MARGIN - 24 - bw / 2, 750, { width: bw, label: okLabel, kind: "primary", onTap: () => (close(), onOk()) }).setDepth(201));
+  }
+
+  private confirmStartRta(): void {
+    this.modal(
+      "RTA レベル 01〜09",
+      [
+        "新しいセーブでレベル 01 から始め、レベル 09 のクリアまでの実時間を bearko.games で測ります。",
+        `・速さは ${RTA_SPEED} 倍に固定（5 倍速は使えません）`,
+        "・負けてもやり直せます。スキルツリーを育てる時間も含みます",
+        "・いまのセーブはそのまま残ります（RTA は別のセーブで遊びます）",
+        "・再読み込みすると計測は消えます",
+      ].join("\n"),
+      "始める",
+      () => void this.beginRta(),
+    );
+  }
+
+  private async beginRta(): Promise<void> {
+    if (!(await startRta(RTA_REGULATION, 0))) {
+      showToast(this, "RTA は bearko.games につながっているときだけ遊べます");
+      return;
+    }
+    session.beginRta();
+    goTo(this, "Run", { levelId: "L1" });
+  }
+
+  private confirmAbortRta(): void {
+    this.modal("RTA をやめる", "計測を中断して、いつものセーブに戻ります。", "やめる", () => {
+      abortRta();
+      session.leaveRtaSave();
+      this.scene.restart();
+    });
   }
 
   private buildCell(id: CryptidId, index: number): void {

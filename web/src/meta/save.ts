@@ -7,7 +7,7 @@ import type { StorageLike } from "./storage";
  * SPEC-101 §5.5: セーブデータ。スキーマを変える時は SAVE_SCHEMA_VERSION を上げ、
  * MIGRATIONS[旧バージョン] に 1 段分の変換を追加する。
  */
-export const SAVE_SCHEMA_VERSION = 6;
+export const SAVE_SCHEMA_VERSION = 7;
 
 /** SPEC-116: ビルドセットの枠数 */
 export const BUILD_SET_SLOTS = 5;
@@ -35,6 +35,18 @@ export interface LevelProgress {
   bestWave: number;
   clears: number;
   runs: number;
+  /** SPEC-122: このレベルの総合スコアの自己ベスト（点の一番高いクリアの成績）。v6 以前のクリアには無い */
+  best?: LevelBest;
+}
+
+/** SPEC-122: 1 回のクリアの成績（bearko.games 共通基盤に送る形） */
+export interface LevelBest {
+  hpLeft: number;
+  maxHp: number;
+  heroesUsed: number;
+  slots: number;
+  /** 早呼びのボーナス GUM の合計 */
+  earlyBonus: number;
 }
 
 export interface MetaState {
@@ -92,6 +104,9 @@ export function emptyMeta(): MetaState {
 
 export const SLOT_IDS = [1, 2, 3] as const;
 export type SlotId = (typeof SLOT_IDS)[number];
+/** SPEC-123: RTA 用のセーブ（ふだんのスロットとは別。RTA を始めるたびに作り直す） */
+export const RTA_SLOT = "rta";
+export type SaveKey = SlotId | typeof RTA_SLOT;
 
 const KEY_PREFIX = "mcf.v2.slot.";
 const ACTIVE_SLOT_KEY = "mcf.v2.activeSlot";
@@ -130,6 +145,9 @@ export const MIGRATIONS: Migrations = {
     const runs = Object.values(meta.levels).reduce((s, p) => s + p.runs, 0);
     return { ...d, meta: { ...meta, stats: { ...emptyStats(), runs } } };
   },
+  // v6 → v7: レベルごとの総合スコアの自己ベスト（SPEC-122）。それまでのクリアの成績は残っていないので空のまま
+  //   （v6 のころに送った成績は、共通基盤が束ねて自己ベストにしている）
+  6: (d) => d,
 };
 
 export function createNewSave(now: Date = new Date()): SaveData {
@@ -159,6 +177,8 @@ export function isValidSave(v: unknown): v is SaveData {
 }
 
 const isCount = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0;
+const isLevelBest = (b: unknown): b is LevelBest =>
+  isObj(b) && isCount(b.hpLeft) && isCount(b.maxHp) && isCount(b.heroesUsed) && isCount(b.slots) && isCount(b.earlyBonus);
 
 function isValidMeta(m: unknown): m is MetaState {
   if (!isObj(m)) return false;
@@ -170,6 +190,7 @@ function isValidMeta(m: unknown): m is MetaState {
   if (!isObj(m.levels)) return false;
   for (const p of Object.values(m.levels)) {
     if (!isObj(p) || typeof p.cleared !== "boolean" || !isCount(p.bestWave) || !isCount(p.clears) || !isCount(p.runs)) return false;
+    if (p.best !== undefined && !isLevelBest(p.best)) return false;
   }
   if (!Number.isInteger(m.treeVersion)) return false;
   if (!isObj(m.stats) || !LIFETIME_STAT_KEYS.every((k) => isCount((m.stats as Record<string, unknown>)[k]))) return false;
@@ -222,7 +243,7 @@ export class SaveStore {
     private readonly migrations: Migrations = MIGRATIONS,
   ) {}
 
-  load(slot: SlotId): SaveData | null {
+  load(slot: SaveKey): SaveData | null {
     const text = this.storage.getItem(KEY_PREFIX + slot);
     if (text === null) return null;
     try {
@@ -233,18 +254,18 @@ export class SaveStore {
   }
 
   /** 保存して、updatedAt を更新したデータを返す */
-  save(slot: SlotId, data: SaveData): SaveData {
+  save(slot: SaveKey, data: SaveData): SaveData {
     const next: SaveData = { ...data, updatedAt: this.clock().toISOString() };
     this.storage.setItem(KEY_PREFIX + slot, JSON.stringify(next));
     return next;
   }
 
   /** 読めなければ新規作成して保存する（破損データは上書きされる） */
-  loadOrCreate(slot: SlotId): SaveData {
+  loadOrCreate(slot: SaveKey): SaveData {
     return this.load(slot) ?? this.save(slot, createNewSave(this.clock()));
   }
 
-  delete(slot: SlotId): void {
+  delete(slot: SaveKey): void {
     this.storage.removeItem(KEY_PREFIX + slot);
   }
 

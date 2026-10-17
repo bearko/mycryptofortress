@@ -5,7 +5,8 @@
 | ID | SPEC-121 |
 | 状態 | Accepted |
 | 作成日 | 2026-10-16 |
-| 最終更新 | 2026-10-16 |
+| 最終更新 | 2026-10-17 |
+| 置き換え | 2.1（送るとき・送る成績）は [SPEC-122](./SPEC-122-platform-score-v2.md) で置き換え（レベルごとの自己ベストの合計） |
 | 親仕様 | [bearko/mycryptoportfolio の SPEC-002](https://github.com/bearko/mycryptoportfolio/blob/claude/game-portfolio-page-4afqbc/docs/specs/SPEC-002-total-score.md)（総合スコア。3.3 が本作の計算式） |
 | 実装 | `web/src/meta/score.ts`（送る成績）、`web/src/view/platform.ts`（SDK への窓口）、`RunScene` の結果表示、`web/index.html` |
 
