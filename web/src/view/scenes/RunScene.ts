@@ -20,10 +20,11 @@ import { playDialog, speechBubble } from "../ui/dialog";
 import { goTo } from "../ui/header";
 import { COLORS, textStyle } from "../ui/theme";
 import { Button, showToast, showTooltip } from "../ui/widgets";
-import { reportLevelResult, reportLevelScore } from "../platform";
-import { levelScoreMetrics } from "../../meta/score";
+import { reportLevelResult, reportScore, rtaCheckpoint } from "../platform";
+import { applyLevelBest, levelBestOf, levelPoints, scoreMetrics } from "../../meta/score";
+import { isFinished, recordRun, RTA_SPEED } from "../../meta/rta";
 
-/** 倍速。3x は丸パネルで解放（SPEC-119）、5x はテストプレイ用（一時停止メニューで ON） */
+/** 倍速。3x は丸パネルで解放（SPEC-119）、5x はテストプレイ用（一時停止メニューで ON）。RTA 中は 3x に固定（SPEC-123） */
 const TEST_SPEED = 5;
 /** オートレベルの判断間隔（秒） */
 const AUTO_LEVEL_EVERY = 0.5;
@@ -190,8 +191,9 @@ export class RunScene extends Phaser.Scene {
     this.input.on(Phaser.Input.Events.POINTER_DOWN, collect);
   }
 
-  /** 選べる倍速: 1x / 2x（最初から）、3x（丸パネル）、5x（テストプレイ用の設定） */
+  /** 選べる倍速: 1x / 2x（最初から）、3x（丸パネル）、5x（テストプレイ用の設定）。RTA 中は 3x だけ */
   private get speeds(): number[] {
+    if (session.rta) return [RTA_SPEED];
     const out = [1, 2];
     if (isFeatureUnlocked(session.data, "speed3x")) out.push(3);
     if (session.data.settings.testSpeed) out.push(TEST_SPEED);
@@ -486,7 +488,8 @@ export class RunScene extends Phaser.Scene {
         }).setDepth(201),
       );
     }
-    // テストプレイ用: 5 倍速を速度ボタンに加える
+    // テストプレイ用: 5 倍速を速度ボタンに加える（RTA 中は使えない。SPEC-123）
+    if (session.rta) return;
     const testOn = () => !!session.data.settings.testSpeed;
     const testBtn = add(
       new Button(this, CENTER_X, isFeatureUnlocked(session.data, "autoLevel") ? 960 : 840, {
@@ -524,8 +527,24 @@ export class RunScene extends Phaser.Scene {
     session.update((d) => applyRunResult(d, result, reward));
     // SPEC-120: bearko.games 共通基盤のトロフィー（L1・L5・L9 のクリア）。SDK がなければ何もしない
     reportLevelResult(level.id, won);
-    // SPEC-121: 総合スコア（残り体力・置いたヒーローの数）。撤退でも送る（点は勝ったときだけ付く）
-    reportLevelScore(levelScoreMetrics({ levelId: level.id, won, hp: this.sim.hp, maxHp: this.sim.maxHp, heroesUsed: this.sim.heroes.length, slots: level.slots.length }));
+    // SPEC-122: 総合スコア。クリアの成績がこのレベルの自己ベストを超えたら、セーブに残してレベルごとの自己ベストをまとめて送る
+    let points: { value: number; best: boolean } | null = null;
+    if (won) {
+      const best = levelBestOf({ hp: this.sim.hp, maxHp: this.sim.maxHp, heroesUsed: this.sim.heroes.length, slots: level.slots.length, earlyBonus: this.sim.stats.earlyBonus });
+      const applied = applyLevelBest(session.data, level.id, best);
+      if (applied.improved) {
+        session.update(() => applied.save);
+        reportScore(scoreMetrics(session.data));
+      }
+      points = { value: Math.round(levelPoints(level.id, best)), best: applied.improved };
+    }
+    // SPEC-123: RTA。ランの時間を IGT に足し、次のレベルのクリアなら区切りを送る
+    if (session.rta) {
+      const rec = recordRun(session.rta, level.id, won, this.sim.time * 1000);
+      session.rta = rec.state;
+      if (rec.checkpoint) rtaCheckpoint(rec.checkpoint, rec.state.igtMs);
+      if (isFinished(rec.state)) session.endRta();
+    }
     // SPEC-119: 記録で新しく解放できるようになった条件つきパネル（ツリーで手動で解放する）
     const unlocked = newlyUnlocked(before, session.data);
     if (unlocked.length > 0)
@@ -557,8 +576,10 @@ export class RunScene extends Phaser.Scene {
     if (this.sim.cannonUnlocked) rows.push(["幻獣砲のダメージ", String(Math.floor(st.cannonDamage))]);
     const minerGum = this.sim.heroes.filter((h) => h.role === "miner").reduce((sum, h) => sum + h.totalGum, 0);
     if (minerGum > 0) rows.push(["採掘で得た GUM", String(minerGum)]);
+    if (st.earlyBonus > 0) rows.push(["早呼びのボーナス", `${st.earlyBonus} GUM`]);
+    if (points) rows.push(["総合スコア（このレベル）", `${points.value}${points.best ? "  自己ベスト" : ""}`]);
     // 行が増えたら詰める（下の CE・ダメージ・実況が重ならないように）
-    const rowH = rows.length > 4 ? 34 : 40;
+    const rowH = rows.length > 6 ? 30 : rows.length > 4 ? 34 : 40;
     rows.forEach(([k, v], i) => {
       const y = top + 160 + i * rowH;
       add(this.add.text(90, y, k, textStyle(22, { weight: 500, color: COLORS.inkDim })).setOrigin(0, 0.5));
@@ -591,7 +612,7 @@ export class RunScene extends Phaser.Scene {
     // ヒーロー別ダメージ（上位 3）
     const ht = rt + boxH + 36;
     add(this.add.text(90, ht, "ヒーロー別ダメージ", textStyle(20, { color: COLORS.inkDim })).setOrigin(0, 0.5));
-    const heroes = [...this.sim.heroes].sort((a, b) => b.totalDamage - a.totalDamage).slice(0, rows.length > 4 ? 2 : 3);
+    const heroes = [...this.sim.heroes].sort((a, b) => b.totalDamage - a.totalDamage).slice(0, rows.length > 6 ? 1 : rows.length > 4 ? 2 : 3);
     const maxDmg = Math.max(1, ...heroes.map((h) => h.totalDamage));
     heroes.forEach((h, i) => {
       const y = ht + 44 + i * 44;

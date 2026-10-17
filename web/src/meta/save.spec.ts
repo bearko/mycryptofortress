@@ -8,6 +8,7 @@ import {
   importSave,
   isValidSave,
   migrate,
+  RTA_SLOT,
   type Migrations,
 } from "./save";
 import { createMemoryStorage } from "./storage";
@@ -177,4 +178,31 @@ describe("v5（Phase 4）", () => {
     // v5 → v6: 累計記録。挑戦回数はレベルごとの記録から復元する（SPEC-119）
     expect(s.meta.stats).toEqual({ kills: 0, bossKills: 0, gumCollected: 0, wavesCleared: 0, flawlessClears: 0, runs: 15 });
   });
+
+  it("SPEC-122: v6 のセーブは v7 にそのまま上がる（自己ベストは空）", () => {
+    const v6 = { ...createNewSave(), schemaVersion: 6 };
+    v6.meta.levels = { L1: { cleared: true, bestWave: 10, clears: 1, runs: 2 } };
+    const m = migrate(v6);
+    expect(m?.schemaVersion).toBe(7);
+    expect(m?.meta.levels.L1).toEqual({ cleared: true, bestWave: 10, clears: 1, runs: 2 });
+  });
+
+  it("SPEC-122: 自己ベストの形が壊れていれば読まない", () => {
+    const s = createNewSave();
+    s.meta.levels = { L1: { cleared: true, bestWave: 10, clears: 1, runs: 1, best: { hpLeft: 2, maxHp: 3, heroesUsed: 7, slots: 15, earlyBonus: 0 } } };
+    expect(migrate(JSON.parse(JSON.stringify(s)))).not.toBeNull();
+    const bad = JSON.parse(JSON.stringify(s));
+    bad.meta.levels.L1.best.earlyBonus = -1;
+    expect(migrate(bad)).toBeNull();
+  });
+
+  it("SPEC-123: RTA のセーブはふだんのスロットと別のキー", () => {
+    const store = new SaveStore(createMemoryStorage());
+    store.save(1, createNewSave());
+    store.save(RTA_SLOT, { ...createNewSave(), meta: { ...createNewSave().meta, tokens: { ce: 5, emblem: 0 } } });
+    expect(store.load(1)?.meta.tokens.ce).toBe(0);
+    expect(store.load(RTA_SLOT)?.meta.tokens.ce).toBe(5);
+    expect(store.listSlots().map((x) => x.slot)).toEqual([1, 2, 3]);
+  });
 });
+

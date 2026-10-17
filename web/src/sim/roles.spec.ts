@@ -205,6 +205,7 @@ describe("Wave の繰り上げ (SPEC-113)", () => {
     expect(sim.waveIndex).toBe(1);
     expect(sim.stats.wavesCleared).toBe(1);
     expect(sim.gum).toBe(g + bonus! + 5);
+    expect(sim.stats.earlyBonus).toBe(bonus); // SPEC-122: 総合スコアの早呼びのボーナス
     run(sim, 1);
     const called = sim.enemies.filter((e) => e.status.accel > 0);
     expect(called.length).toBeGreaterThan(0);

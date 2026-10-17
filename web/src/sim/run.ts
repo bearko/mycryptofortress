@@ -226,6 +226,8 @@ export interface RunStats {
   bossKills: number;
   /** SPEC-119: 敵の到達で受けたダメージの合計（無効化した分は含まない） */
   damageTaken: number;
+  /** SPEC-122: Wave の繰り上げ呼び出し（早呼び）でもらったボーナス GUM の合計 */
+  earlyBonus: number;
 }
 
 interface SpawnEntry {
@@ -275,7 +277,7 @@ export class RunSim {
   drops: DropState[] = [];
   /** 開放済みのロックマス（スロット番号） */
   readonly openedSlots = new Set<number>();
-  readonly stats: RunStats = { kills: 0, leaks: 0, gumEarned: 0, wavesReached: 0, wavesCleared: 0, cannonDamage: 0, blastDamage: 0, bossKills: 0, damageTaken: 0 };
+  readonly stats: RunStats = { kills: 0, leaks: 0, gumEarned: 0, wavesReached: 0, wavesCleared: 0, cannonDamage: 0, blastDamage: 0, bossKills: 0, damageTaken: 0, earlyBonus: 0 };
   readonly paths: PathGeom[];
   /** 幻獣の位置（マス座標の中心） */
   readonly cryptidPos: Point;
@@ -597,6 +599,7 @@ export class RunSim {
     if (bonus === null) return false;
     this.gum += bonus;
     this.stats.gumEarned += bonus;
+    this.stats.earlyBonus += bonus;
     this.emit({ type: "earlyCall", bonus });
     this.clearWave();
     this.beginWave(this.waveIndex + 1, true);

@@ -4,13 +4,19 @@
  * ログイン状態は共通基盤が持つので、ここではセーブ（localStorage）に触らない。
  */
 import { trophyIdsForLevelClear } from "../meta/trophies";
-import type { LevelScoreMetrics } from "../meta/score";
+import type { ScoreMetrics } from "../meta/score";
 
 type Result = { ok?: boolean; error?: string } | undefined;
+type RtaResult = { ok?: boolean; error?: string; finished?: boolean } | undefined;
 interface BearkoGamesSdk {
   init(opts: { game: string; version?: string }): Promise<Result> | Result;
   unlockTrophy(id: string): Promise<Result> | Result;
   submitScore?(metrics: object, opts?: { quiet?: boolean }): Promise<Result> | Result;
+  rta?: {
+    start(opts: { regulation: string; timer?: "top" | "bottom" | false; timerOffset?: number }): Promise<RtaResult> | RtaResult;
+    checkpoint(id: string, opts?: { igtMs?: number }): Promise<RtaResult> | RtaResult;
+    abort(): Promise<RtaResult> | RtaResult;
+  };
 }
 
 const sdk = (): BearkoGamesSdk | undefined =>
@@ -53,8 +59,8 @@ export function reportLevelResult(levelId: string, won: boolean): void {
   }
 }
 
-/** SPEC-121: 1 回のレベルの成績を総合スコアに送る（勝ち負けとも。点の計算は共通基盤） */
-export function reportLevelScore(metrics: LevelScoreMetrics): void {
+/** SPEC-122: レベルごとの自己ベストをまとめて総合スコアに送る（点の計算と前回との束ねは共通基盤） */
+export function reportScore(metrics: ScoreMetrics): void {
   const bg = sdk();
   if (!bg || typeof bg.submitScore !== "function") return;
   try {
@@ -65,5 +71,45 @@ export function reportLevelScore(metrics: LevelScoreMetrics): void {
       .catch((e) => console.warn("[platform] score", e));
   } catch (e) {
     console.warn("[platform] score", e);
+  }
+}
+
+/** SPEC-123: RTA の計測を始める。SDK がない・通信に失敗したら false（ゲームは RTA なしで続けられる） */
+export async function startRta(regulation: string, timerOffset: number): Promise<boolean> {
+  const rta = sdk()?.rta;
+  if (!rta || typeof rta.start !== "function") return false;
+  try {
+    const r = await rta.start({ regulation, timer: "top", timerOffset });
+    if (!r || !r.ok) console.warn("[platform] rta start", r?.error);
+    return !!r && !!r.ok;
+  } catch (e) {
+    console.warn("[platform] rta start", e);
+    return false;
+  }
+}
+
+/** SPEC-123: 区切りを送る（結果の通知は SDK が出す） */
+export function rtaCheckpoint(id: string, igtMs: number): void {
+  const rta = sdk()?.rta;
+  if (!rta || typeof rta.checkpoint !== "function") return;
+  try {
+    Promise.resolve(rta.checkpoint(id, { igtMs }))
+      .then((r) => {
+        if (!r || !r.ok) console.warn("[platform] rta checkpoint", id, r?.error);
+      })
+      .catch((e) => console.warn("[platform] rta checkpoint", id, e));
+  } catch (e) {
+    console.warn("[platform] rta checkpoint", id, e);
+  }
+}
+
+/** SPEC-123: 計測をやめる */
+export function abortRta(): void {
+  const rta = sdk()?.rta;
+  if (!rta || typeof rta.abort !== "function") return;
+  try {
+    Promise.resolve(rta.abort()).catch((e) => console.warn("[platform] rta abort", e));
+  } catch (e) {
+    console.warn("[platform] rta abort", e);
   }
 }
