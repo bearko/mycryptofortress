@@ -6,7 +6,7 @@
 | 状態 | Accepted |
 | 作成日 | 2026-10-17 |
 | 最終更新 | 2026-10-17 |
-| 親仕様 | [bearko/mycryptoportfolio の SPEC-001](https://github.com/bearko/mycryptoportfolio/blob/claude/game-portfolio-page-4afqbc/docs/specs/SPEC-001-bearko-games-platform.md) 6 章（RTA）・6.10（`fortress-all`） |
+| 親仕様 | [bearko/mycryptoportfolio の SPEC-001](https://github.com/bearko/mycryptoportfolio/blob/claude/game-portfolio-page-4afqbc/docs/specs/SPEC-001-bearko-games-platform.md) 6 章（RTA）・6.11（`fortress-all`） |
 | 実装 | `web/src/meta/rta.ts`・`web/src/meta/save.ts`（RTA 用のセーブ）・`web/src/view/session.ts`・`web/src/view/platform.ts`・`HomeScene`・`RunScene` |
 
 ## 1. 背景
