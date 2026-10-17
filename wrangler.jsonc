@@ -1,0 +1,10 @@
+{
+  // ルート（リポジトリの直下）で動く Wrangler のコマンド用。中身は web/wrangler.jsonc と同じ Worker を指す。
+  // Cloudflare のプレビュー（本番以外のブランチ）のビルドは `npx wrangler preview` をリポジトリの直下で動かすため、
+  // ここに設定がないと「Worker の名前がない」で失敗していた（SPEC-122 4 章）。本番の公開は web/wrangler.jsonc を使う
+  "name": "mycryptofortress",
+  "compatibility_date": "2026-10-06",
+  "assets": { "directory": "./web/dist" },
+  // 空なので、プレビューには本番の変数・シークレットはつながらない
+  "previews": {}
+}
