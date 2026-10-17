@@ -4,7 +4,8 @@ import { applyRunResult } from "./progress";
 import { createNewSave, type LevelBest, type SaveData } from "./save";
 import { applyLevelBest, levelBestOf, levelPoints, scoreMetrics, totalPoints } from "./score";
 
-const TYPICAL: LevelBest = { hpLeft: 2, maxHp: 3, heroesUsed: 7, slots: 15, earlyBonus: 0 };
+// SPEC-126: ふつうのクリア（自動プレイの実測）：体力 54% が残る・スロットを埋める・早呼びなし
+const TYPICAL: LevelBest = { hpLeft: 54, maxHp: 100, heroesUsed: 15, slots: 15, earlyBonus: 0 };
 const cleared = (save: SaveData, levelId: string): SaveData =>
   applyRunResult(save, { levelId, won: true, wavesReached: 10, wavesCleared: 10 }, { ce: 0, emblems: 0, breakdown: [], firstClear: false });
 

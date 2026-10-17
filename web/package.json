@@ -12,7 +12,8 @@
     "test": "vitest run",
     "assets:sync": "node scripts/sync-assets.mjs",
     "assets:sync:remote": "node scripts/sync-assets.mjs --remote",
-    "assets:check": "node scripts/sync-assets.mjs --check"
+    "assets:check": "node scripts/sync-assets.mjs --check",
+    "score:measure": "vite-node scripts/measure-score.ts"
   },
   "dependencies": {
     "@fontsource/orbitron": "^5.3.0",

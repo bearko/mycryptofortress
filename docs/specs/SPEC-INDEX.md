@@ -33,6 +33,7 @@
 | [SPEC-123](./SPEC-123-platform-rta.md) | Accepted | RTA「レベル 01〜09」（新しいセーブ・3 倍速固定・区切りは各レベルのクリア） | 2026-10-17 |
 | [SPEC-124](./SPEC-124-preview-build.md) | Accepted | Cloudflare のプレビュービルド（本番以外のブランチ）を通す：直下の wrangler.jsonc | 2026-10-17 |
 | [SPEC-125](./SPEC-125-platform-ranking-link.md) | Accepted | bearko.games の総合ランキングへの導線（ホームのロゴの下・新しいタブ） | 2026-10-17 |
+| [SPEC-126](./SPEC-126-score-typical.md) | Accepted | 総合スコアの「ふつうのクリア」を自動プレイの実測に（TYPICAL 0.54・npm run score:measure） | 2026-10-17 |
 
 ## v1 → v2 の切り替え
 

@@ -7,8 +7,9 @@ import type { LevelBest, LevelProgress, SaveData } from "./save";
 
 /** 早呼びのボーナス 1 GUM ＝ 1 点 */
 export const EARLY_POINT = 1;
-/** ふつうのクリア（体力 2/3 が残る・15 スロットに 7 体）で成績の点 ＝ 重み */
-export const TYPICAL = 1.2;
+/** ふつうのクリア（残り体力の割合 ＋ 空きスロットの割合）で成績の点 ＝ 重み。
+ *  SPEC-126: 自動プレイの初クリアの平均 0.539 から（共通基盤 fortress.v3。npm run score:measure） */
+export const TYPICAL = 0.54;
 
 /** レベルの重み（節目の点）。L1 ＝ 500、L2〜L9 ＝ 562.5（9 レベルで 5,000） */
 export const levelWeight = (levelId: string): number => (levelId === "L1" ? 500 : 562.5);
