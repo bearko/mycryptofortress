@@ -72,4 +72,15 @@ describe("SPEC-120 共通基盤 SDK への窓口", () => {
     expect(await startRta("fortress-all", 0)).toBe(false);
     warn.mockRestore();
   });
+
+  it("SPEC-125: 共通基盤のランキングを新しいタブで開く", async () => {
+    const { openPlatformRanking, PLATFORM_RANKING_URL } = await import("./platform");
+    const open = vi.fn();
+    vi.stubGlobal("window", { ...globalThis.window, open });
+    openPlatformRanking();
+    expect(open).toHaveBeenCalledWith("https://bearko.games/score/?game=fortress", "_blank", "noopener");
+    expect(PLATFORM_RANKING_URL).toBe("https://bearko.games/score/?game=fortress");
+    open.mockImplementation(() => { throw new Error("blocked"); });
+    expect(() => openPlatformRanking()).not.toThrow();
+  });
 });

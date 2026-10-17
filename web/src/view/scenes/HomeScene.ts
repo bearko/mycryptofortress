@@ -8,7 +8,7 @@ import { CENTER_X, GAME_HEIGHT, GAME_WIDTH, MARGIN } from "../layout";
 import { session } from "../session";
 import { COLORS, css, textStyle } from "../ui/theme";
 import { Button, CryptidDisplay, LandBackground, showToast, showTooltip } from "../ui/widgets";
-import { abortRta, startRta } from "../platform";
+import { abortRta, openPlatformRanking, startRta } from "../platform";
 import { jaWrap } from "../ui/jaWrap";
 import { RTA_REGULATION, RTA_SPEED } from "../../meta/rta";
 
@@ -70,6 +70,13 @@ export class HomeScene extends Phaser.Scene {
       label: session.rta ? "RTA をやめる" : "RTA",
       onTap: () => (session.rta ? this.confirmAbortRta() : this.confirmStartRta()),
     });
+    // SPEC-125: bearko.games の総合ランキングへ（新しいタブ）
+    const ranking = this.add
+      .text(MARGIN, 124, "bearko.games の総合ランキング ↗", textStyle(18, { color: COLORS.gold }))
+      .setOrigin(0, 0.5)
+      .setPadding(0, 10, 0, 10)
+      .setInteractive({ useHandCursor: true });
+    bindPress(ranking, { onTap: () => openPlatformRanking() });
   }
 
   private modal(title: string, body: string, okLabel: string, onOk: () => void): void {
