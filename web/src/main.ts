@@ -8,7 +8,9 @@ import { RunScene } from "./view/scenes/RunScene";
 import { TreeScene } from "./view/scenes/TreeScene";
 import { TitleScene } from "./view/scenes/TitleScene";
 import { COLORS, FONT_DISPLAY } from "./view/ui/theme";
-import { initPlatform } from "./view/platform";
+import { initPlatform, reportAchievements } from "./view/platform";
+import { session } from "./view/session";
+import { achievementIdsForSave } from "./meta/trophies";
 
 /**
  * テキストテクスチャがフォールバックフォントで焼かれないよう、同梱の Orbitron を先に読む（最大 2 秒待つ）。
@@ -21,8 +23,10 @@ async function loadFonts(): Promise<void> {
 }
 
 async function start(): Promise<void> {
-  // SPEC-120: bearko.games 共通基盤（トロフィー）。SDK がなければ何もしない
+  // SPEC-120: bearko.games 共通基盤（アチーブメント・総合スコア・RTA）。SDK がなければ何もしない
   initPlatform("0.2.0");
+  // SPEC-130: セーブから判定できるアチーブメントを、起動時にまとめて送る（前から遊んでいる人にも付く）
+  reportAchievements(achievementIdsForSave(session.data));
   await loadFonts();
   document.querySelector("#app .loader")?.remove();
 

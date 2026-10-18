@@ -34,7 +34,8 @@ import { Header, HEADER_H, goTo } from "../ui/header";
 import { COLORS, textStyle } from "../ui/theme";
 import { Button, LandBackground, showToast } from "../ui/widgets";
 import { jaWrap } from "../ui/jaWrap";
-import { setChatVisible } from "../platform";
+import { reportAchievements, setChatVisible } from "../platform";
+import { achievementIdsForSave } from "../../meta/trophies";
 
 /** ツリー座標 1 あたりの px */
 const UNIT = 120;
@@ -576,6 +577,8 @@ export class TreeScene extends Phaser.Scene {
     if (block === "condition") return showToast(this, "丸いパネルは、記録が条件に届くと無料で解放できます");
     if (block) return;
     session.update((d) => buyNode(d, id));
+    // SPEC-130: 初めてのパネル（panel）・5 種のヒーロー解放（heroes5）など
+    reportAchievements(achievementIdsForSave(session.data));
     const n = TREE_BY_ID.get(id)!;
     const lv = nodeLevel(session.data, id);
     this.popEffect(n, effectText(n, lv));
@@ -687,6 +690,7 @@ export class TreeScene extends Phaser.Scene {
             if (!set) return;
             const res = loadBuildSet(session.data, i);
             session.update(() => res.save);
+            reportAchievements(achievementIdsForSave(session.data));   // SPEC-130
             playSe(this, "se.treasure");
             close();
             this.refresh();
