@@ -5,9 +5,11 @@
 | ID | SPEC-120 |
 | 状態 | Accepted |
 | 作成日 | 2026-10-16 |
-| 最終更新 | 2026-10-16 |
+| 最終更新 | 2026-10-18 |
 | 親仕様 | [bearko/mycryptoportfolio の SPEC-001](https://github.com/bearko/mycryptoportfolio/blob/claude/game-portfolio-page-4afqbc/docs/specs/SPEC-001-bearko-games-platform.md)（bearko.games 共通基盤。9 章トロフィー） |
 | 実装 | `web/src/meta/trophies.ts`（レベル → トロフィー ID）、`web/src/view/platform.ts`（SDK への窓口）、`RunScene` の結果表示、`web/src/main.ts`、`web/index.html` |
+
+> 2026-10-18: 共通基盤で「トロフィー」は「アチーブメント」に改められた。送るものは [SPEC-130](./SPEC-130-platform-achievements.md) で広げた（2.1 の表は当時のもの）。
 
 ## 1. 背景
 

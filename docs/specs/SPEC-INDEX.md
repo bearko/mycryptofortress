@@ -27,7 +27,7 @@
 | [SPEC-117](./SPEC-117-gimmick-enemies.md) | Accepted | ギミック敵（隠密・回復）・ギミックボス（召喚・分裂・多節）と Lv7〜9 | 2026-09-26 |
 | [SPEC-118](./SPEC-118-armor-insulation.md) | Accepted | 装甲・絶縁と雷の調整（弓の装甲貫通、雷一辺倒を防ぐギミック） | 2026-09-26 |
 | [SPEC-119](./SPEC-119-tree-panels-and-records.md) | Accepted | スキルツリーのパネル形状（四角・丸・上辺の紋章）・条件つきパネルと累計記録（セーブ v6）・印 / 弱点 / 多重会心 / 報復の炎 / 利息 | 2026-09-26 |
-| [SPEC-120](./SPEC-120-platform-trophies.md) | Accepted | bearko.games 共通基盤のトロフィー（L1・L5・L9 のクリアで送る） | 2026-10-16 |
+| [SPEC-120](./SPEC-120-platform-trophies.md) | Accepted | bearko.games 共通基盤のトロフィー（L1・L5・L9 のクリアで送る。送るものは SPEC-130 で広げた） | 2026-10-18 |
 | [SPEC-121](./SPEC-121-platform-score.md) | Accepted | bearko.games 共通基盤の総合スコア（残り体力・置いたヒーローの数を送る。送る成績は SPEC-122 で置き換え） | 2026-10-16 |
 | [SPEC-122](./SPEC-122-platform-score-v2.md) | Accepted | 総合スコア v2：レベルごとの自己ベストの合計（セーブ v7）・早呼びのボーナス | 2026-10-17 |
 | [SPEC-123](./SPEC-123-platform-rta.md) | Accepted | RTA「レベル 01〜09」（新しいセーブ・3 倍速固定・区切りは各レベルのクリア） | 2026-10-17 |
@@ -37,6 +37,7 @@
 | [SPEC-127](./SPEC-127-volume-steps.md) | Accepted | 音量の 20 段階（BGM・SE を 5% 刻みで。ホームの「音の設定」） | 2026-10-17 |
 | [SPEC-128](./SPEC-128-global-chat-placement.md) | Accepted | 全体チャットの置き場所（共通基盤 SPEC-004。戦闘中は隠す。右下） | 2026-10-17 |
 | [SPEC-129](./SPEC-129-shared-avatar.md) | Accepted | bearko.games 共通のアイコンへの入口（ホームの文字リンク → SDK の窓） | 2026-10-17 |
+| [SPEC-130](./SPEC-130-platform-achievements.md) | Accepted | bearko.games のアチーブメント（名鑑 No.056〜066・エクステンション 3 個。セーブから判定して起動時・節目に順に送る） | 2026-10-18 |
 
 ## v1 → v2 の切り替え
 
