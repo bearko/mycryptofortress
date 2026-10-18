@@ -1,5 +1,5 @@
 /**
- * SPEC-120: bearko.games 共通基盤（https://bearko.games/sdk/v1.js）への窓口。
+ * SPEC-120 / SPEC-130: bearko.games 共通基盤（https://bearko.games/sdk/v1.js）への窓口。
  * SDK が読めない・通信に失敗しても何もしない（console.warn だけ）。ゲームの進行は止めない。
  * ログイン状態は共通基盤が持つので、ここではセーブ（localStorage）に触らない。
  */
@@ -27,6 +27,8 @@ const sdk = (): BearkoGamesSdk | undefined =>
   typeof window !== "undefined" ? (window as unknown as { BearkoGames?: BearkoGamesSdk }).BearkoGames : undefined;
 
 let initedWith: string | null | undefined;
+/** SPEC-130: init が済んだ（アチーブメントを送ってよい） */
+let platformReady = false;
 
 export function initPlatform(version?: string): void {
   const bg = sdk();
@@ -40,12 +42,19 @@ export function initPlatform(version?: string): void {
   }
   if (initedWith === (version ?? "")) return;
   initedWith = version ?? "";
+  const ready = () => {
+    // SPEC-130: init が済んでから（失敗しても）覚えておいたアチーブメントを送り始める
+    platformReady = true;
+    pumpAchievements();
+  };
   try {
     Promise.resolve(bg.init({ game: "fortress", version }))
       .then(() => applyChatVisible())   // SPEC-128: SDK が後から読めたときも、いまの画面の出す／隠すをそろえる
-      .catch((e) => console.warn("[platform] init", e));
+      .catch((e) => console.warn("[platform] init", e))
+      .finally(ready);
   } catch (e) {
     console.warn("[platform] init", e);
+    ready();
   }
 }
 
@@ -69,20 +78,52 @@ export function setChatVisible(on: boolean): void {
   applyChatVisible();
 }
 
-export function reportLevelResult(levelId: string, won: boolean): void {
-  const bg = sdk();
-  if (!bg) return;
-  for (const id of trophyIdsForLevelClear(levelId, won)) {
-    try {
-      Promise.resolve(bg.unlockTrophy(id))
-        .then((r) => {
-          if (!r || !r.ok) console.warn("[platform] trophy", id, r?.error);
-        })
-        .catch((e) => console.warn("[platform] trophy", id, e));
-    } catch (e) {
-      console.warn("[platform] trophy", id, e);
-    }
+// ---------------------------------------------------------------- SPEC-130: アチーブメント（旧トロフィー）
+// 未ログインの最初の書き込みで仮アカウントができるので、同時に送らず 1 つずつ順に（前の返事を待って）送る。
+// 同じ起動で同じ ID は 1 回だけ（成功・失敗にかかわらず。公開前の共通基盤が知らない ID をはじいても送り直さない）
+const achievementsSent = new Set<string>();
+const achievementQueue: string[] = [];
+let achievementBusy = false;
+
+/** アチーブメントを送る（判定は meta/trophies.ts）。SDK がまだ読めていなければ覚えておき、init のあとに送る */
+export function reportAchievements(ids: readonly string[]): void {
+  for (const id of ids) {
+    if (achievementsSent.has(id) || achievementQueue.includes(id)) continue;
+    achievementQueue.push(id);
   }
+  pumpAchievements();
+}
+
+function pumpAchievements(): void {
+  if (achievementBusy || !platformReady) return;
+  const bg = sdk();
+  if (!bg || typeof bg.unlockTrophy !== "function") return;
+  const id = achievementQueue.shift();
+  if (id === undefined) return;
+  achievementsSent.add(id);
+  achievementBusy = true;
+  const next = () => {
+    achievementBusy = false;
+    pumpAchievements();
+  };
+  try {
+    Promise.resolve(bg.unlockTrophy(id))
+      .then(
+        (r) => {
+          if (!r || !r.ok) console.warn("[platform] achievement", id, r?.error);
+        },
+        (e) => console.warn("[platform] achievement", id, e),
+      )
+      .finally(next);
+  } catch (e) {
+    console.warn("[platform] achievement", id, e);
+    next();
+  }
+}
+
+/** SPEC-120: レベルのクリア（L1・L3・L5・L7・L9）を送る */
+export function reportLevelResult(levelId: string, won: boolean): void {
+  reportAchievements(trophyIdsForLevelClear(levelId, won));
 }
 
 /** SPEC-122: レベルごとの自己ベストをまとめて総合スコアに送る（点の計算と前回との束ねは共通基盤） */

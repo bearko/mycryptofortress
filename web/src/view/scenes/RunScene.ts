@@ -20,9 +20,10 @@ import { playDialog, speechBubble } from "../ui/dialog";
 import { goTo } from "../ui/header";
 import { COLORS, textStyle } from "../ui/theme";
 import { Button, showToast, showTooltip } from "../ui/widgets";
-import { reportLevelResult, reportScore, rtaCheckpoint, setChatVisible } from "../platform";
+import { reportAchievements, reportScore, rtaCheckpoint, setChatVisible } from "../platform";
 import { applyLevelBest, levelBestOf, levelPoints, scoreMetrics } from "../../meta/score";
 import { isFinished, recordRun, RTA_SPEED } from "../../meta/rta";
+import { achievementIdsForRun, achievementIdsForSave } from "../../meta/trophies";
 
 /** 倍速。3x は丸パネルで解放（SPEC-119）、5x はテストプレイ用（一時停止メニューで ON）。RTA 中は 3x に固定（SPEC-123） */
 const TEST_SPEED = 5;
@@ -526,8 +527,6 @@ export class RunScene extends Phaser.Scene {
     const reward = computeReward(level, result, session.data);
     const before = conditionalLevels(session.data);
     session.update((d) => applyRunResult(d, result, reward));
-    // SPEC-120: bearko.games 共通基盤のトロフィー（L1・L5・L9 のクリア）。SDK がなければ何もしない
-    reportLevelResult(level.id, won);
     // SPEC-122: 総合スコア。クリアの成績がこのレベルの自己ベストを超えたら、セーブに残してレベルごとの自己ベストをまとめて送る
     let points: { value: number; best: boolean } | null = null;
     if (won) {
@@ -540,12 +539,22 @@ export class RunScene extends Phaser.Scene {
       points = { value: Math.round(levelPoints(level.id, best)), best: applied.improved };
     }
     // SPEC-123: RTA。ランの時間を IGT に足し、次のレベルのクリアなら区切りを送る
+    let rtaFinished = false;
     if (session.rta) {
       const rec = recordRun(session.rta, level.id, won, this.sim.time * 1000);
       session.rta = rec.state;
       if (rec.checkpoint) rtaCheckpoint(rec.checkpoint, rec.state.igtMs);
-      if (isFinished(rec.state)) session.endRta();
+      if (isFinished(rec.state)) {
+        session.endRta();
+        rtaFinished = true;
+      }
     }
+    // SPEC-120 / SPEC-130: bearko.games のアチーブメント。その場のもの（レベルのクリア・L9 ノーダメージ・RTA 完走）と、
+    // セーブから判定できるもの（ボス撃破の通算など）を順に送る。SDK がなければ何もしない
+    reportAchievements([
+      ...achievementIdsForRun({ levelId: level.id, won, damageTaken: this.sim.stats.damageTaken, rtaFinished }),
+      ...achievementIdsForSave(session.data),
+    ]);
     // SPEC-119: 記録で新しく解放できるようになった条件つきパネル（ツリーで手動で解放する）
     const unlocked = newlyUnlocked(before, session.data);
     if (unlocked.length > 0)

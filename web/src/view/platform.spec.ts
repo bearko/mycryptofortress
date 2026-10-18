@@ -133,3 +133,89 @@ describe("SPEC-129 共通のアイコン", () => {
     expect(opened).toBe(1);
   });
 });
+
+describe("SPEC-130 アチーブメントを順に送る", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** platform.ts の待ち・送った記録・init 済みを新しくするため、モジュールを読み直す */
+  const fresh = async () => {
+    vi.resetModules();
+    return import("./platform");
+  };
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  it("SDK が読めるまで覚えておき、init のあとに 1 つずつ（前の返事を待って）送る", async () => {
+    const p = await fresh();
+    p.reportAchievements(["fortress.level01", "fortress.panel"]);   // SDK がまだ無い
+    const log: string[] = [];
+    let inFlight = 0;
+    let maxInFlight = 0;
+    vi.stubGlobal("window", {
+      BearkoGames: {
+        init: async () => (log.push("init"), { ok: true }),
+        unlockTrophy: async (id: string) => {
+          inFlight++;
+          maxInFlight = Math.max(maxInFlight, inFlight);
+          log.push(id);
+          await new Promise((r) => setTimeout(r, 1));
+          inFlight--;
+          return { ok: true };
+        },
+      },
+    });
+    p.reportAchievements(["fortress.firstboss"]);   // init 前は送らない
+    await flush();
+    expect(log).toEqual([]);
+    p.initPlatform("0.2.0");
+    await new Promise((r) => setTimeout(r, 20));
+    expect(log).toEqual(["init", "fortress.level01", "fortress.panel", "fortress.firstboss"]);
+    expect(maxInFlight).toBe(1);
+  });
+
+  it("同じ起動で同じ ID は 1 回だけ（失敗・例外でも送り直さず、ゲームを止めない）", async () => {
+    const p = await fresh();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const sent: string[] = [];
+    vi.stubGlobal("window", {
+      BearkoGames: {
+        init: async () => ({ ok: true }),
+        unlockTrophy: (id: string) => {
+          sent.push(id);
+          if (id === "fortress.boss10") throw new Error("boom");
+          return Promise.resolve({ ok: id !== "fortress.level03", error: "unknown trophy" });
+        },
+      },
+    });
+    p.initPlatform("0.2.0");
+    p.reportAchievements(["fortress.level01", "fortress.level03", "fortress.boss10", "fortress.level01"]);
+    p.reportLevelResult("L1", true);
+    await flush();
+    p.reportAchievements(["fortress.level03", "fortress.boss10", "fortress.boss25"]);
+    expect(() => p.reportLevelResult("L7", true)).not.toThrow();
+    await flush();
+    expect(sent).toEqual(["fortress.level01", "fortress.level03", "fortress.boss10", "fortress.boss25", "fortress.level07"]);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("init が失敗しても、送るのは続ける（ゲームは止めない）", async () => {
+    const p = await fresh();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const sent: string[] = [];
+    vi.stubGlobal("window", {
+      BearkoGames: {
+        init: () => {
+          throw new Error("boom");
+        },
+        unlockTrophy: async (id: string) => (sent.push(id), { ok: true }),
+      },
+    });
+    expect(() => p.initPlatform("0.2.0")).not.toThrow();
+    p.reportAchievements(["fortress.kills1000"]);
+    await flush();
+    expect(sent).toEqual(["fortress.kills1000"]);
+    warn.mockRestore();
+  });
+});
