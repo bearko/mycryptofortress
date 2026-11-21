@@ -11,6 +11,7 @@ import { COLORS, FONT_DISPLAY } from "./view/ui/theme";
 import { initPlatform, reportAchievements } from "./view/platform";
 import { session } from "./view/session";
 import { achievementIdsForSave } from "./meta/trophies";
+import { watchPage } from "./view/audio";
 
 /**
  * テキストテクスチャがフォールバックフォントで焼かれないよう、同梱の Orbitron を先に読む（最大 2 秒待つ）。
@@ -46,6 +47,7 @@ async function start(): Promise<void> {
     input: { activePointers: 2 },
     scene: [BootScene, TitleScene, HomeScene, LevelSelectScene, TreeScene, RunScene],
   });
+  watchPage(game);
 
   if (import.meta.env.DEV) {
     (window as unknown as { __FORTRESS_GAME__: Phaser.Game }).__FORTRESS_GAME__ = game;
