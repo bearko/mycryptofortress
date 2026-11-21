@@ -31,3 +31,39 @@ export function playBgm(scene: Phaser.Scene, key: string): void {
   s.setVolume?.(volume);
   if (!s.isPlaying) s.play();
 }
+
+/**
+ * 画面が隠れたら（ほかのアプリやタブへ移った・画面を消した・ブラウザを閉じた）音を止め、戻ったら続きから鳴らす。
+ * Phaser はウィンドウのフォーカスが外れたとき（blur）にしか音を止めず、フォーカスが残っていればフレームごとに
+ * AudioContext を動かし直す。フォーカスが残ったまま画面だけ隠れる場合（画面を消したときなど）に BGM が鳴り続けるので、
+ * ページの見え方（visibilitychange・pagehide）でも、Phaser 自身の「フォーカスが外れた／戻った」を呼ぶ
+ */
+export function watchPage(game: Phaser.Game): void {
+  type FocusAware = { onGameBlur?: () => void; onGameFocus?: () => void };
+  const sm = game.sound as Phaser.Sound.BaseSoundManager & FocusAware;
+  const hidden = (): boolean => document.visibilityState === "hidden";
+  const hide = (): void => {
+    try {
+      if (sm.onGameBlur) sm.onGameBlur();
+      else sm.pauseAll();
+    } catch {
+      // 止められなくても遊べる
+    }
+  };
+  const show = (): void => {
+    // ほかのウィンドウにフォーカスがあるあいだは、Phaser が FOCUS で戻すのに任せる
+    if (hidden() || !document.hasFocus()) return;
+    try {
+      if (sm.onGameFocus) sm.onGameFocus();
+      else sm.resumeAll();
+    } catch {
+      // 鳴らせなくても遊べる
+    }
+  };
+  document.addEventListener("visibilitychange", () => (hidden() ? hide() : show()));
+  window.addEventListener("pagehide", hide);
+  // 戻る・進むで同じページに戻ってきたとき（bfcache）は visibilitychange が来ないことがある
+  window.addEventListener("pageshow", (e) => {
+    if (e.persisted) show();
+  });
+}
